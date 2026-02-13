@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
@@ -290,8 +291,17 @@ export default function BusinessSummaryPage() {
       <div className="space-y-8 rounded-lg border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900 print:border-0 print:shadow-none">
         {/* Print Header */}
         <div className="hidden border-b border-zinc-300 pb-6 print:block">
-          <h1 className="text-3xl font-bold text-zinc-900">Hibachi A Go Go</h1>
-          <h2 className="mt-2 text-xl font-semibold text-zinc-700">
+          <div className="mb-4 flex justify-center">
+            <Image
+              src="/hibachisun.png"
+              alt="Hibachi A Go Go"
+              width={200}
+              height={60}
+              className="object-contain"
+              priority
+            />
+          </div>
+          <h2 className="text-center text-xl font-semibold text-zinc-700">
             Business Financial Summary
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600">

@@ -1,9 +1,13 @@
 import "./globals.css";
-import Link from "next/link";
+import Sidebar from "@/components/Sidebar";
+import { ThemeProvider } from "next-themes";
 
 export const metadata = {
-  title: "Hibachi Ops",
+  title: "Hibachi A Go Go - Catering Operations",
   description: "Catering Operations Dashboard",
+  icons: {
+    icon: '/hibachisun.png',
+  },
 };
 
 export default function RootLayout({
@@ -12,38 +16,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body style={{ margin: 0, fontFamily: "sans-serif" }}>
-        <div style={{ display: "flex", minHeight: "100vh" }}>
-          
-          {/* Sidebar */}
-          <div
-            style={{
-              width: 220,
-              background: "#111",
-              color: "white",
-              padding: 20,
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Hibachi Ops</h2>
-            <nav style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <Link href="/dashboard" style={{ color: "white" }}>
-                Dashboard
-              </Link>
-              <Link href="/bookings" style={{ color: "white" }}>
-                Bookings
-              </Link>
-              <Link href="/rules" style={{ color: "white" }}>
-                Money Rules
-              </Link>
-            </nav>
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <div className="flex h-screen">
+            <Sidebar />
+            <main className="flex-1 overflow-y-auto">
+              {children}
+            </main>
           </div>
-
-          {/* Main Content */}
-          <div style={{ flex: 1, padding: 40 }}>
-            {children}
-          </div>
-        </div>
+        </ThemeProvider>
       </body>
     </html>
   );

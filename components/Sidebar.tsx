@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   HomeIcon,
@@ -9,12 +10,14 @@ import {
   CalendarDaysIcon,
   ReceiptPercentIcon,
   UsersIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 import ThemeToggle from './ThemeToggle';
 
 const navigation = [
   { name: 'Calculator', href: '/', icon: HomeIcon },
   { name: 'Bookings', href: '/bookings', icon: CalendarDaysIcon },
+  { name: 'Menus', href: '/menus', icon: ClipboardDocumentListIcon },
   { name: 'Staff', href: '/staff', icon: UsersIcon },
   { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon },
   { name: 'Money Rules', href: '/money-rules', icon: CogIcon },
@@ -40,15 +43,20 @@ export default function Sidebar() {
   return (
     <div className="flex h-screen w-64 flex-col border-r border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-950">
       {/* Logo */}
-      <div className="relative flex h-16 items-center border-b border-slate-200/80 px-6 dark:border-slate-800/80">
+      <div className="relative flex h-24 items-center justify-center border-b border-slate-200/80 px-6 py-4 dark:border-slate-800/80">
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 dark:from-indigo-500/10 dark:to-purple-500/10"></div>
-        <h1 className="relative bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-xl font-bold text-transparent dark:from-indigo-400 dark:to-purple-400">
-          Hibachi A Go Go
-        </h1>
+        <Image
+          src="/hibachisun.png"
+          alt="Hibachi A Go Go"
+          width={130}
+          height={36}
+          className="relative object-contain"
+          priority
+        />
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-6">
         {navigation.map((item) => {
           if (item.children) {
             return (

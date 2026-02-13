@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DEFAULT_MONEY_RULES } from '@/lib/moneyRules';
+import { DEFAULT_RULES } from '@/lib/moneyRules';
 import type { MoneyRules } from '@/lib/types';
 
 export default function MoneyRulesPage() {
-  const [rules, setRules] = useState<MoneyRules>(DEFAULT_MONEY_RULES);
+  const [rules, setRules] = useState<MoneyRules>(DEFAULT_RULES);
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
@@ -23,6 +23,7 @@ export default function MoneyRulesPage() {
 
   const handleSave = () => {
     localStorage.setItem('moneyRules', JSON.stringify(rules));
+    window.dispatchEvent(new Event('moneyRulesUpdated'));
     setHasChanges(false);
     setShowSaveSuccess(true);
     setTimeout(() => setShowSaveSuccess(false), 3000);
@@ -30,7 +31,7 @@ export default function MoneyRulesPage() {
 
   const handleReset = () => {
     if (confirm('Reset all values to defaults? This cannot be undone.')) {
-      setRules(DEFAULT_MONEY_RULES);
+      setRules(DEFAULT_RULES);
       localStorage.removeItem('moneyRules');
       setHasChanges(false);
     }
@@ -368,6 +369,59 @@ export default function MoneyRulesPage() {
                 className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
               />
             </div>
+          </div>
+
+          {/* Gratuity Split */}
+          <div className="mt-6 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+            <h3 className="mb-4 text-lg font-medium text-zinc-900 dark:text-zinc-50">
+              Gratuity Split (Private Events)
+            </h3>
+            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+              How gratuity is divided between chefs and assistant. Must total 100%.
+            </p>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Chef(s) Gratuity Split (%)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={rules.privateLabor.chefGratuitySplitPercent}
+                  onChange={(e) =>
+                    updateRules(['privateLabor', 'chefGratuitySplitPercent'], parseFloat(e.target.value))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Split equally among all chefs on the event
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Assistant Gratuity Split (%)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={rules.privateLabor.assistantGratuitySplitPercent}
+                  onChange={(e) =>
+                    updateRules(['privateLabor', 'assistantGratuitySplitPercent'], parseFloat(e.target.value))
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+              </div>
+            </div>
+            {Math.abs(
+              (rules.privateLabor.chefGratuitySplitPercent || 0) +
+              (rules.privateLabor.assistantGratuitySplitPercent || 0) - 100
+            ) > 0.1 && (
+              <p className="mt-3 text-sm font-medium text-orange-600 dark:text-orange-400">
+                Total is {((rules.privateLabor.chefGratuitySplitPercent || 0) + (rules.privateLabor.assistantGratuitySplitPercent || 0)).toFixed(1)}% — should be 100%
+              </p>
+            )}
           </div>
         </section>
 

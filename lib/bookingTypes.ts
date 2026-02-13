@@ -38,6 +38,9 @@ export interface Booking {
   // Staff Assignments
   staffAssignments?: StaffAssignment[];
 
+  // Menu
+  menuId?: string; // Reference to EventMenu
+
   // Metadata
   createdAt: string;
   updatedAt: string;

@@ -19,6 +19,15 @@ export interface EventInput {
   eventDate: Date;
   distanceMiles: number;
   premiumAddOn?: number; // $ per guest
+  staffPayOverrides?: StaffPayOverride[]; // Event-level overrides for staff pay
+}
+
+// Per-staff-role override for event-level pay adjustments
+export interface StaffPayOverride {
+  role: ChefRole | 'assistant';
+  basePayPercent: number; // % of revenue (subtotal)
+  gratuitySplitPercent: number; // % of gratuity pool for this person
+  cap: number | null; // $ max per event, null = no cap
 }
 
 // ----------------------------------------------------------------------------
@@ -53,6 +62,8 @@ export interface MoneyRules {
     fullChefCap: number; // $ max per event
     assistantBasePercent: number; // % of subtotal
     assistantCap: number | null; // $ max per event or null for no cap
+    chefGratuitySplitPercent: number; // % of gratuity that goes to chefs (default: 55)
+    assistantGratuitySplitPercent: number; // % of gratuity that goes to assistant (default: 45)
   };
 
   // Buffet Event Labor
@@ -168,7 +179,7 @@ export interface EventFinancials {
   totalLaborWithGratuity: number;
   totalLaborPaid: number;
   totalExcessToProfit: number;
-  laborAsPercentOfSubtotal: number;
+  laborAsPercentOfRevenue: number; // % of total revenue (subtotal + gratuity)
 
   // Profit
   grossProfit: number;
