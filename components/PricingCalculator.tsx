@@ -262,7 +262,7 @@ export default function PricingCalculator() {
               </div>
 
               <div className="flex justify-between text-emerald-700 dark:text-emerald-300">
-                <span>Labor Cost ({financials.laborAsPercentOfSubtotal.toFixed(1)}%)</span>
+                <span>Labor Cost ({financials.laborAsPercentOfRevenue.toFixed(1)}%)</span>
                 <span>-{formatCurrency(financials.totalLaborPaid)}</span>
               </div>
 

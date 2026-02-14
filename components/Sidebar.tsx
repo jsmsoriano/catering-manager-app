@@ -27,7 +27,7 @@ const navigation = [
     children: [
       { name: 'Dashboard', href: '/reports' },
       { name: 'Owner Monthly', href: '/reports/owner-monthly' },
-      { name: 'Comparative', href: '/reports/comparative' },
+      { name: 'Staff Payouts', href: '/reports/comparative' },
       { name: 'Business Summary', href: '/reports/business-summary' },
     ],
   },

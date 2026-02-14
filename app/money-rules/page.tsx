@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DEFAULT_RULES } from '@/lib/moneyRules';
+import { DEFAULT_RULES, loadRules } from '@/lib/moneyRules';
 import type { MoneyRules } from '@/lib/types';
 
 export default function MoneyRulesPage() {
@@ -9,16 +9,9 @@ export default function MoneyRulesPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
-  // Load saved rules from localStorage on mount
+  // Load saved rules from localStorage on mount (using safe deep merge)
   useEffect(() => {
-    const saved = localStorage.getItem('moneyRules');
-    if (saved) {
-      try {
-        setRules(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load saved money rules:', e);
-      }
-    }
+    setRules(loadRules());
   }, []);
 
   const handleSave = () => {
@@ -38,6 +31,8 @@ export default function MoneyRulesPage() {
   };
 
   const updateRules = (path: string[], value: any) => {
+    // Sanitize NaN from parseFloat("") — treat as 0 to prevent corrupted saves
+    const safeValue = typeof value === 'number' && !Number.isFinite(value) ? 0 : value;
     setRules((prev) => {
       const newRules = { ...prev };
       let current: any = newRules;
@@ -47,7 +42,7 @@ export default function MoneyRulesPage() {
         current = current[path[i]];
       }
 
-      current[path[path.length - 1]] = value;
+      current[path[path.length - 1]] = safeValue;
       return newRules;
     });
     setHasChanges(true);

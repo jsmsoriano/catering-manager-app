@@ -17,6 +17,8 @@ export default function BookingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [sortField, setSortField] = useState<'eventDate' | 'customerName' | 'eventType' | 'guests' | 'total' | 'status'>('eventDate');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const [formData, setFormData] = useState<BookingFormData>({
     eventType: 'private-dinner',
@@ -96,8 +98,31 @@ export default function BookingsPage() {
       );
     }
 
-    return result.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime());
-  }, [bookings, filterStatus, searchQuery]);
+    return result.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'eventDate':
+          comparison = new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
+          break;
+        case 'customerName':
+          comparison = a.customerName.localeCompare(b.customerName);
+          break;
+        case 'eventType':
+          comparison = a.eventType.localeCompare(b.eventType);
+          break;
+        case 'guests':
+          comparison = (a.adults + a.children) - (b.adults + b.children);
+          break;
+        case 'total':
+          comparison = a.total - b.total;
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [bookings, filterStatus, searchQuery, sortField, sortDirection]);
 
   const stats = useMemo(() => {
     const pending = bookings.filter((b) => b.status === 'pending').length;
@@ -193,6 +218,15 @@ export default function BookingsPage() {
           : b
       )
     );
+  };
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
   };
 
   const statusColors: Record<BookingStatus, string> = {
@@ -474,23 +508,24 @@ export default function BookingsPage() {
           <table className="w-full">
             <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Event Date
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Customer
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Type
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Guests
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Total
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Status
+                {([
+                  ['eventDate', 'Event Date'],
+                  ['customerName', 'Customer'],
+                  ['eventType', 'Type'],
+                  ['guests', 'Guests'],
+                  ['total', 'Total'],
+                  ['status', 'Status'],
+                ] as const).map(([field, label]) => (
+                  <th
+                    key={field}
+                    onClick={() => handleSort(field)}
+                    className="cursor-pointer select-none px-4 py-3 text-left text-sm font-semibold text-zinc-900 hover:bg-zinc-100 dark:text-zinc-50 dark:hover:bg-zinc-700"
+                  >
+                    {label} {sortField === field && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
+                ))}
+                <th className="px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  Reconcile
                 </th>
                 <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   Actions
@@ -501,7 +536,7 @@ export default function BookingsPage() {
               {filteredBookings.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400"
                   >
                     {searchQuery || filterStatus !== 'all'
@@ -556,6 +591,22 @@ export default function BookingsPage() {
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
                       </select>
+                    </td>
+                    <td className="px-4 py-4 text-center text-sm">
+                      {(booking.status === 'completed' || booking.reconciliationId) ? (
+                        <Link
+                          href={`/bookings/reconcile?bookingId=${booking.id}`}
+                          className={`inline-flex items-center gap-1 font-medium ${
+                            booking.reconciliationId
+                              ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
+                              : 'text-amber-600 hover:text-amber-700 dark:text-amber-400'
+                          }`}
+                        >
+                          {booking.reconciliationId ? '✓ Reconciled' : '⚖ Reconcile'}
+                        </Link>
+                      ) : (
+                        <span className="text-zinc-400 dark:text-zinc-600">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-4 text-right text-sm">
                       <div className="flex justify-end gap-3">

@@ -41,6 +41,9 @@ export interface Booking {
   // Menu
   menuId?: string; // Reference to EventMenu
 
+  // Reconciliation
+  reconciliationId?: string; // Reference to EventReconciliation
+
   // Metadata
   createdAt: string;
   updatedAt: string;

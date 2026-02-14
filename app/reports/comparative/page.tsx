@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
-import type { OwnerRole } from '@/lib/types';
+import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
+import type { ChefRole } from '@/lib/types';
 
 // Helper to parse date strings as local dates (not UTC)
 function parseLocalDate(dateString: string): Date {
@@ -13,22 +15,64 @@ function parseLocalDate(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
-interface OwnerStats {
-  totalLaborEarnings: number;
-  totalProfitDistribution: number;
-  grandTotal: number;
-  eventCount: number;
+// Map StaffRole (from staff records) to ChefRole (from labor compensation)
+const STAFF_ROLE_TO_CHEF_ROLE: Record<string, ChefRole | 'assistant'> = {
+  'lead-chef': 'lead',
+  'overflow-chef': 'overflow',
+  'full-chef': 'full',
+  'buffet-chef': 'buffet',
+  'assistant': 'assistant',
+};
+
+// ChefRole display labels
+const CHEF_ROLE_LABELS: Record<string, string> = {
+  lead: 'Lead Chef',
+  overflow: 'Overflow Chef',
+  full: 'Full Chef',
+  buffet: 'Buffet Chef',
+  assistant: 'Assistant',
+};
+
+type StaffFilter = 'all' | 'owners' | 'non-owners';
+type RoleFilter = 'all' | ChefRole | 'assistant';
+
+interface StaffPayoutRow {
+  key: string;
+  name: string;
+  role: string;
+  roleLabel: string;
+  isOwner: boolean;
   eventsWorked: number;
-  averagePerEvent: number;
-  roleBreakdown: Record<string, number>;
+  totalBasePay: number;
+  totalGratuity: number;
+  totalPayout: number;
+  avgPerEvent: number;
 }
 
-export default function ComparativeReportPage() {
+interface EventDetailRow {
+  date: string;
+  customer: string;
+  eventType: string;
+  guests: number;
+  staffName: string;
+  role: string;
+  roleLabel: string;
+  isOwner: boolean;
+  basePay: number;
+  gratuity: number;
+  total: number;
+}
+
+export default function StaffPayoutReportPage() {
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+  const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
+  const [startDate, setStartDate] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(() => format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [staffFilter, setStaffFilter] = useState<StaffFilter>('all');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
-  // Load bookings and listen for updates
+  // Load bookings
   useEffect(() => {
     const loadBookings = () => {
       const saved = localStorage.getItem('bookings');
@@ -41,52 +85,88 @@ export default function ComparativeReportPage() {
       }
     };
 
-    // Initial load
     loadBookings();
 
-    // Listen for storage changes (cross-tab updates)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'bookings') {
-        loadBookings();
-      }
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'bookings') loadBookings();
     };
+    const handleCustom = () => loadBookings();
 
-    // Listen for custom events (same-tab updates)
-    const handleCustomStorageChange = () => {
-      loadBookings();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('bookingsUpdated', handleCustomStorageChange);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('bookingsUpdated', handleCustom);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('bookingsUpdated', handleCustomStorageChange);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('bookingsUpdated', handleCustom);
     };
   }, []);
 
-  // Filter bookings for selected month
-  const monthBookings = useMemo(() => {
-    const monthStart = startOfMonth(parseLocalDate(selectedMonth + '-01'));
-    const monthEnd = endOfMonth(monthStart);
+  // Load staff records
+  useEffect(() => {
+    const loadStaff = () => {
+      const saved = localStorage.getItem('staff');
+      if (saved) {
+        try {
+          setStaffRecords(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to load staff:', e);
+        }
+      }
+    };
 
-    return bookings.filter((booking) => {
-      const bookingDate = parseLocalDate(booking.eventDate);
-      return (
-        isWithinInterval(bookingDate, { start: monthStart, end: monthEnd }) &&
-        booking.status !== 'cancelled'
-      );
+    loadStaff();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'staff') loadStaff();
+    };
+    const handleCustom = () => loadStaff();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('staffUpdated', handleCustom);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('staffUpdated', handleCustom);
+    };
+  }, []);
+
+  // Filter bookings for date range (non-cancelled only)
+  const filteredBookings = useMemo(() => {
+    const rangeStart = parseLocalDate(startDate);
+    const rangeEnd = parseLocalDate(endDate);
+
+    return bookings.filter((b) => {
+      const d = parseLocalDate(b.eventDate);
+      return isWithinInterval(d, { start: rangeStart, end: rangeEnd }) && b.status !== 'cancelled';
     });
-  }, [bookings, selectedMonth]);
+  }, [bookings, startDate, endDate]);
 
-  // Calculate stats for a specific owner
-  const calculateOwnerStats = (ownerRole: OwnerRole): OwnerStats => {
-    let totalLaborEarnings = 0;
-    let totalProfitDistribution = 0;
-    let eventsWorked = 0;
-    const roleBreakdown: Record<string, number> = {};
+  // Build owner lookup: maps ChefRole/assistant string -> owner name
+  const ownerLookup = useMemo(() => {
+    const lookup = new Map<string, { name: string; ownerRole: string }>();
 
-    monthBookings.forEach((booking) => {
+    staffRecords
+      .filter((s) => s.isOwner && s.status === 'active')
+      .forEach((s) => {
+        const chefRole = STAFF_ROLE_TO_CHEF_ROLE[s.primaryRole];
+        if (chefRole) {
+          lookup.set(chefRole, { name: s.name, ownerRole: s.ownerRole || '' });
+        }
+      });
+
+    return lookup;
+  }, [staffRecords]);
+
+  // Aggregate payout data
+  const { payoutRows, eventDetails, grandTotals } = useMemo(() => {
+    const staffMap = new Map<string, StaffPayoutRow>();
+    const details: EventDetailRow[] = [];
+    let totalBasePay = 0;
+    let totalGratuity = 0;
+    let totalPayout = 0;
+    let totalEvents = 0;
+
+    filteredBookings.forEach((booking) => {
       const financials = calculateEventFinancials(
         {
           adults: booking.adults,
@@ -99,525 +179,493 @@ export default function ComparativeReportPage() {
         rules
       );
 
-      // Find owner's labor compensation
-      const ownerLabor = financials.laborCompensation.find(
-        (comp) => comp.ownerRole === ownerRole
-      );
+      totalEvents++;
+      const matchedOwners = new Set<string>();
 
-      const laborPay = ownerLabor?.finalPay || 0;
-      const profitShare =
-        ownerRole === 'owner-a'
-          ? financials.ownerADistribution
-          : financials.ownerBDistribution;
+      financials.laborCompensation.forEach((comp) => {
+        let key: string;
+        let name: string;
+        let isOwner = false;
 
-      totalLaborEarnings += laborPay;
-      totalProfitDistribution += profitShare;
+        // Try to match this labor entry to an owner by role
+        const ownerInfo = ownerLookup.get(comp.role);
+        if (ownerInfo && !matchedOwners.has(comp.role)) {
+          matchedOwners.add(comp.role);
+          key = `owner:${comp.role}`;
+          name = ownerInfo.name;
+          isOwner = true;
+        } else {
+          key = `role:${comp.role}`;
+          name = CHEF_ROLE_LABELS[comp.role] || comp.role;
+        }
 
-      if (ownerLabor) {
-        eventsWorked++;
-        roleBreakdown[ownerLabor.role] = (roleBreakdown[ownerLabor.role] || 0) + 1;
-      }
+        const roleLabel = CHEF_ROLE_LABELS[comp.role] || comp.role;
+
+        // Update aggregated row
+        const existing = staffMap.get(key);
+        if (existing) {
+          existing.eventsWorked++;
+          existing.totalBasePay += comp.basePay;
+          existing.totalGratuity += comp.gratuityShare;
+          existing.totalPayout += comp.finalPay;
+          existing.avgPerEvent = existing.totalPayout / existing.eventsWorked;
+        } else {
+          staffMap.set(key, {
+            key,
+            name,
+            role: comp.role,
+            roleLabel,
+            isOwner,
+            eventsWorked: 1,
+            totalBasePay: comp.basePay,
+            totalGratuity: comp.gratuityShare,
+            totalPayout: comp.finalPay,
+            avgPerEvent: comp.finalPay,
+          });
+        }
+
+        totalBasePay += comp.basePay;
+        totalGratuity += comp.gratuityShare;
+        totalPayout += comp.finalPay;
+
+        // Event detail row
+        details.push({
+          date: booking.eventDate,
+          customer: booking.customerName,
+          eventType: booking.eventType === 'private-dinner' ? 'Private' : 'Buffet',
+          guests: booking.adults + booking.children,
+          staffName: name,
+          role: comp.role,
+          roleLabel,
+          isOwner,
+          basePay: comp.basePay,
+          gratuity: comp.gratuityShare,
+          total: comp.finalPay,
+        });
+      });
     });
 
-    return {
-      totalLaborEarnings,
-      totalProfitDistribution,
-      grandTotal: totalLaborEarnings + totalProfitDistribution,
-      eventCount: monthBookings.length,
-      eventsWorked,
-      averagePerEvent:
-        eventsWorked > 0 ? (totalLaborEarnings + totalProfitDistribution) / eventsWorked : 0,
-      roleBreakdown,
-    };
-  };
+    // Sort: owners first, then by total payout descending
+    const rows = Array.from(staffMap.values()).sort((a, b) => {
+      if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
+      return b.totalPayout - a.totalPayout;
+    });
 
-  const ownerAStats = useMemo(() => calculateOwnerStats('owner-a'), [monthBookings, rules]);
-  const ownerBStats = useMemo(() => calculateOwnerStats('owner-b'), [monthBookings, rules]);
-
-  // Calculate comparison metrics
-  const comparisonMetrics = useMemo(() => {
-    const totalCompensation = ownerAStats.grandTotal + ownerBStats.grandTotal;
-    const ownerAPercent =
-      totalCompensation > 0 ? (ownerAStats.grandTotal / totalCompensation) * 100 : 0;
-    const ownerBPercent =
-      totalCompensation > 0 ? (ownerBStats.grandTotal / totalCompensation) * 100 : 0;
+    // Sort details by date
+    details.sort((a, b) => a.date.localeCompare(b.date));
 
     return {
-      totalCompensation,
-      ownerAPercent,
-      ownerBPercent,
-      laborDifference: ownerAStats.totalLaborEarnings - ownerBStats.totalLaborEarnings,
-      profitDifference:
-        ownerAStats.totalProfitDistribution - ownerBStats.totalProfitDistribution,
-      totalDifference: ownerAStats.grandTotal - ownerBStats.grandTotal,
-      participationDifference: ownerAStats.eventsWorked - ownerBStats.eventsWorked,
+      payoutRows: rows,
+      eventDetails: details,
+      grandTotals: { totalBasePay, totalGratuity, totalPayout, totalEvents },
     };
-  }, [ownerAStats, ownerBStats]);
+  }, [filteredBookings, rules, ownerLookup]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  // Apply staff and role filters to summary rows
+  const filteredRows = useMemo(() => {
+    return payoutRows.filter((row) => {
+      if (staffFilter === 'owners' && !row.isOwner) return false;
+      if (staffFilter === 'non-owners' && row.isOwner) return false;
+      if (roleFilter !== 'all' && row.role !== roleFilter) return false;
+      return true;
+    });
+  }, [payoutRows, staffFilter, roleFilter]);
+
+  // Apply staff and role filters to event detail rows
+  const filteredDetails = useMemo(() => {
+    return eventDetails.filter((row) => {
+      if (staffFilter === 'owners' && !row.isOwner) return false;
+      if (staffFilter === 'non-owners' && row.isOwner) return false;
+      if (roleFilter !== 'all' && row.role !== roleFilter) return false;
+      return true;
+    });
+  }, [eventDetails, staffFilter, roleFilter]);
+
+  // Compute filtered totals for summary cards and table footer
+  const filteredTotals = useMemo(() => {
+    return filteredRows.reduce(
+      (acc, row) => ({
+        totalBasePay: acc.totalBasePay + row.totalBasePay,
+        totalGratuity: acc.totalGratuity + row.totalGratuity,
+        totalPayout: acc.totalPayout + row.totalPayout,
+        totalStaffEvents: acc.totalStaffEvents + row.eventsWorked,
+      }),
+      { totalBasePay: 0, totalGratuity: 0, totalPayout: 0, totalStaffEvents: 0 }
+    );
+  }, [filteredRows]);
+
+  const handlePrint = () => window.print();
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header - Hide on print */}
       <div className="mb-8 print:hidden">
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          Comparative Owner Report
+          Staff Payout Report
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          Side-by-side comparison of owner compensation and participation
+          Comprehensive breakdown of all staff payouts including owners
         </p>
       </div>
 
       {/* Filters - Hide on print */}
-      <div className="mb-8 flex flex-wrap gap-4 print:hidden">
+      <div className="mb-8 flex flex-wrap items-end gap-4 print:hidden">
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Month
+            Start Date
           </label>
           <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
             className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           />
         </div>
-        <div className="flex items-end">
-          <button
-            onClick={handlePrint}
-            className="rounded-md bg-zinc-600 px-4 py-2 text-white hover:bg-zinc-700"
-          >
-            🖨️ Print Report
-          </button>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            End Date
+          </label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          />
         </div>
+        <button
+          onClick={() => {
+            const today = new Date();
+            setStartDate(format(startOfMonth(today), 'yyyy-MM-dd'));
+            setEndDate(format(endOfMonth(today), 'yyyy-MM-dd'));
+          }}
+          className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+        >
+          This Month
+        </button>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Staff
+          </label>
+          <select
+            value={staffFilter}
+            onChange={(e) => setStaffFilter(e.target.value as StaffFilter)}
+            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          >
+            <option value="all">All Staff</option>
+            <option value="owners">Owners Only</option>
+            <option value="non-owners">Non-Owner Staff</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Role
+          </label>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
+            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          >
+            <option value="all">All Roles</option>
+            <option value="lead">Lead Chef</option>
+            <option value="overflow">Overflow Chef</option>
+            <option value="full">Full Chef</option>
+            <option value="buffet">Buffet Chef</option>
+            <option value="assistant">Assistant</option>
+          </select>
+        </div>
+        <button
+          onClick={handlePrint}
+          className="rounded-md bg-zinc-600 px-4 py-2 text-white hover:bg-zinc-700"
+        >
+          Print Report
+        </button>
       </div>
 
       {/* Report Content - Print friendly */}
       <div className="space-y-8 rounded-lg border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900 print:border-0 print:shadow-none">
         {/* Print Header */}
         <div className="hidden border-b border-zinc-300 pb-6 print:block">
-          <h1 className="text-3xl font-bold text-zinc-900">Hibachi A Go Go</h1>
-          <h2 className="mt-2 text-xl font-semibold text-zinc-700">
-            Comparative Owner Report
+          <div className="mb-4 flex justify-center">
+            <Image
+              src="/hibachisun.png"
+              alt="Hibachi A Go Go"
+              width={200}
+              height={60}
+              className="object-contain"
+              priority
+            />
+          </div>
+          <h2 className="text-center text-xl font-semibold text-zinc-700">
+            Staff Payout Report
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600">
             <div>
-              <strong>Report Period:</strong> {format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy')}
+              <strong>Report Period:</strong>{' '}
+              {format(parseLocalDate(startDate), 'MMM d, yyyy')} -{' '}
+              {format(parseLocalDate(endDate), 'MMM d, yyyy')}
             </div>
             <div>
               <strong>Generated:</strong> {format(new Date(), 'PPP')}
             </div>
             <div>
-              <strong>Total Events:</strong> {monthBookings.length}
+              <strong>Total Payouts:</strong>{' '}
+              {formatCurrency(filteredTotals.totalPayout)}
             </div>
             <div>
-              <strong>Total Compensation:</strong>{' '}
-              {formatCurrency(comparisonMetrics.totalCompensation)}
+              <strong>Events:</strong> {grandTotals.totalEvents}
             </div>
           </div>
         </div>
 
-        {monthBookings.length > 0 ? (
+        {/* Summary Cards */}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/20 print:border-blue-300">
+            <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+              Total Payouts
+            </p>
+            <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+              {formatCurrency(filteredTotals.totalPayout)}
+            </p>
+            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+              Base pay + gratuity
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/20 print:border-emerald-300">
+            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+              Base Pay
+            </p>
+            <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(filteredTotals.totalBasePay)}
+            </p>
+            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+              From revenue
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 dark:border-purple-900 dark:bg-purple-950/20 print:border-purple-300">
+            <p className="text-sm font-medium text-purple-900 dark:text-purple-200">
+              Total Gratuity
+            </p>
+            <p className="mt-2 text-3xl font-bold text-purple-600 dark:text-purple-400">
+              {formatCurrency(filteredTotals.totalGratuity)}
+            </p>
+            <p className="mt-1 text-xs text-purple-700 dark:text-purple-300">
+              From tips
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-900 dark:bg-amber-950/20 print:border-amber-300">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              Events in Period
+            </p>
+            <p className="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">
+              {grandTotals.totalEvents}
+            </p>
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              {filteredBookings.length} non-cancelled bookings
+            </p>
+          </div>
+        </div>
+
+        {/* Staff Payout Summary Table */}
+        {filteredRows.length > 0 ? (
           <>
-            {/* Overall Comparison */}
             <div>
               <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                Total Compensation Overview
-              </h3>
-              <div className="space-y-4">
-                {/* Owner A Bar */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                      Owner A (Head Chef) - {rules.profitDistribution.ownerAEquityPercent}% Equity
-                    </span>
-                    <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                      {formatCurrency(ownerAStats.grandTotal)}
-                    </span>
-                  </div>
-                  <div className="h-8 overflow-hidden rounded-lg bg-zinc-200 dark:bg-zinc-700">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-blue-600"
-                      style={{ width: `${comparisonMetrics.ownerAPercent}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    {comparisonMetrics.ownerAPercent.toFixed(1)}% of total compensation
-                  </p>
-                </div>
-
-                {/* Owner B Bar */}
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                      Owner B (Operations) - {rules.profitDistribution.ownerBEquityPercent}% Equity
-                    </span>
-                    <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(ownerBStats.grandTotal)}
-                    </span>
-                  </div>
-                  <div className="h-8 overflow-hidden rounded-lg bg-zinc-200 dark:bg-zinc-700">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600"
-                      style={{ width: `${comparisonMetrics.ownerBPercent}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                    {comparisonMetrics.ownerBPercent.toFixed(1)}% of total compensation
-                  </p>
-                </div>
-
-                {/* Difference */}
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Compensation Difference:
-                    </span>
-                    <span
-                      className={`text-lg font-bold ${
-                        comparisonMetrics.totalDifference > 0
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-emerald-600 dark:text-emerald-400'
-                      }`}
-                    >
-                      {comparisonMetrics.totalDifference > 0 ? 'Owner A +' : 'Owner B +'}
-                      {formatCurrency(Math.abs(comparisonMetrics.totalDifference))}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Side-by-Side Stats */}
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Owner A Column */}
-              <div className="space-y-6">
-                <div className="border-b border-zinc-200 pb-4 dark:border-zinc-700">
-                  <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                    Owner A (Head Chef)
-                  </h3>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {rules.profitDistribution.ownerAEquityPercent}% Equity Share
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
-                    <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
-                      Total Compensation
-                    </p>
-                    <p className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {formatCurrency(ownerAStats.grandTotal)}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">Labor Earnings</span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerAStats.totalLaborEarnings)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">
-                        Profit Distribution
-                      </span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerAStats.totalProfitDistribution)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-                    <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                      Participation
-                    </p>
-                    <div className="mt-2 space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-600 dark:text-zinc-400">Events Worked</span>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                          {ownerAStats.eventsWorked} / {ownerAStats.eventCount}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-600 dark:text-zinc-400">Avg per Event</span>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                          {formatCurrency(ownerAStats.averagePerEvent)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {Object.keys(ownerAStats.roleBreakdown).length > 0 && (
-                    <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-                      <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        Role Distribution
-                      </p>
-                      <div className="mt-2 space-y-1">
-                        {Object.entries(ownerAStats.roleBreakdown).map(([role, count]) => (
-                          <div key={role} className="flex justify-between text-sm">
-                            <span className="text-zinc-600 dark:text-zinc-400">
-                              {role === 'lead-chef'
-                                ? 'Lead Chef'
-                                : role === 'assistant-chef'
-                                ? 'Assistant Chef'
-                                : role}
-                            </span>
-                            <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                              {count}x
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Owner B Column */}
-              <div className="space-y-6">
-                <div className="border-b border-zinc-200 pb-4 dark:border-zinc-700">
-                  <h3 className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
-                    Owner B (Operations)
-                  </h3>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {rules.profitDistribution.ownerBEquityPercent}% Equity Share
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
-                    <p className="text-xs font-medium text-emerald-900 dark:text-emerald-200">
-                      Total Compensation
-                    </p>
-                    <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(ownerBStats.grandTotal)}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">Labor Earnings</span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerBStats.totalLaborEarnings)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">
-                        Profit Distribution
-                      </span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerBStats.totalProfitDistribution)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-                    <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                      Participation
-                    </p>
-                    <div className="mt-2 space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-600 dark:text-zinc-400">Events Worked</span>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                          {ownerBStats.eventsWorked} / {ownerBStats.eventCount}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-zinc-600 dark:text-zinc-400">Avg per Event</span>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                          {formatCurrency(ownerBStats.averagePerEvent)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {Object.keys(ownerBStats.roleBreakdown).length > 0 && (
-                    <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-                      <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        Role Distribution
-                      </p>
-                      <div className="mt-2 space-y-1">
-                        {Object.entries(ownerBStats.roleBreakdown).map(([role, count]) => (
-                          <div key={role} className="flex justify-between text-sm">
-                            <span className="text-zinc-600 dark:text-zinc-400">
-                              {role === 'lead-chef'
-                                ? 'Lead Chef'
-                                : role === 'assistant-chef'
-                                ? 'Assistant Chef'
-                                : role}
-                            </span>
-                            <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                              {count}x
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Detailed Comparison Table */}
-            <div className="mt-8">
-              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                Detailed Breakdown
+                Staff Payout Summary
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="border-b-2 border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
                     <tr>
                       <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
-                        Metric
+                        Name / Role
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-blue-600 dark:text-blue-400">
-                        Owner A
-                      </th>
-                      <th className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                        Owner B
+                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Role
                       </th>
                       <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
-                        Difference
+                        Events
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Base Pay
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Gratuity
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Total Pay
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Avg/Event
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                    <tr>
-                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
-                        Labor Earnings
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerAStats.totalLaborEarnings)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerBStats.totalLaborEarnings)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {comparisonMetrics.laborDifference >= 0 ? '+' : ''}
-                        {formatCurrency(comparisonMetrics.laborDifference)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
-                        Profit Distribution
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerAStats.totalProfitDistribution)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerBStats.totalProfitDistribution)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {comparisonMetrics.profitDifference >= 0 ? '+' : ''}
-                        {formatCurrency(comparisonMetrics.profitDifference)}
-                      </td>
-                    </tr>
-                    <tr className="bg-zinc-50 font-semibold dark:bg-zinc-800/50">
-                      <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
-                        Total Compensation
-                      </td>
-                      <td className="px-4 py-3 text-right text-blue-600 dark:text-blue-400">
-                        {formatCurrency(ownerAStats.grandTotal)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(ownerBStats.grandTotal)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {comparisonMetrics.totalDifference >= 0 ? '+' : ''}
-                        {formatCurrency(comparisonMetrics.totalDifference)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
-                        Events Worked
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {ownerAStats.eventsWorked}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {ownerBStats.eventsWorked}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {comparisonMetrics.participationDifference >= 0 ? '+' : ''}
-                        {comparisonMetrics.participationDifference}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
-                        Average per Event Worked
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerAStats.averagePerEvent)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(ownerBStats.averagePerEvent)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {ownerAStats.averagePerEvent - ownerBStats.averagePerEvent >= 0
-                          ? '+'
-                          : ''}
-                        {formatCurrency(
-                          ownerAStats.averagePerEvent - ownerBStats.averagePerEvent
-                        )}
-                      </td>
-                    </tr>
+                    {filteredRows.map((row) => (
+                      <tr
+                        key={row.key}
+                        className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                      >
+                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                          <div className="flex items-center gap-2">
+                            {row.name}
+                            {row.isOwner && (
+                              <span className="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                Owner
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                          {row.roleLabel}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                          {row.eventsWorked}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                          {formatCurrency(row.totalBasePay)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                          {formatCurrency(row.totalGratuity)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                          {formatCurrency(row.totalPayout)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                          {formatCurrency(row.avgPerEvent)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
+                  <tfoot className="border-t-2 border-zinc-300 bg-zinc-100 font-semibold dark:border-zinc-700 dark:bg-zinc-800">
+                    <tr>
+                      <td
+                        colSpan={2}
+                        className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50"
+                      >
+                        Totals:
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        {filteredTotals.totalStaffEvents}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        {formatCurrency(filteredTotals.totalBasePay)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        {formatCurrency(filteredTotals.totalGratuity)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        {formatCurrency(filteredTotals.totalPayout)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                        {filteredTotals.totalStaffEvents > 0
+                          ? formatCurrency(
+                              filteredTotals.totalPayout / filteredTotals.totalStaffEvents
+                            )
+                          : formatCurrency(0)}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>
 
-            {/* Insights */}
-            <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-              <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                Key Insights
+            {/* Event-by-Event Breakdown */}
+            <div>
+              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                Event-by-Event Breakdown
               </h3>
-              <div className="space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
-                <div>
-                  <strong className="text-zinc-900 dark:text-zinc-50">
-                    Compensation Split:
-                  </strong>
-                  <p>
-                    Owner A received {comparisonMetrics.ownerAPercent.toFixed(1)}% of total
-                    compensation while Owner B received {comparisonMetrics.ownerBPercent.toFixed(1)}%
-                    . This reflects both labor participation and equity distribution.
-                  </p>
-                </div>
-                <div>
-                  <strong className="text-zinc-900 dark:text-zinc-50">
-                    Participation Rates:
-                  </strong>
-                  <p>
-                    Owner A worked {ownerAStats.eventsWorked} events (
-                    {monthBookings.length > 0
-                      ? ((ownerAStats.eventsWorked / monthBookings.length) * 100).toFixed(0)
-                      : 0}
-                    %) while Owner B worked {ownerBStats.eventsWorked} events (
-                    {monthBookings.length > 0
-                      ? ((ownerBStats.eventsWorked / monthBookings.length) * 100).toFixed(0)
-                      : 0}
-                    %) of the total {monthBookings.length} events.
-                  </p>
-                </div>
-                <div>
-                  <strong className="text-zinc-900 dark:text-zinc-50">Labor vs Profit:</strong>
-                  <p>
-                    Labor earnings represent working income, while profit distribution is based on
-                    equity ownership. Both owners receive profit distributions regardless of
-                    participation, but labor earnings depend on events worked.
-                  </p>
-                </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b-2 border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Date
+                      </th>
+                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Customer
+                      </th>
+                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Type
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Guests
+                      </th>
+                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Staff
+                      </th>
+                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Role
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Base Pay
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Gratuity
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    {filteredDetails.map((row, idx) => (
+                      <tr
+                        key={idx}
+                        className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                      >
+                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                          {format(parseLocalDate(row.date), 'MMM d')}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                          {row.customer}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                          {row.eventType}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                          {row.guests}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                          <div className="flex items-center gap-1">
+                            {row.staffName}
+                            {row.isOwner && (
+                              <span className="inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                                Owner
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                          {row.roleLabel}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                          {formatCurrency(row.basePay)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                          {formatCurrency(row.gratuity)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                          {formatCurrency(row.total)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </>
         ) : (
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-700 dark:bg-zinc-800">
             <p className="text-zinc-600 dark:text-zinc-400">
-              No events found for {format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy')}
+              No payout data found for{' '}
+              {format(parseLocalDate(startDate), 'MMM d, yyyy')} -{' '}
+              {format(parseLocalDate(endDate), 'MMM d, yyyy')}
             </p>
             <p className="mt-2 text-sm text-zinc-500">
-              Create bookings in the Bookings page to see comparison data here.
+              Create bookings in the Bookings page to see staff payout data here.
             </p>
           </div>
         )}
@@ -625,11 +673,12 @@ export default function ComparativeReportPage() {
         {/* Footer */}
         <div className="mt-8 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-700">
           <p>
-            This report is generated based on current Money Rules settings. Historical events may
-            have used different rates.
+            This report is generated based on current Money Rules settings.
+            Historical events may have used different rates.
           </p>
           <p className="mt-2">
-            Report generated on {format(new Date(), 'PPP')} at {format(new Date(), 'p')}
+            Report generated on {format(new Date(), 'PPP')} at{' '}
+            {format(new Date(), 'p')}
           </p>
         </div>
       </div>

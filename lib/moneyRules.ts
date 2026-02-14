@@ -1,4 +1,4 @@
-import type { MoneyRules, EventInput, EventFinancials, StaffingPlan, LaborCompensation, ChefRole, StaffPayOverride } from './types';
+import type { MoneyRules, EventInput, EventFinancials, StaffingPlan, StaffMember, LaborCompensation, ChefRole, StaffPayOverride } from './types';
 
 export const STORAGE_KEY_RULES = "hibachi.moneyRules.v1";
 
@@ -77,6 +77,18 @@ export function toNumber(value: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Strip null/NaN/undefined values from an object so defaults aren't overridden by bad data
+function stripInvalid<T extends Record<string, any>>(obj: T | undefined | null): Partial<T> {
+  if (!obj || typeof obj !== 'object') return {};
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== null && value !== undefined && (typeof value !== 'number' || Number.isFinite(value))) {
+      clean[key] = value;
+    }
+  }
+  return clean as Partial<T>;
+}
+
 export function loadRules(): MoneyRules {
   if (typeof window === 'undefined') return DEFAULT_RULES;
 
@@ -84,16 +96,16 @@ export function loadRules(): MoneyRules {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Deep merge one level to preserve new default fields in nested objects
+      // Deep merge one level, stripping null/NaN values so defaults are used instead
       return {
-        pricing: { ...DEFAULT_RULES.pricing, ...parsed.pricing },
-        staffing: { ...DEFAULT_RULES.staffing, ...parsed.staffing },
-        privateLabor: { ...DEFAULT_RULES.privateLabor, ...parsed.privateLabor },
-        buffetLabor: { ...DEFAULT_RULES.buffetLabor, ...parsed.buffetLabor },
-        costs: { ...DEFAULT_RULES.costs, ...parsed.costs },
-        distance: { ...DEFAULT_RULES.distance, ...parsed.distance },
-        profitDistribution: { ...DEFAULT_RULES.profitDistribution, ...parsed.profitDistribution },
-        safetyLimits: { ...DEFAULT_RULES.safetyLimits, ...parsed.safetyLimits },
+        pricing: { ...DEFAULT_RULES.pricing, ...stripInvalid(parsed.pricing) },
+        staffing: { ...DEFAULT_RULES.staffing, ...stripInvalid(parsed.staffing) },
+        privateLabor: { ...DEFAULT_RULES.privateLabor, ...stripInvalid(parsed.privateLabor) },
+        buffetLabor: { ...DEFAULT_RULES.buffetLabor, ...stripInvalid(parsed.buffetLabor) },
+        costs: { ...DEFAULT_RULES.costs, ...stripInvalid(parsed.costs) },
+        distance: { ...DEFAULT_RULES.distance, ...stripInvalid(parsed.distance) },
+        profitDistribution: { ...DEFAULT_RULES.profitDistribution, ...stripInvalid(parsed.profitDistribution) },
+        safetyLimits: { ...DEFAULT_RULES.safetyLimits, ...stripInvalid(parsed.safetyLimits) },
       };
     } catch (e) {
       console.error('Failed to load rules:', e);
@@ -275,7 +287,7 @@ function determineStaffing(
   }
 
   const assistantNeeded = rules.staffing.assistantRequired;
-  const staff = [
+  const staff: StaffMember[] = [
     ...chefRoles.map(role => {
       let basePayPercent: number;
       let cap: number;
@@ -309,9 +321,9 @@ function determineStaffing(
 
   if (assistantNeeded) {
     staff.push({
-      role: 'assistant' as 'assistant',
+      role: 'assistant',
       basePayPercent: rules.privateLabor.assistantBasePercent,
-      cap: rules.privateLabor.assistantCap ?? null,
+      cap: rules.privateLabor.assistantCap,
       isOwner: false,
     });
   }
