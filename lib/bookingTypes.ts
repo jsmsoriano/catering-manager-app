@@ -38,6 +38,9 @@ export interface Booking {
   // Staff Assignments
   staffAssignments?: StaffAssignment[];
 
+  // Staffing Profile Override
+  staffingProfileId?: string;
+
   // Menu
   menuId?: string; // Reference to EventMenu
 
@@ -62,4 +65,6 @@ export interface BookingFormData {
   distanceMiles: number;
   premiumAddOn: number;
   notes: string;
+  staffAssignments?: StaffAssignment[];
+  staffingProfileId?: string;
 }

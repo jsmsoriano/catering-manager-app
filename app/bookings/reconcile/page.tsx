@@ -10,6 +10,8 @@ import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { Expense, ExpenseCategory } from '@/lib/expenseTypes';
 import type { EventReconciliation, ActualLaborEntry } from '@/lib/reconciliationTypes';
+import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
+import { CHEF_ROLE_TO_STAFF_ROLE } from '@/lib/staffTypes';
 
 // Helper to parse date strings as local dates (not UTC)
 function parseLocalDate(dateString: string): Date {
@@ -126,10 +128,45 @@ function ReconcileContent() {
   useEffect(() => {
     if (!financials || !booking || reconciliation) return;
 
-    const laborEntries: ActualLaborEntry[] = financials.laborCompensation.map((comp) => ({
-      role: comp.role,
-      actualPay: comp.finalPay,
-    }));
+    // Load staff records to resolve names from assignments
+    let staffById = new Map<string, StaffRecord>();
+    const staffData = localStorage.getItem('staff');
+    if (staffData) {
+      try {
+        const staffRecords: StaffRecord[] = JSON.parse(staffData);
+        staffRecords.forEach((s) => staffById.set(s.id, s));
+      } catch { /* ignore */ }
+    }
+
+    const laborEntries: ActualLaborEntry[] = financials.laborCompensation.map((comp, idx) => {
+      let staffName: string | undefined;
+
+      // Try to resolve staff name from booking assignments
+      if (booking.staffAssignments) {
+        const staffRole = CHEF_ROLE_TO_STAFF_ROLE[comp.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
+        if (staffRole) {
+          // Count same-role positions before this index
+          let sameRoleIndex = 0;
+          for (let i = 0; i < idx; i++) {
+            if (financials.laborCompensation[i].role === comp.role) sameRoleIndex++;
+          }
+          let matchCount = 0;
+          const assignment = booking.staffAssignments.find((a) => {
+            if (a.role === staffRole) {
+              if (matchCount === sameRoleIndex) return true;
+              matchCount++;
+            }
+            return false;
+          });
+          if (assignment) {
+            const staff = staffById.get(assignment.staffId);
+            if (staff) staffName = staff.name;
+          }
+        }
+      }
+
+      return { role: comp.role, actualPay: comp.finalPay, staffName };
+    });
 
     const now = new Date().toISOString();
     setReconciliation({
@@ -593,6 +630,11 @@ function ReconcileContent() {
                     <tr key={idx}>
                       <td className="py-3 text-zinc-900 dark:text-zinc-100">
                         {roleLabels[comp.role] || comp.role}
+                        {actualEntry?.staffName && (
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {actualEntry.staffName}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">
                         {formatCurrency(comp.finalPay)}

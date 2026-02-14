@@ -7,6 +7,7 @@ import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
+import { CHEF_ROLE_TO_STAFF_ROLE, STAFF_ROLE_TO_CHEF_ROLE } from '@/lib/staffTypes';
 import type { ChefRole } from '@/lib/types';
 
 // Helper to parse date strings as local dates (not UTC)
@@ -14,15 +15,6 @@ function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
   return new Date(year, month - 1, day);
 }
-
-// Map StaffRole (from staff records) to ChefRole (from labor compensation)
-const STAFF_ROLE_TO_CHEF_ROLE: Record<string, ChefRole | 'assistant'> = {
-  'lead-chef': 'lead',
-  'overflow-chef': 'overflow',
-  'full-chef': 'full',
-  'buffet-chef': 'buffet',
-  'assistant': 'assistant',
-};
 
 // ChefRole display labels
 const CHEF_ROLE_LABELS: Record<string, string> = {
@@ -42,9 +34,11 @@ interface StaffPayoutRow {
   role: string;
   roleLabel: string;
   isOwner: boolean;
+  ownerRole?: 'owner-a' | 'owner-b';
   eventsWorked: number;
   totalBasePay: number;
   totalGratuity: number;
+  totalProfitShare: number;
   totalPayout: number;
   avgPerEvent: number;
 }
@@ -60,6 +54,7 @@ interface EventDetailRow {
   isOwner: boolean;
   basePay: number;
   gratuity: number;
+  profitShare: number;
   total: number;
 }
 
@@ -157,12 +152,20 @@ export default function StaffPayoutReportPage() {
     return lookup;
   }, [staffRecords]);
 
+  // Build staff ID lookup for resolving assignments
+  const staffById = useMemo(() => {
+    const map = new Map<string, StaffRecord>();
+    staffRecords.forEach((s) => map.set(s.id, s));
+    return map;
+  }, [staffRecords]);
+
   // Aggregate payout data
   const { payoutRows, eventDetails, grandTotals } = useMemo(() => {
     const staffMap = new Map<string, StaffPayoutRow>();
     const details: EventDetailRow[] = [];
     let totalBasePay = 0;
     let totalGratuity = 0;
+    let totalProfitShare = 0;
     let totalPayout = 0;
     let totalEvents = 0;
 
@@ -182,51 +185,104 @@ export default function StaffPayoutReportPage() {
       totalEvents++;
       const matchedOwners = new Set<string>();
 
-      financials.laborCompensation.forEach((comp) => {
+      // Track which owner roles have been assigned profit share for this event
+      const profitShareAssigned = new Set<string>();
+
+      financials.laborCompensation.forEach((comp, compIdx) => {
         let key: string;
         let name: string;
         let isOwner = false;
+        let ownerRole: 'owner-a' | 'owner-b' | undefined;
 
-        // Try to match this labor entry to an owner by role
-        const ownerInfo = ownerLookup.get(comp.role);
-        if (ownerInfo && !matchedOwners.has(comp.role)) {
-          matchedOwners.add(comp.role);
-          key = `owner:${comp.role}`;
-          name = ownerInfo.name;
-          isOwner = true;
-        } else {
-          key = `role:${comp.role}`;
-          name = CHEF_ROLE_LABELS[comp.role] || comp.role;
+        // Priority 1: Check booking.staffAssignments for this position
+        const staffRole = CHEF_ROLE_TO_STAFF_ROLE[comp.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
+        let resolvedFromAssignment = false;
+
+        if (booking.staffAssignments && staffRole) {
+          // Count same-role positions before this index
+          let sameRoleIndex = 0;
+          for (let i = 0; i < compIdx; i++) {
+            if (financials.laborCompensation[i].role === comp.role) sameRoleIndex++;
+          }
+
+          // Find the nth assignment matching this role
+          let matchCount = 0;
+          const assignment = booking.staffAssignments.find((a) => {
+            if (a.role === staffRole) {
+              if (matchCount === sameRoleIndex) return true;
+              matchCount++;
+            }
+            return false;
+          });
+
+          if (assignment) {
+            const staffRecord = staffById.get(assignment.staffId);
+            if (staffRecord) {
+              resolvedFromAssignment = true;
+              name = staffRecord.name;
+              isOwner = staffRecord.isOwner;
+              ownerRole = staffRecord.ownerRole;
+              key = isOwner ? `owner:${staffRecord.id}` : `staff:${staffRecord.id}`;
+            }
+          }
+        }
+
+        // Priority 2: Fallback to role-based owner matching
+        if (!resolvedFromAssignment) {
+          const ownerInfo = ownerLookup.get(comp.role);
+          if (ownerInfo && !matchedOwners.has(comp.role)) {
+            matchedOwners.add(comp.role);
+            key = `owner:${comp.role}`;
+            name = ownerInfo.name;
+            isOwner = true;
+            ownerRole = ownerInfo.ownerRole as 'owner-a' | 'owner-b' | undefined;
+          } else {
+            key = `role:${comp.role}`;
+            name = CHEF_ROLE_LABELS[comp.role] || comp.role;
+          }
         }
 
         const roleLabel = CHEF_ROLE_LABELS[comp.role] || comp.role;
 
+        // Calculate profit share for this position (owners only, once per owner per event)
+        let profitShare = 0;
+        if (isOwner && ownerRole && !profitShareAssigned.has(ownerRole)) {
+          profitShareAssigned.add(ownerRole);
+          profitShare = ownerRole === 'owner-a'
+            ? financials.ownerADistribution
+            : financials.ownerBDistribution;
+        }
+
         // Update aggregated row
-        const existing = staffMap.get(key);
+        const existing = staffMap.get(key!);
         if (existing) {
           existing.eventsWorked++;
           existing.totalBasePay += comp.basePay;
           existing.totalGratuity += comp.gratuityShare;
-          existing.totalPayout += comp.finalPay;
+          existing.totalProfitShare += profitShare;
+          existing.totalPayout += comp.finalPay + profitShare;
           existing.avgPerEvent = existing.totalPayout / existing.eventsWorked;
         } else {
-          staffMap.set(key, {
-            key,
-            name,
+          staffMap.set(key!, {
+            key: key!,
+            name: name!,
             role: comp.role,
             roleLabel,
             isOwner,
+            ownerRole,
             eventsWorked: 1,
             totalBasePay: comp.basePay,
             totalGratuity: comp.gratuityShare,
-            totalPayout: comp.finalPay,
-            avgPerEvent: comp.finalPay,
+            totalProfitShare: profitShare,
+            totalPayout: comp.finalPay + profitShare,
+            avgPerEvent: comp.finalPay + profitShare,
           });
         }
 
         totalBasePay += comp.basePay;
         totalGratuity += comp.gratuityShare;
-        totalPayout += comp.finalPay;
+        totalProfitShare += profitShare;
+        totalPayout += comp.finalPay + profitShare;
 
         // Event detail row
         details.push({
@@ -234,13 +290,14 @@ export default function StaffPayoutReportPage() {
           customer: booking.customerName,
           eventType: booking.eventType === 'private-dinner' ? 'Private' : 'Buffet',
           guests: booking.adults + booking.children,
-          staffName: name,
+          staffName: name!,
           role: comp.role,
           roleLabel,
           isOwner,
           basePay: comp.basePay,
           gratuity: comp.gratuityShare,
-          total: comp.finalPay,
+          profitShare,
+          total: comp.finalPay + profitShare,
         });
       });
     });
@@ -257,9 +314,9 @@ export default function StaffPayoutReportPage() {
     return {
       payoutRows: rows,
       eventDetails: details,
-      grandTotals: { totalBasePay, totalGratuity, totalPayout, totalEvents },
+      grandTotals: { totalBasePay, totalGratuity, totalProfitShare, totalPayout, totalEvents },
     };
-  }, [filteredBookings, rules, ownerLookup]);
+  }, [filteredBookings, rules, ownerLookup, staffById]);
 
   // Apply staff and role filters to summary rows
   const filteredRows = useMemo(() => {
@@ -287,10 +344,11 @@ export default function StaffPayoutReportPage() {
       (acc, row) => ({
         totalBasePay: acc.totalBasePay + row.totalBasePay,
         totalGratuity: acc.totalGratuity + row.totalGratuity,
+        totalProfitShare: acc.totalProfitShare + row.totalProfitShare,
         totalPayout: acc.totalPayout + row.totalPayout,
         totalStaffEvents: acc.totalStaffEvents + row.eventsWorked,
       }),
-      { totalBasePay: 0, totalGratuity: 0, totalPayout: 0, totalStaffEvents: 0 }
+      { totalBasePay: 0, totalGratuity: 0, totalProfitShare: 0, totalPayout: 0, totalStaffEvents: 0 }
     );
   }, [filteredRows]);
 
@@ -418,7 +476,7 @@ export default function StaffPayoutReportPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/20 print:border-blue-300">
             <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
               Total Payouts
@@ -427,7 +485,7 @@ export default function StaffPayoutReportPage() {
               {formatCurrency(filteredTotals.totalPayout)}
             </p>
             <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
-              Base pay + gratuity
+              Labor + gratuity + profit share
             </p>
           </div>
 
@@ -452,6 +510,18 @@ export default function StaffPayoutReportPage() {
             </p>
             <p className="mt-1 text-xs text-purple-700 dark:text-purple-300">
               From tips
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-6 dark:border-indigo-900 dark:bg-indigo-950/20 print:border-indigo-300">
+            <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+              Profit Share
+            </p>
+            <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+              {formatCurrency(filteredTotals.totalProfitShare)}
+            </p>
+            <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">
+              Owner equity distributions
             </p>
           </div>
 
@@ -495,6 +565,9 @@ export default function StaffPayoutReportPage() {
                         Gratuity
                       </th>
                       <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Profit Share
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
                         Total Pay
                       </th>
                       <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
@@ -530,6 +603,11 @@ export default function StaffPayoutReportPage() {
                         <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
                           {formatCurrency(row.totalGratuity)}
                         </td>
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                          {row.isOwner ? formatCurrency(row.totalProfitShare) : (
+                            <span className="text-zinc-400 dark:text-zinc-600">&mdash;</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
                           {formatCurrency(row.totalPayout)}
                         </td>
@@ -555,6 +633,9 @@ export default function StaffPayoutReportPage() {
                       </td>
                       <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
                         {formatCurrency(filteredTotals.totalGratuity)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        {formatCurrency(filteredTotals.totalProfitShare)}
                       </td>
                       <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
                         {formatCurrency(filteredTotals.totalPayout)}
@@ -606,6 +687,9 @@ export default function StaffPayoutReportPage() {
                         Gratuity
                       </th>
                       <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        Profit Share
+                      </th>
+                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
                         Total
                       </th>
                     </tr>
@@ -646,6 +730,11 @@ export default function StaffPayoutReportPage() {
                         </td>
                         <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
                           {formatCurrency(row.gratuity)}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                          {row.profitShare > 0 ? formatCurrency(row.profitShare) : (
+                            <span className="text-zinc-400 dark:text-zinc-600">&mdash;</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
                           {formatCurrency(row.total)}

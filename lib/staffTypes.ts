@@ -118,3 +118,22 @@ export const DEFAULT_WEEKLY_AVAILABILITY: WeeklyAvailability = {
   saturday: true,
   sunday: true,
 };
+
+// ChefRole → StaffRole mapping (for filtering staff dropdowns by calculated role)
+import type { ChefRole } from './types';
+
+export const CHEF_ROLE_TO_STAFF_ROLE: Record<ChefRole | 'assistant', StaffRole> = {
+  lead: 'lead-chef',
+  overflow: 'overflow-chef',
+  full: 'full-chef',
+  buffet: 'buffet-chef',
+  assistant: 'assistant',
+};
+
+export const STAFF_ROLE_TO_CHEF_ROLE: Record<string, ChefRole | 'assistant'> = {
+  'lead-chef': 'lead',
+  'overflow-chef': 'overflow',
+  'full-chef': 'full',
+  'buffet-chef': 'buffet',
+  'assistant': 'assistant',
+};

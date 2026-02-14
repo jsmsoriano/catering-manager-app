@@ -5,7 +5,17 @@ import Link from 'next/link';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
-import type { Booking, BookingStatus, BookingFormData} from '@/lib/bookingTypes';
+import type { Booking, BookingStatus, BookingFormData } from '@/lib/bookingTypes';
+import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
+import { CHEF_ROLE_TO_STAFF_ROLE, ROLE_LABELS as STAFF_ROLE_LABELS } from '@/lib/staffTypes';
+
+const CHEF_ROLE_LABELS: Record<string, string> = {
+  lead: 'Lead Chef',
+  overflow: 'Overflow Chef',
+  full: 'Full Chef',
+  buffet: 'Buffet Chef',
+  assistant: 'Assistant',
+};
 
 export default function BookingsPage() {
   const rules = useMoneyRules();
@@ -19,6 +29,7 @@ export default function BookingsPage() {
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [sortField, setSortField] = useState<'eventDate' | 'customerName' | 'eventType' | 'guests' | 'total' | 'status'>('eventDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
 
   const [formData, setFormData] = useState<BookingFormData>({
     eventType: 'private-dinner',
@@ -33,6 +44,7 @@ export default function BookingsPage() {
     distanceMiles: 10,
     premiumAddOn: 0,
     notes: '',
+    staffingProfileId: undefined,
   });
 
   // Load bookings
@@ -70,6 +82,35 @@ export default function BookingsPage() {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('bookingsUpdated', handleCustomStorageChange);
+    };
+  }, []);
+
+  // Load staff records
+  useEffect(() => {
+    const loadStaff = () => {
+      const saved = localStorage.getItem('staff');
+      if (saved) {
+        try {
+          setStaffRecords(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to load staff:', e);
+        }
+      }
+    };
+
+    loadStaff();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'staff') loadStaff();
+    };
+    const handleCustom = () => loadStaff();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('staffUpdated', handleCustom);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('staffUpdated', handleCustom);
     };
   }, []);
 
@@ -146,6 +187,7 @@ export default function BookingsPage() {
         eventDate: new Date(formData.eventDate),
         distanceMiles: formData.distanceMiles,
         premiumAddOn: formData.premiumAddOn,
+        staffingProfileId: formData.staffingProfileId,
       },
       rules
     );
@@ -169,6 +211,8 @@ export default function BookingsPage() {
       total: financials.totalCharged,
       status: selectedBooking?.status || 'pending',
       notes: formData.notes,
+      staffAssignments: formData.staffAssignments,
+      staffingProfileId: formData.staffingProfileId,
       createdAt: selectedBooking?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -199,6 +243,8 @@ export default function BookingsPage() {
       distanceMiles: 10,
       premiumAddOn: 0,
       notes: '',
+      staffAssignments: undefined,
+      staffingProfileId: undefined,
     });
   };
 
@@ -227,6 +273,97 @@ export default function BookingsPage() {
       setSortField(field);
       setSortDirection('asc');
     }
+  };
+
+  // Compute staffing plan from current form data
+  const currentFinancials = useMemo(() => {
+    if (!formData.adults) return null;
+    return calculateEventFinancials(
+      {
+        adults: formData.adults,
+        children: formData.children,
+        eventType: formData.eventType,
+        eventDate: new Date(formData.eventDate),
+        distanceMiles: formData.distanceMiles,
+        premiumAddOn: formData.premiumAddOn,
+        staffingProfileId: formData.staffingProfileId,
+      },
+      rules
+    );
+  }, [formData.eventType, formData.adults, formData.children, formData.distanceMiles, formData.premiumAddOn, formData.eventDate, formData.staffingProfileId, rules]);
+
+  // Get available staff for a given ChefRole
+  const getAvailableStaff = (chefRole: string): StaffRecord[] => {
+    const requiredStaffRole = CHEF_ROLE_TO_STAFF_ROLE[chefRole as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
+    if (!requiredStaffRole) return [];
+    return staffRecords.filter(
+      (s) => s.status === 'active' && (s.primaryRole === requiredStaffRole || s.secondaryRoles.includes(requiredStaffRole))
+    );
+  };
+
+  // Find the assignment for a staffing plan position (handles duplicate roles)
+  const findAssignmentForPosition = (positionIndex: number): StaffAssignment | undefined => {
+    if (!currentFinancials || !formData.staffAssignments) return undefined;
+    const position = currentFinancials.staffingPlan.staff[positionIndex];
+    const staffRole = CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
+
+    // Count how many earlier positions have the same role
+    let sameRoleIndex = 0;
+    for (let i = 0; i < positionIndex; i++) {
+      if (currentFinancials.staffingPlan.staff[i].role === position.role) sameRoleIndex++;
+    }
+
+    // Find the nth assignment with this role
+    let matchCount = 0;
+    return formData.staffAssignments.find((a) => {
+      if (a.role === staffRole) {
+        if (matchCount === sameRoleIndex) return true;
+        matchCount++;
+      }
+      return false;
+    });
+  };
+
+  // Update a staff assignment for a given position index
+  const updateStaffAssignment = (positionIndex: number, staffId: string) => {
+    if (!currentFinancials) return;
+    const position = currentFinancials.staffingPlan.staff[positionIndex];
+    const staffRole = CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
+    const estimatedPay = currentFinancials.laborCompensation[positionIndex]?.finalPay || 0;
+
+    // Count how many earlier positions have the same role
+    let sameRoleIndex = 0;
+    for (let i = 0; i < positionIndex; i++) {
+      if (currentFinancials.staffingPlan.staff[i].role === position.role) sameRoleIndex++;
+    }
+
+    const assignments = [...(formData.staffAssignments || [])];
+
+    // Find existing assignment for this position
+    let matchCount = 0;
+    const existingIdx = assignments.findIndex((a) => {
+      if (a.role === staffRole) {
+        if (matchCount === sameRoleIndex) return true;
+        matchCount++;
+      }
+      return false;
+    });
+
+    if (!staffId) {
+      if (existingIdx >= 0) assignments.splice(existingIdx, 1);
+    } else {
+      const newAssignment: StaffAssignment = { staffId, role: staffRole, estimatedPay, status: 'scheduled' };
+      if (existingIdx >= 0) {
+        assignments[existingIdx] = newAssignment;
+      } else {
+        assignments.push(newAssignment);
+      }
+    }
+
+    setFormData({
+      ...formData,
+      staffAssignments: assignments.length > 0 ? assignments : undefined,
+    });
   };
 
   const statusColors: Record<BookingStatus, string> = {
@@ -463,6 +600,8 @@ export default function BookingsPage() {
                               distanceMiles: booking.distanceMiles,
                               premiumAddOn: booking.premiumAddOn,
                               notes: booking.notes,
+                              staffAssignments: booking.staffAssignments,
+                              staffingProfileId: booking.staffingProfileId,
                             });
                             setShowModal(true);
                           }}
@@ -640,6 +779,8 @@ export default function BookingsPage() {
                               distanceMiles: booking.distanceMiles,
                               premiumAddOn: booking.premiumAddOn,
                               notes: booking.notes,
+                              staffAssignments: booking.staffAssignments,
+                              staffingProfileId: booking.staffingProfileId,
                             });
                             setShowModal(true);
                           }}
@@ -858,6 +999,97 @@ export default function BookingsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Staffing Profile Selector */}
+              {(rules.staffing.profiles || []).length > 0 && (
+                <div>
+                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                    Staffing Profile
+                  </h3>
+                  <select
+                    value={formData.staffingProfileId || ''}
+                    onChange={(e) => {
+                      setFormData({
+                        ...formData,
+                        staffingProfileId: e.target.value || undefined,
+                        staffAssignments: undefined, // Clear assignments when profile changes
+                      });
+                    }}
+                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  >
+                    <option value="">Auto (best match)</option>
+                    {(rules.staffing.profiles || []).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.minGuests}–{p.maxGuests === 9999 ? '\u221E' : p.maxGuests} guests)
+                      </option>
+                    ))}
+                  </select>
+                  {currentFinancials?.staffingPlan.matchedProfileName && (
+                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                      Using profile: <span className="font-medium">{currentFinancials.staffingPlan.matchedProfileName}</span>
+                    </p>
+                  )}
+                  {!currentFinancials?.staffingPlan.matchedProfileId && (
+                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                      Using default staffing rules
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Staff Assignments */}
+              {currentFinancials && currentFinancials.staffingPlan.staff.length > 0 && (
+                <div>
+                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                    Staff Assignments
+                  </h3>
+                  <div className="space-y-3">
+                    {currentFinancials.staffingPlan.staff.map((position, idx) => {
+                      const available = getAvailableStaff(position.role);
+                      const assignment = findAssignmentForPosition(idx);
+                      const laborComp = currentFinancials.laborCompensation[idx];
+
+                      return (
+                        <div
+                          key={`${position.role}-${idx}`}
+                          className="flex items-center gap-4 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
+                        >
+                          <div className="min-w-[140px]">
+                            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                              {CHEF_ROLE_LABELS[position.role] || position.role}
+                            </div>
+                            {laborComp && (
+                              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                                Est. {formatCurrency(laborComp.finalPay)}
+                              </div>
+                            )}
+                          </div>
+                          <select
+                            value={assignment?.staffId || ''}
+                            onChange={(e) => updateStaffAssignment(idx, e.target.value)}
+                            className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                          >
+                            <option value="">Unassigned</option>
+                            {available.map((staff) => (
+                              <option key={staff.id} value={staff.id}>
+                                {staff.name}
+                                {staff.primaryRole === CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE]
+                                  ? ''
+                                  : ` (${STAFF_ROLE_LABELS[staff.primaryRole] || staff.primaryRole})`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {staffRecords.filter((s) => s.status === 'active').length === 0 && (
+                    <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                      No active staff found. Add staff members on the Staff page to assign them here.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Notes */}
               <div>

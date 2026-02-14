@@ -1,4 +1,4 @@
-import type { MoneyRules, EventInput, EventFinancials, StaffingPlan, StaffMember, LaborCompensation, ChefRole, StaffPayOverride } from './types';
+import type { MoneyRules, EventInput, EventFinancials, StaffingPlan, StaffMember, LaborCompensation, ChefRole, StaffPayOverride, StaffingProfile, EventType } from './types';
 
 export const STORAGE_KEY_RULES = "hibachi.moneyRules.v1";
 
@@ -15,6 +15,7 @@ export const DEFAULT_RULES: MoneyRules = {
     maxGuestsPerChefPrivate: 15,
     maxGuestsPerChefBuffet: 25,
     assistantRequired: true,
+    profiles: [],
   },
   privateLabor: {
     leadChefBasePercent: 15,
@@ -97,7 +98,7 @@ export function loadRules(): MoneyRules {
     try {
       const parsed = JSON.parse(saved);
       // Deep merge one level, stripping null/NaN values so defaults are used instead
-      return {
+      const merged = {
         pricing: { ...DEFAULT_RULES.pricing, ...stripInvalid(parsed.pricing) },
         staffing: { ...DEFAULT_RULES.staffing, ...stripInvalid(parsed.staffing) },
         privateLabor: { ...DEFAULT_RULES.privateLabor, ...stripInvalid(parsed.privateLabor) },
@@ -107,6 +108,11 @@ export function loadRules(): MoneyRules {
         profitDistribution: { ...DEFAULT_RULES.profitDistribution, ...stripInvalid(parsed.profitDistribution) },
         safetyLimits: { ...DEFAULT_RULES.safetyLimits, ...stripInvalid(parsed.safetyLimits) },
       };
+      // Ensure profiles is always a valid array
+      if (!Array.isArray(merged.staffing.profiles)) {
+        merged.staffing.profiles = [];
+      }
+      return merged;
     } catch (e) {
       console.error('Failed to load rules:', e);
       return DEFAULT_RULES;
@@ -163,7 +169,7 @@ export function calculateEventFinancials(
   const totalCosts = foodCost + suppliesCost + transportationCost;
 
   // Staffing determination
-  const staffingPlan = determineStaffing(guestCount, eventType, rules);
+  const staffingPlan = determineStaffing(guestCount, eventType, rules, input.staffingProfileId);
 
   // Labor compensation calculations
   const laborCompensation = calculateLabor(
@@ -246,12 +252,120 @@ export function calculateEventFinancials(
   };
 }
 
+// Helper: Find best-matching staffing profile
+export function findMatchingProfile(
+  profiles: StaffingProfile[],
+  eventType: EventType,
+  guestCount: number,
+  staffingProfileId?: string
+): StaffingProfile | undefined {
+  // Explicit override by ID
+  if (staffingProfileId) {
+    const explicit = profiles.find(p => p.id === staffingProfileId);
+    if (explicit) return explicit;
+    // Profile was deleted — fall through to auto-match
+  }
+
+  // Auto-match by event type and guest count
+  const candidates = profiles.filter(p => {
+    const typeMatch = p.eventType === eventType || p.eventType === 'any';
+    const rangeMatch = guestCount >= p.minGuests && guestCount <= p.maxGuests;
+    return typeMatch && rangeMatch;
+  });
+
+  if (candidates.length === 0) return undefined;
+
+  // Prefer exact event type match, then narrowest guest range
+  candidates.sort((a, b) => {
+    const aExact = a.eventType === eventType ? 0 : 1;
+    const bExact = b.eventType === eventType ? 0 : 1;
+    if (aExact !== bExact) return aExact - bExact;
+    return (a.maxGuests - a.minGuests) - (b.maxGuests - b.minGuests);
+  });
+
+  return candidates[0];
+}
+
+// Helper: Build staffing plan from a profile's role list
+function buildStaffingPlanFromProfile(
+  profile: StaffingProfile,
+  rules: MoneyRules
+): StaffingPlan {
+  const chefRoles: ChefRole[] = [];
+  let assistantNeeded = false;
+  const staff: StaffMember[] = [];
+
+  for (const role of profile.roles) {
+    if (role === 'assistant') {
+      assistantNeeded = true;
+      staff.push({
+        role: 'assistant',
+        basePayPercent: rules.privateLabor.assistantBasePercent,
+        cap: rules.privateLabor.assistantCap,
+        isOwner: false,
+      });
+    } else {
+      chefRoles.push(role);
+      let basePayPercent: number;
+      let cap: number | null;
+
+      if (role === 'buffet') {
+        basePayPercent = rules.buffetLabor.chefBasePercent;
+        cap = rules.buffetLabor.chefCap;
+      } else {
+        switch (role) {
+          case 'lead':
+            basePayPercent = rules.privateLabor.leadChefBasePercent;
+            cap = rules.privateLabor.leadChefCap;
+            break;
+          case 'overflow':
+            basePayPercent = rules.privateLabor.overflowChefBasePercent;
+            cap = rules.privateLabor.overflowChefCap;
+            break;
+          case 'full':
+            basePayPercent = rules.privateLabor.fullChefBasePercent;
+            cap = rules.privateLabor.fullChefCap;
+            break;
+          default:
+            basePayPercent = 0;
+            cap = 0;
+        }
+      }
+
+      staff.push({ role, basePayPercent, cap, isOwner: false });
+    }
+  }
+
+  return {
+    chefRoles,
+    assistantNeeded,
+    totalStaffCount: staff.length,
+    staff,
+    matchedProfileId: profile.id,
+    matchedProfileName: profile.name,
+  };
+}
+
 // Helper: Determine staffing needs
 function determineStaffing(
   guestCount: number,
-  eventType: 'private-dinner' | 'buffet',
-  rules: MoneyRules
+  eventType: EventType,
+  rules: MoneyRules,
+  staffingProfileId?: string
 ): StaffingPlan {
+  // Try profile-based staffing first
+  const matchedProfile = findMatchingProfile(
+    rules.staffing.profiles,
+    eventType,
+    guestCount,
+    staffingProfileId
+  );
+
+  if (matchedProfile) {
+    return buildStaffingPlanFromProfile(matchedProfile, rules);
+  }
+
+  // Fallback: hardcoded logic
   if (eventType === 'buffet') {
     const maxPerChef = rules.staffing.maxGuestsPerChefBuffet;
     const chefsNeeded = Math.ceil(guestCount / maxPerChef);

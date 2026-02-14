@@ -12,6 +12,17 @@ export type ChefRole = 'lead' | 'overflow' | 'full' | 'buffet';
 
 export type OwnerRole = 'owner-a' | 'owner-b';
 
+export type StaffingRoleEntry = ChefRole | 'assistant';
+
+export interface StaffingProfile {
+  id: string;
+  name: string;
+  eventType: EventType | 'any';
+  minGuests: number;
+  maxGuests: number; // 9999 = no upper limit
+  roles: StaffingRoleEntry[];
+}
+
 export interface EventInput {
   adults: number;
   children: number; // under 13 years old
@@ -20,6 +31,7 @@ export interface EventInput {
   distanceMiles: number;
   premiumAddOn?: number; // $ per guest
   staffPayOverrides?: StaffPayOverride[]; // Event-level overrides for staff pay
+  staffingProfileId?: string; // Override auto-matched staffing profile
 }
 
 // Per-staff-role override for event-level pay adjustments
@@ -50,6 +62,7 @@ export interface MoneyRules {
     maxGuestsPerChefPrivate: number; // guests (default: 15)
     maxGuestsPerChefBuffet: number; // guests (default: 25)
     assistantRequired: boolean; // for private events
+    profiles: StaffingProfile[]; // Named staffing compositions
   };
 
   // Private Event Labor
@@ -122,6 +135,8 @@ export interface StaffingPlan {
   assistantNeeded: boolean;
   totalStaffCount: number;
   staff: StaffMember[];
+  matchedProfileId?: string;
+  matchedProfileName?: string;
 }
 
 // ----------------------------------------------------------------------------
