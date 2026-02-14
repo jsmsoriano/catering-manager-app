@@ -11,14 +11,16 @@ import {
   ReceiptPercentIcon,
   UsersIcon,
   ClipboardDocumentListIcon,
+  CalculatorIcon,
 } from '@heroicons/react/24/outline';
 import ThemeToggle from './ThemeToggle';
 
 const navigation = [
-  { name: 'Calculator', href: '/', icon: HomeIcon },
+  { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Bookings', href: '/bookings', icon: CalendarDaysIcon },
   { name: 'Menus', href: '/menus', icon: ClipboardDocumentListIcon },
   { name: 'Staff', href: '/staff', icon: UsersIcon },
+  { name: 'Calculator', href: '/calculator', icon: CalculatorIcon },
   { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon },
   { name: 'Money Rules', href: '/money-rules', icon: CogIcon },
   {
