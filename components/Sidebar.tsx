@@ -22,7 +22,7 @@ const navigation = [
   { name: 'Staff', href: '/staff', icon: UsersIcon },
   { name: 'Calculator', href: '/calculator', icon: CalculatorIcon },
   { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon },
-  { name: 'Money Rules', href: '/money-rules', icon: CogIcon },
+  { name: 'Business Rules', href: '/business-rules', icon: CogIcon },
   {
     name: 'Reports',
     icon: DocumentChartBarIcon,

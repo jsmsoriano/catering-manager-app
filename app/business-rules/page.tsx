@@ -10,6 +10,15 @@ export default function MoneyRulesPage() {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showProfileForm, setShowProfileForm] = useState(false);
   const [editingProfile, setEditingProfile] = useState<StaffingProfile | null>(null);
+  const [activeTab, setActiveTab] = useState('pricing');
+
+  const tabs = [
+    { id: 'pricing', name: 'Pricing' },
+    { id: 'staffing', name: 'Staffing' },
+    { id: 'labor', name: 'Labor' },
+    { id: 'costs', name: 'Costs & Fees' },
+    { id: 'profit', name: 'Profit' },
+  ];
 
   // Load saved rules from localStorage on mount (using safe deep merge)
   useEffect(() => {
@@ -123,7 +132,7 @@ export default function MoneyRulesPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          Money Rules Configuration
+          Business Rules
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
           Configure all pricing, labor, and profit distribution rules for your business.
@@ -159,7 +168,29 @@ export default function MoneyRulesPage() {
         )}
       </div>
 
+      {/* Tab Bar */}
+      <div className="mb-8 border-b border-zinc-200 dark:border-zinc-800">
+        <nav className="-mb-px flex space-x-8">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
+                  : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-300'
+              }`}
+            >
+              {tab.name}
+            </button>
+          ))}
+        </nav>
+      </div>
+
       <div className="space-y-8">
+        {/* PRICING TAB */}
+        {activeTab === 'pricing' && (
+        <>
         {/* PRICING SECTION */}
         <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
@@ -259,6 +290,12 @@ export default function MoneyRulesPage() {
           </div>
         </section>
 
+        </>
+        )}
+
+        {/* STAFFING TAB */}
+        {activeTab === 'staffing' && (
+        <>
         {/* STAFFING SECTION */}
         <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
@@ -511,6 +548,12 @@ export default function MoneyRulesPage() {
           )}
         </section>
 
+        </>
+        )}
+
+        {/* LABOR TAB */}
+        {activeTab === 'labor' && (
+        <>
         {/* PRIVATE LABOR SECTION */}
         <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
@@ -728,6 +771,12 @@ export default function MoneyRulesPage() {
           </div>
         </section>
 
+        </>
+        )}
+
+        {/* COSTS & FEES TAB */}
+        {activeTab === 'costs' && (
+        <>
         {/* COST STRUCTURE SECTION */}
         <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
@@ -861,6 +910,12 @@ export default function MoneyRulesPage() {
           </div>
         </section>
 
+        </>
+        )}
+
+        {/* PROFIT TAB */}
+        {activeTab === 'profit' && (
+        <>
         {/* PROFIT DISTRIBUTION SECTION */}
         <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
@@ -999,6 +1054,8 @@ export default function MoneyRulesPage() {
             </div>
           </div>
         </section>
+        </>
+        )}
       </div>
 
       {/* Bottom Save Button */}

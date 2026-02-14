@@ -460,7 +460,7 @@ export default function OwnerMonthlyReportPage() {
                 <p>
                   As a working chef/staff member, you earn a percentage of each event's revenue plus
                   your share of gratuity. This varies by your role (lead chef, assistant, etc.) and
-                  is subject to caps configured in Money Rules.
+                  is subject to caps configured in Business Rules.
                 </p>
               </div>
               <div>
@@ -484,7 +484,7 @@ export default function OwnerMonthlyReportPage() {
         {/* Footer */}
         <div className="mt-8 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-700">
           <p>
-            This report is generated based on current Money Rules settings. Historical events may
+            This report is generated based on current Business Rules settings. Historical events may
             have used different rates.
           </p>
           <p className="mt-2">

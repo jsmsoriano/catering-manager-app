@@ -762,7 +762,7 @@ export default function StaffPayoutReportPage() {
         {/* Footer */}
         <div className="mt-8 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-700">
           <p>
-            This report is generated based on current Money Rules settings.
+            This report is generated based on current Business Rules settings.
             Historical events may have used different rates.
           </p>
           <p className="mt-2">

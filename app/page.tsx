@@ -192,7 +192,7 @@ export default function DashboardPage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* Upcoming Events */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-950/50">
                 <CalendarDaysIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
@@ -208,7 +208,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Monthly Revenue */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-emerald-50 p-2.5 dark:bg-emerald-950/50">
                 <BanknotesIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -224,7 +224,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Monthly Profit */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-950/50">
                 <ArrowTrendingUpIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
@@ -242,7 +242,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Pending Bookings */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-amber-50 p-2.5 dark:bg-amber-950/50">
                 <ClockIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />
@@ -259,8 +259,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Upcoming Events Table */}
-        <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+        <div className="rounded-xl border border-zinc-200/60 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               Upcoming Events
             </h2>
@@ -339,7 +339,7 @@ export default function DashboardPage() {
         {/* Monthly Snapshot + Action Items */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Monthly Snapshot */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-zinc-200/60 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               Monthly Snapshot
             </h2>
@@ -415,13 +415,13 @@ export default function DashboardPage() {
           </div>
 
           {/* Action Items */}
-          <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-xl border border-zinc-200/60 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-5 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               Action Items
             </h2>
             <div className="space-y-3">
               {dashboard.todayEvents.length > 0 && (
-                <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-950/30">
+                <div className="rounded-xl bg-blue-50/80 p-4 dark:bg-blue-950/30">
                   <div className="flex items-start gap-3">
                     <CalendarDaysIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
                     <div>
@@ -437,7 +437,7 @@ export default function DashboardPage() {
               )}
 
               {dashboard.tomorrowEvents.length > 0 && (
-                <div className="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-950/30">
+                <div className="rounded-xl bg-indigo-50/80 p-4 dark:bg-indigo-950/30">
                   <div className="flex items-start gap-3">
                     <CalendarDaysIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-indigo-600 dark:text-indigo-400" />
                     <div>
@@ -454,7 +454,7 @@ export default function DashboardPage() {
 
               {dashboard.pendingBookings.length > 0 && (
                 <Link href="/bookings" className="block">
-                  <div className="rounded-lg bg-amber-50 p-4 transition-colors hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50">
+                  <div className="rounded-xl bg-amber-50/80 p-4 transition-colors hover:bg-amber-100/80 dark:bg-amber-950/30 dark:hover:bg-amber-950/50">
                     <div className="flex items-start gap-3">
                       <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                       <div>
@@ -473,7 +473,7 @@ export default function DashboardPage() {
               {dashboard.todayEvents.length === 0 &&
                 dashboard.tomorrowEvents.length === 0 &&
                 dashboard.pendingBookings.length === 0 && (
-                  <div className="rounded-lg bg-emerald-50 p-4 dark:bg-emerald-950/30">
+                  <div className="rounded-xl bg-emerald-50/80 p-4 dark:bg-emerald-950/30">
                     <div className="flex items-center gap-3">
                       <CheckCircleIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                       <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
@@ -490,7 +490,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Link
             href="/bookings"
-            className="group rounded-lg border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
+            className="group rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
           >
             <CalendarDaysIcon className="h-6 w-6 text-zinc-400 transition-colors group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-400" />
             <p className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">New Booking</p>
@@ -499,7 +499,7 @@ export default function DashboardPage() {
 
           <Link
             href="/calculator"
-            className="group rounded-lg border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
+            className="group rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
           >
             <CalculatorIcon className="h-6 w-6 text-zinc-400 transition-colors group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-400" />
             <p className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Calculator</p>
@@ -508,7 +508,7 @@ export default function DashboardPage() {
 
           <Link
             href="/reports"
-            className="group rounded-lg border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
+            className="group rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
           >
             <DocumentChartBarIcon className="h-6 w-6 text-zinc-400 transition-colors group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-400" />
             <p className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Reports</p>
@@ -516,11 +516,11 @@ export default function DashboardPage() {
           </Link>
 
           <Link
-            href="/money-rules"
-            className="group rounded-lg border border-zinc-200 bg-white p-5 transition-all hover:border-indigo-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
+            href="/business-rules"
+            className="group rounded-xl border border-zinc-200/60 bg-white p-5 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
           >
             <CogIcon className="h-6 w-6 text-zinc-400 transition-colors group-hover:text-indigo-600 dark:text-zinc-500 dark:group-hover:text-indigo-400" />
-            <p className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Money Rules</p>
+            <p className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Business Rules</p>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Configure pricing</p>
           </Link>
         </div>
