@@ -6,6 +6,8 @@ import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { OwnerRole } from '@/lib/types';
+import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
+import { CHEF_ROLE_TO_STAFF_ROLE, STAFF_ROLE_TO_CHEF_ROLE } from '@/lib/staffTypes';
 
 // Helper to parse date strings as local dates (not UTC)
 function parseLocalDate(dateString: string): Date {
@@ -16,10 +18,11 @@ function parseLocalDate(dateString: string): Date {
 export default function OwnerMonthlyReportPage() {
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
   const [selectedOwner, setSelectedOwner] = useState<OwnerRole>('owner-a');
 
-  // Load bookings and listen for updates
+  // Load bookings and staff, listen for updates
   useEffect(() => {
     const loadBookings = () => {
       const saved = localStorage.getItem('bookings');
@@ -32,27 +35,34 @@ export default function OwnerMonthlyReportPage() {
       }
     };
 
-    // Initial load
-    loadBookings();
-
-    // Listen for storage changes (cross-tab updates)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'bookings') {
-        loadBookings();
+    const loadStaff = () => {
+      const saved = localStorage.getItem('staff');
+      if (saved) {
+        try {
+          setStaffRecords(JSON.parse(saved));
+        } catch { /* ignore */ }
       }
     };
 
-    // Listen for custom events (same-tab updates)
-    const handleCustomStorageChange = () => {
-      loadBookings();
+    loadBookings();
+    loadStaff();
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'bookings') loadBookings();
+      if (e.key === 'staff') loadStaff();
     };
 
+    const handleBookingsUpdate = () => loadBookings();
+    const handleStaffUpdate = () => loadStaff();
+
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('bookingsUpdated', handleCustomStorageChange);
+    window.addEventListener('bookingsUpdated', handleBookingsUpdate);
+    window.addEventListener('staffUpdated', handleStaffUpdate);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('bookingsUpdated', handleCustomStorageChange);
+      window.removeEventListener('bookingsUpdated', handleBookingsUpdate);
+      window.removeEventListener('staffUpdated', handleStaffUpdate);
     };
   }, []);
 
@@ -70,6 +80,35 @@ export default function OwnerMonthlyReportPage() {
     });
   }, [bookings, selectedMonth]);
 
+  // Build staff ID lookup for resolving assignments
+  const staffById = useMemo(() => {
+    const map = new Map<string, StaffRecord>();
+    staffRecords.forEach((s) => map.set(s.id, s));
+    return map;
+  }, [staffRecords]);
+
+  // Build role-based owner lookup (chefRole → staff record) as fallback
+  const ownerRoleLookup = useMemo(() => {
+    const lookup = new Map<string, StaffRecord>();
+    staffRecords
+      .filter((s) => s.isOwner && s.ownerRole === selectedOwner && s.status === 'active')
+      .forEach((s) => {
+        const chefRole = STAFF_ROLE_TO_CHEF_ROLE[s.primaryRole];
+        if (chefRole) {
+          lookup.set(chefRole, s);
+        }
+      });
+    return lookup;
+  }, [staffRecords, selectedOwner]);
+
+  const ROLE_LABELS: Record<string, string> = {
+    lead: 'Lead Chef',
+    overflow: 'Overflow Chef',
+    full: 'Full Chef',
+    buffet: 'Buffet Chef',
+    assistant: 'Assistant',
+  };
+
   // Calculate detailed compensation
   const reportData = useMemo(() => {
     let totalLaborEarnings = 0;
@@ -86,7 +125,6 @@ export default function OwnerMonthlyReportPage() {
     }> = [];
 
     monthBookings.forEach((booking) => {
-      // Recalculate financials with current rules
       const financials = calculateEventFinancials(
         {
           adults: booking.adults,
@@ -95,22 +133,70 @@ export default function OwnerMonthlyReportPage() {
           eventDate: parseLocalDate(booking.eventDate),
           distanceMiles: booking.distanceMiles,
           premiumAddOn: booking.premiumAddOn,
+          staffingProfileId: booking.staffingProfileId,
         },
         rules
       );
 
-      // Find owner's labor compensation
-      const ownerLabor = financials.laborCompensation.find(
-        (comp) => comp.ownerRole === selectedOwner
-      );
+      // Find the owner's labor compensation entry
+      let ownerLaborPay = 0;
+      let ownerRole = 'N/A';
+      let foundOwnerLabor = false;
 
-      const laborPay = ownerLabor?.finalPay || 0;
+      // Priority 1: Check booking.staffAssignments for the selected owner
+      if (booking.staffAssignments) {
+        for (let compIdx = 0; compIdx < financials.laborCompensation.length; compIdx++) {
+          if (foundOwnerLabor) break;
+          const comp = financials.laborCompensation[compIdx];
+          const staffRole = CHEF_ROLE_TO_STAFF_ROLE[comp.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
+          if (!staffRole) continue;
+
+          // Count same-role positions before this index
+          let sameRoleIndex = 0;
+          for (let i = 0; i < compIdx; i++) {
+            if (financials.laborCompensation[i].role === comp.role) sameRoleIndex++;
+          }
+
+          // Find the nth assignment matching this role
+          let matchCount = 0;
+          const assignment = booking.staffAssignments.find((a) => {
+            if (a.role === staffRole) {
+              if (matchCount === sameRoleIndex) return true;
+              matchCount++;
+            }
+            return false;
+          });
+
+          if (assignment) {
+            const staffRecord = staffById.get(assignment.staffId);
+            if (staffRecord && staffRecord.isOwner && staffRecord.ownerRole === selectedOwner) {
+              ownerLaborPay = comp.finalPay;
+              ownerRole = ROLE_LABELS[comp.role] || comp.role;
+              foundOwnerLabor = true;
+            }
+          }
+        }
+      }
+
+      // Priority 2: Fallback to role-based owner matching
+      if (!foundOwnerLabor) {
+        for (const comp of financials.laborCompensation) {
+          const ownerStaff = ownerRoleLookup.get(comp.role);
+          if (ownerStaff) {
+            ownerLaborPay = comp.finalPay;
+            ownerRole = ROLE_LABELS[comp.role] || comp.role;
+            foundOwnerLabor = true;
+            break;
+          }
+        }
+      }
+
       const profitShare =
         selectedOwner === 'owner-a'
           ? financials.ownerADistribution
           : financials.ownerBDistribution;
 
-      totalLaborEarnings += laborPay;
+      totalLaborEarnings += ownerLaborPay;
       totalProfitDistribution += profitShare;
 
       eventDetails.push({
@@ -119,10 +205,10 @@ export default function OwnerMonthlyReportPage() {
         eventType:
           booking.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet Catering',
         guests: booking.adults + booking.children,
-        role: ownerLabor?.role || 'N/A',
-        laborPay,
+        role: ownerRole,
+        laborPay: ownerLaborPay,
         profitShare,
-        total: laborPay + profitShare,
+        total: ownerLaborPay + profitShare,
       });
     });
 
@@ -137,7 +223,7 @@ export default function OwnerMonthlyReportPage() {
           ? (totalLaborEarnings + totalProfitDistribution) / monthBookings.length
           : 0,
     };
-  }, [monthBookings, rules, selectedOwner]);
+  }, [monthBookings, rules, selectedOwner, staffById, ownerRoleLookup]);
 
   const handlePrint = () => {
     window.print();
@@ -154,7 +240,7 @@ export default function OwnerMonthlyReportPage() {
       {/* Header - Hide on print */}
       <div className="mb-8 print:hidden">
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          Owner Monthly Compensation Report
+          Owner Distribution Summary
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
           Detailed breakdown of labor earnings and profit distributions
@@ -203,7 +289,7 @@ export default function OwnerMonthlyReportPage() {
         <div className="hidden border-b border-zinc-300 pb-6 print:block">
           <h1 className="text-3xl font-bold text-zinc-900">Hibachi A Go Go</h1>
           <h2 className="mt-2 text-xl font-semibold text-zinc-700">
-            Monthly Compensation Report
+            Owner Distribution Summary
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600">
             <div>

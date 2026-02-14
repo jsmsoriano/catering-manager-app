@@ -1111,7 +1111,7 @@ export default function ReportsDashboardPage() {
           className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            Owner Monthly Reports
+            Owner Distribution Summary
           </h3>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             Detailed compensation breakdown for each owner
