@@ -30,6 +30,8 @@ export interface EventInput {
   eventDate: Date;
   distanceMiles: number;
   premiumAddOn?: number; // $ per guest
+  subtotalOverride?: number; // Optional revenue subtotal override (e.g., menu-based pricing)
+  foodCostOverride?: number; // Optional food cost override (e.g., menu-based COGS)
   staffPayOverrides?: StaffPayOverride[]; // Event-level overrides for staff pay
   staffingProfileId?: string; // Override auto-matched staffing profile
 }

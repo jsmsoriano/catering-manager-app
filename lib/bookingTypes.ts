@@ -4,6 +4,7 @@
 
 import type { EventType } from './types';
 import type { StaffAssignment } from './staffTypes';
+import type { MenuPricingSnapshot } from './menuTypes';
 
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
@@ -43,6 +44,7 @@ export interface Booking {
 
   // Menu
   menuId?: string; // Reference to EventMenu
+  menuPricingSnapshot?: MenuPricingSnapshot; // Menu-derived pricing override snapshot
 
   // Reconciliation
   reconciliationId?: string; // Reference to EventReconciliation

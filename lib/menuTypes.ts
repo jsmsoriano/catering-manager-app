@@ -14,6 +14,7 @@ export interface MenuItem {
   name: string;
   category: MenuCategory;
   description: string;
+  pricePerServing: number; // Price charged per serving
   costPerServing: number; // Cost to make this item
   isAvailable: boolean;
   dietaryTags?: string[]; // e.g., ['vegetarian', 'gluten-free', 'dairy-free']
@@ -48,6 +49,19 @@ export interface EventMenu {
   guestSelections: GuestMenuSelection[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MenuPricingSnapshot {
+  menuId: string;
+  subtotalOverride: number;
+  foodCostOverride: number;
+  calculatedAt: string;
+}
+
+export interface MenuPricingBreakdown {
+  subtotalOverride: number;
+  foodCostOverride: number;
+  missingItemIds: string[];
 }
 
 // Form data for guest menu selection

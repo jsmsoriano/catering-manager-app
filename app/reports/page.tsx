@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, subMonths, parseISO } from 'date-fns';
 import Link from 'next/link';
-import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
+import { formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { Expense, ExpenseCategory } from '@/lib/expenseTypes';
@@ -173,17 +174,7 @@ export default function ReportsDashboardPage() {
     }> = [];
 
     monthBookings.forEach((booking) => {
-      const financials = calculateEventFinancials(
-        {
-          adults: booking.adults,
-          children: booking.children,
-          eventType: booking.eventType,
-          eventDate: parseLocalDate(booking.eventDate),
-          distanceMiles: booking.distanceMiles,
-          premiumAddOn: booking.premiumAddOn,
-        },
-        rules
-      );
+      const { financials } = calculateBookingFinancials(booking, rules);
 
       totalRevenue += financials.subtotal + financials.distanceFee;
       totalFoodCosts += financials.foodCost;
@@ -328,17 +319,7 @@ export default function ReportsDashboardPage() {
       let costs = 0;
 
       monthBookings.forEach((booking) => {
-        const financials = calculateEventFinancials(
-          {
-            adults: booking.adults,
-            children: booking.children,
-            eventType: booking.eventType,
-            eventDate: parseLocalDate(booking.eventDate),
-            distanceMiles: booking.distanceMiles,
-            premiumAddOn: booking.premiumAddOn,
-          },
-          rules
-        );
+        const { financials } = calculateBookingFinancials(booking, rules);
         revenue += financials.subtotal + financials.distanceFee;
         profit += financials.grossProfit;
         costs += financials.foodCost + financials.totalLaborPaid;

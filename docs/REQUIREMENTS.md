@@ -1,6 +1,6 @@
 # Catering App - Business Requirements
 
-> **Last Updated**: 2026-02-12
+> **Last Updated**: 2026-02-15
 > **Version**: 0.1.0
 
 ## Overview
@@ -163,7 +163,7 @@ TOTAL:                    = $825.00
 ## Future Considerations
 
 ### Planned Features
-- [ ] Menu item selection with per-item pricing
+- [x] Menu item selection with per-item pricing (implemented for private-dinner bookings)
 - [ ] Package deals and promotions
 - [ ] Tax calculation based on location
 - [ ] Holiday surcharge (beyond weekends)

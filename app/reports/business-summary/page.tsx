@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
+import { formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking, BookingStatus } from '@/lib/bookingTypes';
 
@@ -96,17 +97,7 @@ export default function BusinessSummaryPage() {
     let totalChildren = 0;
 
     monthBookings.forEach((booking) => {
-      const financials = calculateEventFinancials(
-        {
-          adults: booking.adults,
-          children: booking.children,
-          eventType: booking.eventType,
-          eventDate: parseLocalDate(booking.eventDate),
-          distanceMiles: booking.distanceMiles,
-          premiumAddOn: booking.premiumAddOn,
-        },
-        rules
-      );
+      const { financials } = calculateBookingFinancials(booking, rules);
 
       // Aggregate totals
       totalRevenue += financials.totalCharged;

@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { format, startOfMonth, endOfMonth, isWithinInterval, isToday, isTomorrow } from 'date-fns';
-import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
+import { formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import {
@@ -79,18 +80,7 @@ export default function DashboardPage() {
     const statusCounts = { pending: 0, confirmed: 0, completed: 0 };
 
     monthBookings.forEach((booking) => {
-      const fin = calculateEventFinancials(
-        {
-          adults: booking.adults,
-          children: booking.children,
-          eventType: booking.eventType,
-          eventDate: parseLocalDate(booking.eventDate),
-          distanceMiles: booking.distanceMiles,
-          premiumAddOn: booking.premiumAddOn,
-          staffingProfileId: booking.staffingProfileId,
-        },
-        rules
-      );
+      const { financials: fin } = calculateBookingFinancials(booking, rules);
       totalRevenue += fin.subtotal + fin.distanceFee;
       totalCosts += fin.totalCosts + fin.totalLaborPaid;
       totalGrossProfit += fin.grossProfit;
@@ -117,18 +107,7 @@ export default function DashboardPage() {
       .sort((a, b) => parseLocalDate(a.eventDate).getTime() - parseLocalDate(b.eventDate).getTime())
       .slice(0, 5)
       .map((b) => {
-        const fin = calculateEventFinancials(
-          {
-            adults: b.adults,
-            children: b.children,
-            eventType: b.eventType,
-            eventDate: parseLocalDate(b.eventDate),
-            distanceMiles: b.distanceMiles,
-            premiumAddOn: b.premiumAddOn,
-            staffingProfileId: b.staffingProfileId,
-          },
-          rules
-        );
+        const { financials: fin } = calculateBookingFinancials(b, rules);
         return {
           id: b.id,
           date: b.eventDate,

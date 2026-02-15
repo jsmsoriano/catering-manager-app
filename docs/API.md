@@ -134,6 +134,42 @@ console.log(summary);
 
 ---
 
+## Menu-Aware Pricing Helpers
+
+### Revenue/Cost Overrides in Event Inputs
+
+`calculateEventFinancials()` accepts optional menu-derived overrides:
+
+```typescript
+interface EventInput {
+  // existing fields...
+  subtotalOverride?: number;  // Override computed subtotal
+  foodCostOverride?: number;  // Override percent-based food cost
+}
+```
+
+When provided, downstream gratuity, labor, profit, and owner distributions are calculated from these override values.
+
+### `calculateMenuPricingBreakdown()`
+
+Calculates menu-derived subtotal and food cost from guest selections and menu item catalog data.
+
+**Location**: `lib/menuPricing.ts`
+
+### `buildMenuPricingSnapshot()`
+
+Builds a booking-safe `menuPricingSnapshot` payload for persistent storage on a booking record.
+
+**Location**: `lib/menuPricing.ts`
+
+### `calculateBookingFinancials()`
+
+Wrapper helper that computes booking financials and automatically applies `booking.menuPricingSnapshot` overrides when present.
+
+**Location**: `lib/bookingFinancials.ts`
+
+---
+
 ## Constants
 
 ### `DEFAULT_PRICING`

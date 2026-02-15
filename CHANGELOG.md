@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimum order enforcement ($200 or 10 guests)
 - Responsive UI with dark mode support
 - TypeScript strict mode configuration
+- Menu-aware pricing snapshots for private-dinner bookings
+- Menu item catalog now supports `pricePerServing` and `costPerServing`
+- Booking/dashboard/report/reconciliation financials now honor menu pricing overrides
 
 ## [0.1.0] - 2026-02-12
 

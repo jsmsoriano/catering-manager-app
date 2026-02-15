@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { formatCurrency } from '@/lib/moneyRules';
 import type { MenuItem, MenuCategory } from '@/lib/menuTypes';
+import { DEFAULT_MENU_ITEMS } from '@/lib/defaultMenuItems';
 
 const categoryLabels: Record<MenuCategory, string> = {
   protein: 'Proteins',
@@ -31,6 +32,7 @@ export default function MenusPage() {
     name: '',
     category: 'protein' as MenuCategory,
     description: '',
+    pricePerServing: '',
     costPerServing: '',
     isAvailable: true,
     dietaryTags: '',
@@ -39,99 +41,35 @@ export default function MenusPage() {
 
   // Load menu items from localStorage
   useEffect(() => {
+    const defaultById = new Map(DEFAULT_MENU_ITEMS.map((item) => [item.id, item]));
+    const normalizeMenuItem = (item: MenuItem): MenuItem => {
+      const fallback = defaultById.get(item.id);
+      const normalizedCost = Number.isFinite(item.costPerServing) ? item.costPerServing : 0;
+      const hasPrice = Number.isFinite(item.pricePerServing);
+      const normalizedPrice = hasPrice
+        ? (item.pricePerServing as number)
+        : fallback?.pricePerServing ?? Math.max(0, normalizedCost * 3);
+
+      return {
+        ...item,
+        costPerServing: normalizedCost,
+        pricePerServing: normalizedPrice,
+      };
+    };
+
     const saved = localStorage.getItem('menuItems');
     if (saved) {
       try {
-        setMenuItems(JSON.parse(saved));
+        const parsed = JSON.parse(saved) as MenuItem[];
+        const normalized = parsed.map(normalizeMenuItem);
+        setMenuItems(normalized);
+        localStorage.setItem('menuItems', JSON.stringify(normalized));
       } catch (e) {
         console.error('Failed to load menu items:', e);
       }
     } else {
-      // Load default menu items for private dining
-      const defaultItems: MenuItem[] = [
-        {
-          id: 'protein-chicken',
-          name: 'Chicken',
-          category: 'protein',
-          description: 'Grilled hibachi chicken',
-          costPerServing: 3.5,
-          isAvailable: true,
-          dietaryTags: [],
-          allergens: [],
-        },
-        {
-          id: 'protein-steak',
-          name: 'Steak',
-          category: 'protein',
-          description: 'Premium hibachi steak',
-          costPerServing: 6.0,
-          isAvailable: true,
-          dietaryTags: [],
-          allergens: [],
-        },
-        {
-          id: 'protein-shrimp',
-          name: 'Shrimp',
-          category: 'protein',
-          description: 'Grilled hibachi shrimp',
-          costPerServing: 5.0,
-          isAvailable: true,
-          dietaryTags: [],
-          allergens: ['shellfish'],
-        },
-        {
-          id: 'protein-scallops',
-          name: 'Scallops',
-          category: 'protein',
-          description: 'Seared hibachi scallops',
-          costPerServing: 7.0,
-          isAvailable: true,
-          dietaryTags: [],
-          allergens: ['shellfish'],
-        },
-        {
-          id: 'side-rice',
-          name: 'Fried Rice',
-          category: 'side',
-          description: 'Classic hibachi fried rice',
-          costPerServing: 1.0,
-          isAvailable: true,
-          dietaryTags: [],
-          allergens: ['eggs', 'soy'],
-        },
-        {
-          id: 'side-noodles',
-          name: 'Noodles',
-          category: 'side',
-          description: 'Hibachi noodles',
-          costPerServing: 1.0,
-          isAvailable: true,
-          dietaryTags: [],
-          allergens: ['gluten', 'soy'],
-        },
-        {
-          id: 'side-salad',
-          name: 'Side Salad',
-          category: 'side',
-          description: 'Fresh garden salad with ginger dressing',
-          costPerServing: 0.75,
-          isAvailable: true,
-          dietaryTags: ['vegetarian'],
-          allergens: [],
-        },
-        {
-          id: 'side-veggies',
-          name: 'Mixed Vegetables',
-          category: 'side',
-          description: 'Grilled seasonal vegetables',
-          costPerServing: 1.25,
-          isAvailable: true,
-          dietaryTags: ['vegetarian', 'vegan'],
-          allergens: [],
-        },
-      ];
-      setMenuItems(defaultItems);
-      localStorage.setItem('menuItems', JSON.stringify(defaultItems));
+      setMenuItems(DEFAULT_MENU_ITEMS);
+      localStorage.setItem('menuItems', JSON.stringify(DEFAULT_MENU_ITEMS));
     }
   }, []);
 
@@ -188,6 +126,7 @@ export default function MenusPage() {
       name: formData.name,
       category: formData.category,
       description: formData.description,
+      pricePerServing: parseFloat(formData.pricePerServing) || 0,
       costPerServing: parseFloat(formData.costPerServing) || 0,
       isAvailable: formData.isAvailable,
       dietaryTags: formData.dietaryTags ? formData.dietaryTags.split(',').map((t) => t.trim()) : [],
@@ -208,6 +147,7 @@ export default function MenusPage() {
       name: '',
       category: 'protein',
       description: '',
+      pricePerServing: '',
       costPerServing: '',
       isAvailable: true,
       dietaryTags: '',
@@ -223,6 +163,7 @@ export default function MenusPage() {
       name: item.name,
       category: item.category,
       description: item.description,
+      pricePerServing: item.pricePerServing.toString(),
       costPerServing: item.costPerServing.toString(),
       isAvailable: item.isAvailable,
       dietaryTags: item.dietaryTags?.join(', ') || '',
@@ -395,8 +336,11 @@ export default function MenusPage() {
                 {item.description}
               </p>
 
-              <div className="mb-4 text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(item.costPerServing)} / serving
+              <div className="mb-1 text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(item.pricePerServing)} price / serving
+              </div>
+              <div className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+                {formatCurrency(item.costPerServing)} cost / serving
               </div>
 
               {(item.dietaryTags && item.dietaryTags.length > 0) && (
@@ -484,6 +428,26 @@ export default function MenusPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Price per Serving *
+                  </label>
+                  <div className="relative mt-1">
+                    <span className="absolute left-3 top-2 text-zinc-500">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={formData.pricePerServing}
+                      onChange={(e) =>
+                        setFormData({ ...formData, pricePerServing: e.target.value })
+                      }
+                      className="w-full rounded-md border border-zinc-300 py-2 pl-7 pr-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    />
+                  </div>
                 </div>
 
                 <div>

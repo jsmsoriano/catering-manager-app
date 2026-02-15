@@ -179,6 +179,14 @@ export default function BookingsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const shouldPreserveMenuPricing =
+      formData.eventType === 'private-dinner' &&
+      selectedBooking?.eventType === 'private-dinner';
+    const preservedMenuSnapshot = shouldPreserveMenuPricing
+      ? selectedBooking?.menuPricingSnapshot
+      : undefined;
+    const preservedMenuId = shouldPreserveMenuPricing ? selectedBooking?.menuId : undefined;
+
     const financials = calculateEventFinancials(
       {
         adults: formData.adults,
@@ -187,6 +195,8 @@ export default function BookingsPage() {
         eventDate: new Date(formData.eventDate),
         distanceMiles: formData.distanceMiles,
         premiumAddOn: formData.premiumAddOn,
+        subtotalOverride: preservedMenuSnapshot?.subtotalOverride,
+        foodCostOverride: preservedMenuSnapshot?.foodCostOverride,
         staffingProfileId: formData.staffingProfileId,
       },
       rules
@@ -213,6 +223,9 @@ export default function BookingsPage() {
       notes: formData.notes,
       staffAssignments: formData.staffAssignments,
       staffingProfileId: formData.staffingProfileId,
+      menuId: preservedMenuId,
+      menuPricingSnapshot: preservedMenuSnapshot,
+      reconciliationId: selectedBooking?.reconciliationId,
       createdAt: selectedBooking?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -278,6 +291,12 @@ export default function BookingsPage() {
   // Compute staffing plan from current form data
   const currentFinancials = useMemo(() => {
     if (!formData.adults) return null;
+    const activeMenuSnapshot =
+      formData.eventType === 'private-dinner' &&
+      selectedBooking?.eventType === 'private-dinner'
+        ? selectedBooking.menuPricingSnapshot
+        : undefined;
+
     return calculateEventFinancials(
       {
         adults: formData.adults,
@@ -286,11 +305,13 @@ export default function BookingsPage() {
         eventDate: new Date(formData.eventDate),
         distanceMiles: formData.distanceMiles,
         premiumAddOn: formData.premiumAddOn,
+        subtotalOverride: activeMenuSnapshot?.subtotalOverride,
+        foodCostOverride: activeMenuSnapshot?.foodCostOverride,
         staffingProfileId: formData.staffingProfileId,
       },
       rules
     );
-  }, [formData.eventType, formData.adults, formData.children, formData.distanceMiles, formData.premiumAddOn, formData.eventDate, formData.staffingProfileId, rules]);
+  }, [formData.eventType, formData.adults, formData.children, formData.distanceMiles, formData.premiumAddOn, formData.eventDate, formData.staffingProfileId, selectedBooking, rules]);
 
   // Get available staff for a given ChefRole
   const getAvailableStaff = (chefRole: string): StaffRecord[] => {
@@ -714,6 +735,9 @@ export default function BookingsPage() {
                     </td>
                     <td className="px-4 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
                       {formatCurrency(booking.total)}
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {booking.menuPricingSnapshot ? 'menu pricing' : 'rules pricing'}
+                      </div>
                     </td>
                     <td className="px-4 py-4 text-sm">
                       <select

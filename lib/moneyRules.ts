@@ -131,7 +131,15 @@ export function calculateEventFinancials(
   input: EventInput,
   rules: MoneyRules
 ): EventFinancials {
-  const { adults, children, eventType, distanceMiles, premiumAddOn = 0 } = input;
+  const {
+    adults,
+    children,
+    eventType,
+    distanceMiles,
+    premiumAddOn = 0,
+    subtotalOverride,
+    foodCostOverride,
+  } = input;
   const guestCount = adults + children;
 
   // Pricing calculations
@@ -143,7 +151,10 @@ export function calculateEventFinancials(
   const adultTotal = adults * basePrice;
   const childTotal = children * childPrice;
   const premiumTotal = guestCount * premiumAddOn;
-  const subtotal = adultTotal + childTotal + premiumTotal;
+  const computedSubtotal = adultTotal + childTotal + premiumTotal;
+  const subtotal = Number.isFinite(subtotalOverride) && subtotalOverride >= 0
+    ? subtotalOverride
+    : computedSubtotal;
 
   const gratuityPercent = rules.pricing.defaultGratuityPercent;
   const gratuity = subtotal * (gratuityPercent / 100);
@@ -160,10 +171,13 @@ export function calculateEventFinancials(
   const totalCharged = subtotal + gratuity + distanceFee;
 
   // Cost calculations
-  const foodCostPercent = eventType === 'private-dinner'
+  const configuredFoodCostPercent = eventType === 'private-dinner'
     ? rules.costs.foodCostPercentPrivate
     : rules.costs.foodCostPercentBuffet;
-  const foodCost = subtotal * (foodCostPercent / 100);
+  const foodCost = Number.isFinite(foodCostOverride) && foodCostOverride >= 0
+    ? foodCostOverride
+    : subtotal * (configuredFoodCostPercent / 100);
+  const foodCostPercent = subtotal > 0 ? (foodCost / subtotal) * 100 : 0;
   const suppliesCost = subtotal * (rules.costs.suppliesCostPercent / 100);
   const transportationCost = rules.costs.transportationStipend;
   const totalCosts = foodCost + suppliesCost + transportationCost;

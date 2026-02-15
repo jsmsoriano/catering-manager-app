@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
+import { formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
@@ -170,17 +171,7 @@ export default function StaffPayoutReportPage() {
     let totalEvents = 0;
 
     filteredBookings.forEach((booking) => {
-      const financials = calculateEventFinancials(
-        {
-          adults: booking.adults,
-          children: booking.children,
-          eventType: booking.eventType,
-          eventDate: parseLocalDate(booking.eventDate),
-          distanceMiles: booking.distanceMiles,
-          premiumAddOn: booking.premiumAddOn,
-        },
-        rules
-      );
+      const { financials } = calculateBookingFinancials(booking, rules);
 
       totalEvents++;
       const matchedOwners = new Set<string>();

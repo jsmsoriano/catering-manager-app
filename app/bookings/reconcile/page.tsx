@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
+import { formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { Expense, ExpenseCategory } from '@/lib/expenseTypes';
@@ -109,20 +110,12 @@ function ReconcileContent() {
   }, [bookingId]);
 
   // Calculate estimated financials from the booking
-  const financials = useMemo(() => {
+  const bookingFinancials = useMemo(() => {
     if (!booking) return null;
-    return calculateEventFinancials(
-      {
-        adults: booking.adults,
-        children: booking.children,
-        eventType: booking.eventType,
-        eventDate: parseLocalDate(booking.eventDate),
-        distanceMiles: booking.distanceMiles,
-        premiumAddOn: booking.premiumAddOn,
-      },
-      rules
-    );
+    return calculateBookingFinancials(booking, rules);
   }, [booking, rules]);
+  const financials = bookingFinancials?.financials ?? null;
+  const pricingSource = bookingFinancials?.pricingSource ?? 'rules';
 
   // Initialize reconciliation with estimated values when financials are ready
   useEffect(() => {
@@ -487,6 +480,10 @@ function ReconcileContent() {
             <span className="text-zinc-400">|</span>
             <span className="text-sm text-zinc-600 dark:text-zinc-400">
               {booking.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'}
+            </span>
+            <span className="text-zinc-400">|</span>
+            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+              Pricing Source: {pricingSource === 'menu' ? 'Menu' : 'Rules'}
             </span>
             <span className="text-zinc-400">|</span>
             <span className="text-sm text-zinc-600 dark:text-zinc-400">

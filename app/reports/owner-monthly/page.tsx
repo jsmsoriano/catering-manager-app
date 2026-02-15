@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
+import { formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { OwnerRole } from '@/lib/types';
@@ -125,18 +126,7 @@ export default function OwnerMonthlyReportPage() {
     }> = [];
 
     monthBookings.forEach((booking) => {
-      const financials = calculateEventFinancials(
-        {
-          adults: booking.adults,
-          children: booking.children,
-          eventType: booking.eventType,
-          eventDate: parseLocalDate(booking.eventDate),
-          distanceMiles: booking.distanceMiles,
-          premiumAddOn: booking.premiumAddOn,
-          staffingProfileId: booking.staffingProfileId,
-        },
-        rules
-      );
+      const { financials } = calculateBookingFinancials(booking, rules);
 
       // Find the owner's labor compensation entry
       let ownerLaborPay = 0;

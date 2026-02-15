@@ -3,7 +3,11 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { Booking } from '@/lib/bookingTypes';
-import type { EventMenu, GuestMenuSelection, ProteinType } from '@/lib/menuTypes';
+import type { EventMenu, GuestMenuSelection, MenuItem, ProteinType } from '@/lib/menuTypes';
+import { useMoneyRules } from '@/lib/useMoneyRules';
+import { formatCurrency, calculateEventFinancials } from '@/lib/moneyRules';
+import { DEFAULT_MENU_ITEMS } from '@/lib/defaultMenuItems';
+import { buildMenuPricingSnapshot, calculateMenuPricingBreakdown } from '@/lib/menuPricing';
 
 const proteinOptions: { value: ProteinType; label: string }[] = [
   { value: 'chicken', label: 'Chicken' },
@@ -11,6 +15,28 @@ const proteinOptions: { value: ProteinType; label: string }[] = [
   { value: 'shrimp', label: 'Shrimp' },
   { value: 'scallops', label: 'Scallops' },
 ];
+
+function parseLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function normalizeMenuItems(items: MenuItem[]): MenuItem[] {
+  const defaultById = new Map(DEFAULT_MENU_ITEMS.map((item) => [item.id, item]));
+  return items.map((item) => {
+    const fallback = defaultById.get(item.id);
+    const normalizedCost = Number.isFinite(item.costPerServing) ? item.costPerServing : 0;
+    const normalizedPrice = Number.isFinite(item.pricePerServing)
+      ? (item.pricePerServing as number)
+      : fallback?.pricePerServing ?? Math.max(0, normalizedCost * 3);
+
+    return {
+      ...item,
+      costPerServing: normalizedCost,
+      pricePerServing: normalizedPrice,
+    };
+  });
+}
 
 export default function BookingMenuPage() {
   return (
@@ -29,11 +55,48 @@ export default function BookingMenuPage() {
 function BookingMenuContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const rules = useMoneyRules();
   const bookingId = searchParams.get('bookingId');
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [existingMenu, setExistingMenu] = useState<EventMenu | null>(null);
   const [guestSelections, setGuestSelections] = useState<GuestMenuSelection[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+
+  // Load menu items so we can calculate menu-based pricing
+  useEffect(() => {
+    const loadMenuItems = () => {
+      const savedMenuItems = localStorage.getItem('menuItems');
+      if (savedMenuItems) {
+        try {
+          const parsed = JSON.parse(savedMenuItems) as MenuItem[];
+          const normalized = normalizeMenuItems(parsed);
+          setMenuItems(normalized);
+          localStorage.setItem('menuItems', JSON.stringify(normalized));
+          return;
+        } catch (e) {
+          console.error('Failed to load menu items:', e);
+        }
+      }
+
+      setMenuItems(DEFAULT_MENU_ITEMS);
+      localStorage.setItem('menuItems', JSON.stringify(DEFAULT_MENU_ITEMS));
+    };
+
+    loadMenuItems();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'menuItems') loadMenuItems();
+    };
+    const handleCustom = () => loadMenuItems();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('menuItemsUpdated', handleCustom);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('menuItemsUpdated', handleCustom);
+    };
+  }, []);
 
   // Load booking and existing menu
   useEffect(() => {
@@ -105,6 +168,42 @@ function BookingMenuContent() {
     setGuestSelections(updated);
   };
 
+  const menuPricing = useMemo(() => {
+    if (!booking || guestSelections.length === 0) return null;
+    return calculateMenuPricingBreakdown(
+      {
+        id: existingMenu?.id || 'menu-preview',
+        bookingId: booking.id,
+        guestSelections,
+        createdAt: existingMenu?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      menuItems,
+      {
+        childDiscountPercent: rules.pricing.childDiscountPercent,
+        premiumAddOnPerGuest: booking.premiumAddOn,
+      }
+    );
+  }, [booking, existingMenu, guestSelections, menuItems, rules]);
+
+  const pricingPreview = useMemo(() => {
+    if (!booking || !menuPricing) return null;
+    return calculateEventFinancials(
+      {
+        adults: booking.adults,
+        children: booking.children,
+        eventType: booking.eventType,
+        eventDate: parseLocalDate(booking.eventDate),
+        distanceMiles: booking.distanceMiles,
+        premiumAddOn: booking.premiumAddOn,
+        staffingProfileId: booking.staffingProfileId,
+        subtotalOverride: menuPricing.subtotalOverride,
+        foodCostOverride: menuPricing.foodCostOverride,
+      },
+      rules
+    );
+  }, [booking, menuPricing, rules]);
+
   const handleSave = () => {
     if (!booking || !bookingId) return;
 
@@ -124,6 +223,24 @@ function BookingMenuContent() {
       createdAt: existingMenu?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    const snapshot = buildMenuPricingSnapshot(menu, menuItems, {
+      childDiscountPercent: rules.pricing.childDiscountPercent,
+      premiumAddOnPerGuest: booking.premiumAddOn,
+    });
+    const updatedFinancials = calculateEventFinancials(
+      {
+        adults: booking.adults,
+        children: booking.children,
+        eventType: booking.eventType,
+        eventDate: parseLocalDate(booking.eventDate),
+        distanceMiles: booking.distanceMiles,
+        premiumAddOn: booking.premiumAddOn,
+        staffingProfileId: booking.staffingProfileId,
+        subtotalOverride: snapshot.subtotalOverride,
+        foodCostOverride: snapshot.foodCostOverride,
+      },
+      rules
+    );
 
     // Save menu
     const menusData = localStorage.getItem('eventMenus');
@@ -137,12 +254,23 @@ function BookingMenuContent() {
 
     localStorage.setItem('eventMenus', JSON.stringify(menus));
 
-    // Update booking with menuId
+    // Update booking with menuId and menu-derived pricing snapshot
     const bookingsData = localStorage.getItem('bookings');
     if (bookingsData) {
       const bookings: Booking[] = JSON.parse(bookingsData);
       const updatedBookings = bookings.map((b) =>
-        b.id === bookingId ? { ...b, menuId: menuId } : b
+        b.id === bookingId
+          ? {
+              ...b,
+              menuId,
+              menuPricingSnapshot: snapshot,
+              subtotal: updatedFinancials.subtotal,
+              gratuity: updatedFinancials.gratuity,
+              distanceFee: updatedFinancials.distanceFee,
+              total: updatedFinancials.totalCharged,
+              updatedAt: new Date().toISOString(),
+            }
+          : b
       );
       localStorage.setItem('bookings', JSON.stringify(updatedBookings));
       window.dispatchEvent(new Event('bookingsUpdated'));
@@ -222,7 +350,7 @@ function BookingMenuContent() {
         </div>
 
         {/* Summary Cards */}
-        <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-6">
           <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
             <h3 className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
               Total Protein Selections
@@ -270,7 +398,37 @@ function BookingMenuContent() {
               Salad: {summary.salad} | Veggies: {summary.veggies}
             </p>
           </div>
+
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+            <h3 className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+              Menu Revenue Estimate
+            </h3>
+            <p className="mt-2 text-xl font-bold text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(menuPricing?.subtotalOverride ?? 0)}
+            </p>
+            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+              Includes premium add-on (${booking.premiumAddOn.toFixed(2)}/guest)
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/20">
+            <h3 className="text-sm font-medium text-rose-900 dark:text-rose-200">
+              Food Cost Estimate
+            </h3>
+            <p className="mt-2 text-xl font-bold text-rose-600 dark:text-rose-400">
+              {formatCurrency(menuPricing?.foodCostOverride ?? 0)}
+            </p>
+            <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">
+              Gross Profit: {formatCurrency(pricingPreview?.grossProfit ?? 0)}
+            </p>
+          </div>
         </div>
+
+        {menuPricing && menuPricing.missingItemIds.length > 0 && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+            Missing menu items in catalog for: {menuPricing.missingItemIds.join(', ')}. Their price/cost was treated as $0.00.
+          </div>
+        )}
 
         {/* Guest Selection Table */}
         <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
