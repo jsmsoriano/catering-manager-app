@@ -1,5 +1,5 @@
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import { Providers } from "@/components/Providers";
 
 export const metadata = {
@@ -17,14 +17,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-[#f5f5f7] dark:bg-slate-950">
+      <body className="min-h-screen bg-[#f5f5f7] text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <Providers>
-          <div className="flex h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto bg-[#f5f5f7] dark:bg-slate-950">
-              {children}
-            </main>
-          </div>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

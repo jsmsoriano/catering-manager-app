@@ -12,6 +12,7 @@ import {
   UsersIcon,
   ClipboardDocumentListIcon,
   CalculatorIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import ThemeToggle from './ThemeToggle';
 
@@ -39,14 +40,34 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function Sidebar() {
+type SidebarProps = {
+  isMobile?: boolean;
+  onNavigate?: () => void;
+  onClose?: () => void;
+};
+
+export default function Sidebar({
+  isMobile = false,
+  onNavigate,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-screen w-64 flex-col border-r border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-950">
+    <div className="flex h-full w-64 flex-col border-r border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-950">
       {/* Logo */}
       <div className="relative flex h-24 items-center justify-center border-b border-slate-200/80 px-6 py-4 dark:border-slate-800/80">
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 dark:from-indigo-500/10 dark:to-purple-500/10"></div>
+        {isMobile && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-3 top-3 z-10 rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            aria-label="Close navigation menu"
+          >
+            <XMarkIcon className="h-4 w-4" />
+          </button>
+        )}
         <Image
           src="/hibachisun.png"
           alt="Hibachi A Go Go"
@@ -74,6 +95,7 @@ export default function Sidebar() {
                       <Link
                         key={child.name}
                         href={child.href}
+                        onClick={onNavigate}
                         className={classNames(
                           isActive
                             ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 shadow-sm dark:from-indigo-950/50 dark:to-purple-950/50 dark:text-indigo-300'
@@ -98,6 +120,7 @@ export default function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={onNavigate}
               className={classNames(
                 isActive
                   ? 'bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-700 shadow-sm dark:from-indigo-950/50 dark:to-purple-950/50 dark:text-indigo-300'
