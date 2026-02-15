@@ -2,7 +2,6 @@
 
 import type { FormEvent } from 'react';
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -11,13 +10,15 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export default function LoginPage() {
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(
-    ERROR_MESSAGES[searchParams.get('error') ?? ''] ?? null
-  );
+  const [error, setError] = useState<string | null>(null);
+  const initialErrorCode =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('error')
+      : null;
+  const initialError = ERROR_MESSAGES[initialErrorCode ?? ''] ?? null;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -75,6 +76,12 @@ export default function LoginPage() {
           {error && (
             <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
               {error}
+            </p>
+          )}
+
+          {!error && initialError && (
+            <p className="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">
+              {initialError}
             </p>
           )}
 
