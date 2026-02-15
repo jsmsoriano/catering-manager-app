@@ -11,7 +11,6 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export default function LoginPage() {
-  const supabase = createClient();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,6 +25,7 @@ export default function LoginPage() {
     setError(null);
     setFeedback(null);
 
+    const supabase = createClient();
     const emailRedirectTo = `${window.location.origin}/auth/callback?next=/`;
     const { error: signInError } = await supabase.auth.signInWithOtp({
       email: email.trim(),
