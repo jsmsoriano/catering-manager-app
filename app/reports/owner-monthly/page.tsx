@@ -472,6 +472,14 @@ export default function OwnerMonthlyReportPage() {
             🖨️ Print Report
           </button>
         </div>
+        <div className="flex items-end">
+          <a
+            href="#profit-tracker"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+          >
+            Jump to Profit Tracker
+          </a>
+        </div>
       </div>
 
       {/* Report Content - Print friendly */}
@@ -640,7 +648,7 @@ export default function OwnerMonthlyReportPage() {
         )}
 
         {/* Profit Tracker Section */}
-        <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
+        <div id="profit-tracker" className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
           <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
             Profit Tracker
           </h3>
