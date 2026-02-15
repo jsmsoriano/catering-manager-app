@@ -1,5 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Supabase Integration
+
+This project includes baseline Supabase wiring for:
+
+- browser and server clients
+- middleware session refresh
+- auth callback handling
+- a starter SQL migration with RLS
+
+See **[docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)** for setup details.
+
 ## Getting Started
 
 First, run the development server:
@@ -15,6 +26,12 @@ bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+To use Supabase locally, copy env vars first:
+
+```bash
+cp .env.example .env.local
+```
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
