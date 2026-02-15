@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, isWithinInterval, subMonths, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isWithinInterval, subMonths } from 'date-fns';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
