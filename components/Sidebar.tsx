@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ComponentType, type SVGProps } from 'react';
+import { useState, type ComponentType, type SVGProps } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -141,10 +141,6 @@ function NavContent({
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [pathname]);
 
   return (
     <>
