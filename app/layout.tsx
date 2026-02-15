@@ -19,9 +19,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-[#f5f5f7] dark:bg-slate-950">
         <Providers>
-          <div className="flex h-screen">
+          <div className="min-h-screen">
             <Sidebar />
-            <main className="flex-1 overflow-y-auto bg-[#f5f5f7] dark:bg-slate-950">
+            <main className="min-h-screen bg-[#f5f5f7] pt-16 pb-20 lg:ml-64 lg:pt-0 lg:pb-0 dark:bg-slate-950">
               {children}
             </main>
           </div>

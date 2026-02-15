@@ -34,6 +34,7 @@ function BookingMenuContent() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [existingMenu, setExistingMenu] = useState<EventMenu | null>(null);
   const [guestSelections, setGuestSelections] = useState<GuestMenuSelection[]>([]);
+  const [menuStep, setMenuStep] = useState(1);
 
   // Load booking and existing menu
   useEffect(() => {
@@ -103,6 +104,23 @@ function BookingMenuContent() {
     const updated = [...guestSelections];
     updated[index] = { ...updated[index], [field]: value };
     setGuestSelections(updated);
+  };
+
+  const menuStepLabels = ['Guest Details', 'Meal Preferences', 'Review'];
+
+  const goToNextStep = () => {
+    if (menuStep === 1) {
+      const missingNames = guestSelections.filter((g) => !g.guestName.trim());
+      if (missingNames.length > 0) {
+        alert(`Please enter names for all ${missingNames.length} guest(s)`);
+        return;
+      }
+    }
+    setMenuStep((prev) => Math.min(prev + 1, menuStepLabels.length));
+  };
+
+  const goToPreviousStep = () => {
+    setMenuStep((prev) => Math.max(prev - 1, 1));
   };
 
   const handleSave = () => {
@@ -190,10 +208,10 @@ function BookingMenuContent() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
               Guest Menu Selection
@@ -205,20 +223,12 @@ function BookingMenuContent() {
               {booking.adults} Adults, {booking.children} Children
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push('/bookings')}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
-            >
-              Save Menu
-            </button>
-          </div>
+          <button
+            onClick={() => router.push('/bookings')}
+            className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
         </div>
 
         {/* Summary Cards */}
@@ -272,45 +282,47 @@ function BookingMenuContent() {
           </div>
         </div>
 
-        {/* Guest Selection Table */}
-        <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    #
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    Guest Name *
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    Type
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    Protein 1
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    Protein 2
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    Sides
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    Special Requests
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
-                    Allergies
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {guestSelections.map((guest, index) => (
-                  <tr key={guest.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                    <td className="px-4 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                      {index + 1}
-                    </td>
-                    <td className="px-4 py-4">
+        <div className="mb-6 grid grid-cols-3 gap-2">
+          {menuStepLabels.map((label, idx) => {
+            const stepNumber = idx + 1;
+            const isCurrent = menuStep === stepNumber;
+            const isComplete = menuStep > stepNumber;
+            return (
+              <div
+                key={label}
+                className={`rounded-md px-2 py-2 text-center text-xs font-semibold ${
+                  isCurrent
+                    ? 'bg-indigo-600 text-white'
+                    : isComplete
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                    : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                }`}
+              >
+                {stepNumber}. {label}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+          {menuStep === 1 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Step 1: Guest Details
+              </h2>
+              {guestSelections.map((guest, index) => (
+                <div
+                  key={guest.id}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50"
+                >
+                  <p className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Guest #{index + 1}
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Guest Name *
+                      </label>
                       <input
                         type="text"
                         value={guest.guestName}
@@ -318,28 +330,34 @@ function BookingMenuContent() {
                           updateGuestSelection(index, 'guestName', e.target.value)
                         }
                         placeholder="Enter name"
-                        className="w-full rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                       />
-                    </td>
-                    <td className="px-4 py-4">
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Type
+                      </label>
                       <select
                         value={guest.isAdult ? 'adult' : 'child'}
                         onChange={(e) =>
                           updateGuestSelection(index, 'isAdult', e.target.value === 'adult')
                         }
-                        className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                       >
                         <option value="adult">Adult</option>
                         <option value="child">Child</option>
                       </select>
-                    </td>
-                    <td className="px-4 py-4">
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Protein 1
+                      </label>
                       <select
                         value={guest.protein1}
                         onChange={(e) =>
                           updateGuestSelection(index, 'protein1', e.target.value)
                         }
-                        className="w-28 rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                       >
                         {proteinOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -347,14 +365,17 @@ function BookingMenuContent() {
                           </option>
                         ))}
                       </select>
-                    </td>
-                    <td className="px-4 py-4">
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Protein 2
+                      </label>
                       <select
                         value={guest.protein2}
                         onChange={(e) =>
                           updateGuestSelection(index, 'protein2', e.target.value)
                         }
-                        className="w-28 rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                       >
                         {proteinOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -362,98 +383,180 @@ function BookingMenuContent() {
                           </option>
                         ))}
                       </select>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-col gap-1 text-xs">
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={guest.wantsFriedRice}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsFriedRice', e.target.checked)
-                            }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
-                          />
-                          <span className="text-zinc-700 dark:text-zinc-300">Fried Rice</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {menuStep === 2 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Step 2: Meal Preferences
+              </h2>
+              {guestSelections.map((guest, index) => (
+                <div
+                  key={guest.id}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50"
+                >
+                  <p className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    {guest.guestName || `Guest #${index + 1}`}
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={guest.wantsFriedRice}
+                          onChange={(e) =>
+                            updateGuestSelection(index, 'wantsFriedRice', e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-zinc-300 text-emerald-600"
+                        />
+                        Fried Rice
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={guest.wantsNoodles}
+                          onChange={(e) =>
+                            updateGuestSelection(index, 'wantsNoodles', e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-zinc-300 text-emerald-600"
+                        />
+                        Noodles
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={guest.wantsSalad}
+                          onChange={(e) =>
+                            updateGuestSelection(index, 'wantsSalad', e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-zinc-300 text-emerald-600"
+                        />
+                        Salad
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={guest.wantsVeggies}
+                          onChange={(e) =>
+                            updateGuestSelection(index, 'wantsVeggies', e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-zinc-300 text-emerald-600"
+                        />
+                        Veggies
+                      </label>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                          Special Requests
                         </label>
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={guest.wantsNoodles}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsNoodles', e.target.checked)
-                            }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
-                          />
-                          <span className="text-zinc-700 dark:text-zinc-300">Noodles</span>
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={guest.wantsSalad}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsSalad', e.target.checked)
-                            }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
-                          />
-                          <span className="text-zinc-700 dark:text-zinc-300">Salad</span>
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={guest.wantsVeggies}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsVeggies', e.target.checked)
-                            }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
-                          />
-                          <span className="text-zinc-700 dark:text-zinc-300">Veggies</span>
-                        </label>
+                        <textarea
+                          value={guest.specialRequests}
+                          onChange={(e) =>
+                            updateGuestSelection(index, 'specialRequests', e.target.value)
+                          }
+                          placeholder="Special requests..."
+                          rows={2}
+                          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        />
                       </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <textarea
-                        value={guest.specialRequests}
-                        onChange={(e) =>
-                          updateGuestSelection(index, 'specialRequests', e.target.value)
-                        }
-                        placeholder="Special requests..."
-                        rows={2}
-                        className="w-32 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                      />
-                    </td>
-                    <td className="px-4 py-4">
-                      <textarea
-                        value={guest.allergies}
-                        onChange={(e) =>
-                          updateGuestSelection(index, 'allergies', e.target.value)
-                        }
-                        placeholder="Allergies..."
-                        rows={2}
-                        className="w-32 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                      />
-                    </td>
-                  </tr>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                          Allergies
+                        </label>
+                        <textarea
+                          value={guest.allergies}
+                          onChange={(e) =>
+                            updateGuestSelection(index, 'allergies', e.target.value)
+                          }
+                          placeholder="Allergies..."
+                          rows={2}
+                          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {menuStep === 3 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Step 3: Review & Save
+              </h2>
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-800/50">
+                <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {summary.totalGuests} guests ({summary.adults} adults / {summary.children} children)
+                </p>
+                <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                  Rice: {summary.friedRice}, Noodles: {summary.noodles}, Salad: {summary.salad}, Veggies: {summary.veggies}
+                </p>
+              </div>
+              <div className="space-y-2">
+                {guestSelections.map((guest, index) => (
+                  <div
+                    key={guest.id}
+                    className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700"
+                  >
+                    <p className="font-medium text-zinc-900 dark:text-zinc-100">
+                      {guest.guestName || `Guest #${index + 1}`} ({guest.isAdult ? 'Adult' : 'Child'})
+                    </p>
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                      Proteins: {guest.protein1}, {guest.protein2}
+                    </p>
+                    <p className="text-zinc-500 dark:text-zinc-400">
+                      Sides: {guest.wantsFriedRice ? 'Rice ' : ''}{guest.wantsNoodles ? 'Noodles ' : ''}{guest.wantsSalad ? 'Salad ' : ''}{guest.wantsVeggies ? 'Veggies' : ''}
+                    </p>
+                    {(guest.specialRequests || guest.allergies) && (
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {guest.specialRequests && `Notes: ${guest.specialRequests}. `}
+                        {guest.allergies && `Allergies: ${guest.allergies}.`}
+                      </p>
+                    )}
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Save Button (Bottom) */}
-        <div className="mt-8 flex justify-end gap-2">
+        <div className="mt-8 flex flex-wrap justify-end gap-2">
           <button
             onClick={() => router.push('/bookings')}
             className="rounded-md border border-zinc-300 px-6 py-3 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            className="rounded-md bg-emerald-600 px-6 py-3 text-white hover:bg-emerald-700"
-          >
-            Save Menu
-          </button>
+          {menuStep > 1 && (
+            <button
+              onClick={goToPreviousStep}
+              className="rounded-md border border-zinc-300 px-6 py-3 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              Back
+            </button>
+          )}
+          {menuStep < menuStepLabels.length ? (
+            <button
+              onClick={goToNextStep}
+              className="rounded-md bg-indigo-600 px-6 py-3 text-white hover:bg-indigo-700"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              onClick={handleSave}
+              className="rounded-md bg-emerald-600 px-6 py-3 text-white hover:bg-emerald-700"
+            >
+              Save Menu
+            </button>
+          )}
         </div>
       </div>
     </div>
