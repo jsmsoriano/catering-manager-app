@@ -28,9 +28,9 @@ const navigation = [
     icon: DocumentChartBarIcon,
     children: [
       { name: 'Dashboard', href: '/reports' },
-      { name: 'Owner Distribution', href: '/reports/owner-monthly' },
-      { name: 'Staff Payouts', href: '/reports/comparative' },
       { name: 'Business Summary', href: '/reports/business-summary' },
+      { name: 'Owner Distribution & Profit Tracker', href: '/reports/owner-monthly' },
+      { name: 'Staff Payouts', href: '/reports/comparative' },
     ],
   },
 ];

@@ -4,10 +4,14 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking, BookingStatus, BookingFormData } from '@/lib/bookingTypes';
+import type { EventFinancials } from '@/lib/types';
 import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
 import { CHEF_ROLE_TO_STAFF_ROLE, ROLE_LABELS as STAFF_ROLE_LABELS } from '@/lib/staffTypes';
+import type { LaborPaymentRecord } from '@/lib/financeTypes';
+import { loadLaborPayments, saveLaborPayments } from '@/lib/financeStorage';
 
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
@@ -16,6 +20,60 @@ const CHEF_ROLE_LABELS: Record<string, string> = {
   buffet: 'Buffet Chef',
   assistant: 'Assistant',
 };
+
+interface StaffConflict {
+  staffId: string;
+  staffName: string;
+  conflictingBooking: Booking;
+}
+
+function getUniqueAssignedStaffIds(assignments?: StaffAssignment[]): string[] {
+  if (!assignments || assignments.length === 0) return [];
+  const ids = assignments
+    .map((assignment) => assignment.staffId)
+    .filter((staffId) => typeof staffId === 'string' && staffId.length > 0);
+  return Array.from(new Set(ids));
+}
+
+function getDuplicateAssignedStaffIds(assignments?: StaffAssignment[]): string[] {
+  if (!assignments || assignments.length === 0) return [];
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  assignments.forEach((assignment) => {
+    if (!assignment.staffId) return;
+    if (seen.has(assignment.staffId)) duplicates.add(assignment.staffId);
+    seen.add(assignment.staffId);
+  });
+
+  return Array.from(duplicates);
+}
+
+function getAssignmentForPosition(
+  assignments: StaffAssignment[] | undefined,
+  financials: EventFinancials,
+  positionIndex: number
+): StaffAssignment | undefined {
+  if (!assignments || assignments.length === 0) return undefined;
+
+  const position = financials.staffingPlan.staff[positionIndex];
+  const staffRole = CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
+  if (!staffRole) return undefined;
+
+  let sameRoleIndex = 0;
+  for (let i = 0; i < positionIndex; i++) {
+    if (financials.staffingPlan.staff[i].role === position.role) sameRoleIndex++;
+  }
+
+  let matchCount = 0;
+  return assignments.find((assignment) => {
+    if (assignment.role === staffRole) {
+      if (matchCount === sameRoleIndex) return true;
+      matchCount++;
+    }
+    return false;
+  });
+}
 
 export default function BookingsPage() {
   const rules = useMoneyRules();
@@ -114,6 +172,47 @@ export default function BookingsPage() {
     };
   }, []);
 
+  const staffById = useMemo(() => {
+    const map = new Map<string, StaffRecord>();
+    staffRecords.forEach((staff) => map.set(staff.id, staff));
+    return map;
+  }, [staffRecords]);
+
+  const findStaffConflicts = (
+    eventDate: string,
+    eventTime: string,
+    assignedStaffIds: string[],
+    excludeBookingId?: string
+  ): StaffConflict[] => {
+    if (assignedStaffIds.length === 0) return [];
+    const assignedSet = new Set(assignedStaffIds);
+    const conflicts: StaffConflict[] = [];
+    const seen = new Set<string>();
+
+    bookings.forEach((otherBooking) => {
+      if (excludeBookingId && otherBooking.id === excludeBookingId) return;
+      if (otherBooking.status === 'cancelled') return;
+      if (otherBooking.eventDate !== eventDate || otherBooking.eventTime !== eventTime) return;
+      if (!otherBooking.staffAssignments || otherBooking.staffAssignments.length === 0) return;
+
+      otherBooking.staffAssignments.forEach((assignment) => {
+        if (!assignedSet.has(assignment.staffId)) return;
+        const dedupeKey = `${assignment.staffId}:${otherBooking.id}`;
+        if (seen.has(dedupeKey)) return;
+        seen.add(dedupeKey);
+
+        const staffName = staffById.get(assignment.staffId)?.name ?? `Staff ${assignment.staffId}`;
+        conflicts.push({
+          staffId: assignment.staffId,
+          staffName,
+          conflictingBooking: otherBooking,
+        });
+      });
+    });
+
+    return conflicts;
+  };
+
   const saveBookings = (newBookings: Booking[]) => {
     console.log('📅 Bookings: Saving', newBookings.length, 'bookings to localStorage');
     setBookings(newBookings);
@@ -178,6 +277,32 @@ export default function BookingsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    const validationErrors: string[] = [];
+    const duplicateStaffIds = getDuplicateAssignedStaffIds(formData.staffAssignments);
+    if (duplicateStaffIds.length > 0) {
+      const duplicateNames = duplicateStaffIds.map((staffId) => staffById.get(staffId)?.name ?? staffId);
+      validationErrors.push(`Duplicate staff assignments are not allowed: ${duplicateNames.join(', ')}`);
+    }
+
+    const assignedStaffIds = getUniqueAssignedStaffIds(formData.staffAssignments);
+    const conflicts = findStaffConflicts(
+      formData.eventDate,
+      formData.eventTime,
+      assignedStaffIds,
+      selectedBooking?.id
+    );
+    if (conflicts.length > 0) {
+      const conflictLines = conflicts.map((conflict) =>
+        `- ${conflict.staffName} is already assigned to ${conflict.conflictingBooking.customerName} (${conflict.conflictingBooking.eventDate} ${conflict.conflictingBooking.eventTime})`
+      );
+      validationErrors.push(`Staff double-booking conflict detected:\n${conflictLines.join('\n')}`);
+    }
+
+    if (validationErrors.length > 0) {
+      alert(`Please fix the following before saving:\n\n${validationErrors.join('\n\n')}`);
+      return;
+    }
 
     const shouldPreserveMenuPricing =
       formData.eventType === 'private-dinner' &&
@@ -263,6 +388,8 @@ export default function BookingsPage() {
 
   const handleDelete = () => {
     if (selectedBooking && confirm(`Delete booking for ${selectedBooking.customerName}?`)) {
+      const remainingLaborPayments = loadLaborPayments().filter((record) => record.bookingId !== selectedBooking.id);
+      saveLaborPayments(remainingLaborPayments);
       saveBookings(bookings.filter((b) => b.id !== selectedBooking.id));
       setShowModal(false);
       resetForm();
@@ -270,10 +397,117 @@ export default function BookingsPage() {
   };
 
   const updateBookingStatus = (booking: Booking, newStatus: BookingStatus) => {
+    const now = new Date().toISOString();
+    let updatedAssignments = booking.staffAssignments;
+
+    if (newStatus === 'completed') {
+      const { financials } = calculateBookingFinancials(booking, rules);
+      const missingAssignmentRoles: string[] = [];
+      const unknownStaffNames: string[] = [];
+
+      for (let idx = 0; idx < financials.staffingPlan.staff.length; idx++) {
+        const assignment = getAssignmentForPosition(booking.staffAssignments, financials, idx);
+        const roleLabel = CHEF_ROLE_LABELS[financials.staffingPlan.staff[idx].role] ?? financials.staffingPlan.staff[idx].role;
+        if (!assignment?.staffId) {
+          missingAssignmentRoles.push(roleLabel);
+          continue;
+        }
+        if (!staffById.has(assignment.staffId)) {
+          unknownStaffNames.push(assignment.staffId);
+        }
+      }
+
+      if (missingAssignmentRoles.length > 0) {
+        alert(
+          `Cannot mark booking as completed until all staffing positions are assigned.\n\nMissing assignments:\n- ${missingAssignmentRoles.join('\n- ')}`
+        );
+        return;
+      }
+
+      if (unknownStaffNames.length > 0) {
+        alert(
+          `Cannot mark booking as completed because some assigned staff records are missing:\n- ${unknownStaffNames.join('\n- ')}`
+        );
+        return;
+      }
+
+      const duplicateStaffIds = getDuplicateAssignedStaffIds(booking.staffAssignments);
+      if (duplicateStaffIds.length > 0) {
+        const duplicateNames = duplicateStaffIds.map((staffId) => staffById.get(staffId)?.name ?? staffId);
+        alert(`Cannot mark completed with duplicate staff assignments:\n- ${duplicateNames.join('\n- ')}`);
+        return;
+      }
+
+      const assignedStaffIds = getUniqueAssignedStaffIds(booking.staffAssignments);
+      const conflicts = findStaffConflicts(booking.eventDate, booking.eventTime, assignedStaffIds, booking.id);
+      if (conflicts.length > 0) {
+        const details = conflicts.map((conflict) =>
+          `- ${conflict.staffName} already assigned to ${conflict.conflictingBooking.customerName}`
+        );
+        alert(`Cannot mark completed due to staff double-booking:\n${details.join('\n')}`);
+        return;
+      }
+
+      const existingLaborPayments = loadLaborPayments().filter((record) => record.bookingId !== booking.id);
+      const recordedLaborPayments: LaborPaymentRecord[] = [];
+
+      for (let idx = 0; idx < financials.laborCompensation.length; idx++) {
+        const compensation = financials.laborCompensation[idx];
+        const assignment = getAssignmentForPosition(booking.staffAssignments, financials, idx);
+        if (!assignment?.staffId) continue;
+
+        const staff = staffById.get(assignment.staffId);
+        recordedLaborPayments.push({
+          id: `labor-${booking.id}-${idx}`,
+          bookingId: booking.id,
+          eventDate: booking.eventDate,
+          eventTime: booking.eventTime,
+          customerName: booking.customerName,
+          staffId: assignment.staffId,
+          staffName: staff?.name ?? assignment.staffId,
+          staffRole: assignment.role,
+          chefRole: compensation.role,
+          amount: compensation.finalPay,
+          recordedAt: now,
+        });
+      }
+
+      saveLaborPayments([...existingLaborPayments, ...recordedLaborPayments]);
+      updatedAssignments = booking.staffAssignments?.map((assignment) => ({
+        ...assignment,
+        status: 'completed' as const,
+      }));
+    } else {
+      if (newStatus === 'confirmed') {
+        const assignedStaffIds = getUniqueAssignedStaffIds(booking.staffAssignments);
+        const conflicts = findStaffConflicts(booking.eventDate, booking.eventTime, assignedStaffIds, booking.id);
+        if (conflicts.length > 0) {
+          const details = conflicts.map((conflict) =>
+            `- ${conflict.staffName} already assigned to ${conflict.conflictingBooking.customerName}`
+          );
+          alert(`Cannot confirm booking due to staff double-booking:\n${details.join('\n')}`);
+          return;
+        }
+      }
+
+      if (booking.status === 'completed') {
+        const remainingLaborPayments = loadLaborPayments().filter((record) => record.bookingId !== booking.id);
+        saveLaborPayments(remainingLaborPayments);
+      }
+
+      if (booking.staffAssignments && booking.staffAssignments.length > 0) {
+        const assignmentStatus = newStatus === 'confirmed' ? 'confirmed' : 'scheduled';
+        updatedAssignments = booking.staffAssignments.map((assignment) => ({
+          ...assignment,
+          status: assignmentStatus,
+        }));
+      }
+    }
+
     saveBookings(
       bookings.map((b) =>
         b.id === booking.id
-          ? { ...b, status: newStatus, updatedAt: new Date().toISOString() }
+          ? { ...b, status: newStatus, staffAssignments: updatedAssignments, updatedAt: now }
           : b
       )
     );
@@ -312,6 +546,11 @@ export default function BookingsPage() {
       rules
     );
   }, [formData.eventType, formData.adults, formData.children, formData.distanceMiles, formData.premiumAddOn, formData.eventDate, formData.staffingProfileId, selectedBooking, rules]);
+
+  const selectedStaffIdsInForm = useMemo(
+    () => new Set(getUniqueAssignedStaffIds(formData.staffAssignments)),
+    [formData.staffAssignments]
+  );
 
   // Get available staff for a given ChefRole
   const getAvailableStaff = (chefRole: string): StaffRecord[] => {
@@ -373,6 +612,15 @@ export default function BookingsPage() {
     if (!staffId) {
       if (existingIdx >= 0) assignments.splice(existingIdx, 1);
     } else {
+      const duplicateAssignmentIdx = assignments.findIndex(
+        (assignment, idx) => idx !== existingIdx && assignment.staffId === staffId
+      );
+      if (duplicateAssignmentIdx >= 0) {
+        const staffName = staffById.get(staffId)?.name ?? 'This staff member';
+        alert(`${staffName} is already assigned to another position for this booking.`);
+        return;
+      }
+
       const newAssignment: StaffAssignment = { staffId, role: staffRole, estimatedPay, status: 'scheduled' };
       if (existingIdx >= 0) {
         assignments[existingIdx] = newAssignment;
@@ -1095,11 +1343,18 @@ export default function BookingsPage() {
                           >
                             <option value="">Unassigned</option>
                             {available.map((staff) => (
-                              <option key={staff.id} value={staff.id}>
+                              <option
+                                key={staff.id}
+                                value={staff.id}
+                                disabled={selectedStaffIdsInForm.has(staff.id) && assignment?.staffId !== staff.id}
+                              >
                                 {staff.name}
                                 {staff.primaryRole === CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE]
                                   ? ''
                                   : ` (${STAFF_ROLE_LABELS[staff.primaryRole] || staff.primaryRole})`}
+                                {selectedStaffIdsInForm.has(staff.id) && assignment?.staffId !== staff.id
+                                  ? ' - already assigned'
+                                  : ''}
                               </option>
                             ))}
                           </select>

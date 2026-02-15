@@ -1086,13 +1086,17 @@ export default function ReportsDashboardPage() {
       </div>
 
       {/* Quick Links */}
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+          Consolidated Report Views
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link
           href="/reports/owner-monthly"
           className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            Owner Distribution Summary
+            Owner Distribution
           </h3>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             Detailed compensation breakdown for each owner
@@ -1100,14 +1104,14 @@ export default function ReportsDashboardPage() {
         </Link>
 
         <Link
-          href="/reports/comparative"
+          href="/reports/owner-monthly"
           className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            Comparative Reports
+            Profit Tracker
           </h3>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Side-by-side owner comparison
+            Track earned vs paid owner profit and retained balances
           </p>
         </Link>
 
@@ -1122,6 +1126,19 @@ export default function ReportsDashboardPage() {
             Overall performance and trends
           </p>
         </Link>
+
+        <Link
+          href="/reports/comparative"
+          className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+        >
+          <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+            Staff Payouts
+          </h3>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            Consolidated labor payout report across owners and staff
+          </p>
+        </Link>
+        </div>
       </div>
     </div>
   );
