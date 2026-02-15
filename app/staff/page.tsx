@@ -215,6 +215,26 @@ export default function StaffPage() {
     });
   };
 
+  const openStaffEditor = (member: StaffMember) => {
+    setSelectedStaff(member);
+    setIsEditing(true);
+    setFormData({
+      name: member.name,
+      email: member.email,
+      phone: member.phone,
+      primaryRole: member.primaryRole,
+      secondaryRoles: member.secondaryRoles,
+      status: member.status,
+      isOwner: member.isOwner,
+      ownerRole: member.ownerRole,
+      weeklyAvailability: { ...member.weeklyAvailability },
+      hourlyRate: member.hourlyRate ? member.hourlyRate.toString() : '',
+      notes: member.notes || '',
+      hireDate: member.hireDate,
+    });
+    setShowModal(true);
+  };
+
   // Handle setup - create owner records
   const handleCreateOwners = () => {
     const ownerA: StaffMember = {
@@ -277,7 +297,7 @@ export default function StaffPage() {
   };
 
   return (
-    <div className="h-full p-8">
+    <div className="h-full p-4 sm:p-6 lg:p-8">
       {/* Setup Modal */}
       {showSetup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -307,7 +327,7 @@ export default function StaffPage() {
       )}
 
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
             Staff Management
@@ -321,7 +341,7 @@ export default function StaffPage() {
             resetForm();
             setShowModal(true);
           }}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
+          className="w-full rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 sm:w-auto"
         >
           + Add Staff
         </button>
@@ -434,7 +454,90 @@ export default function StaffPage() {
 
       {/* Staff Table */}
       <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-zinc-200 dark:divide-zinc-800 md:hidden">
+          {filteredStaff.length === 0 ? (
+            <div className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400">
+              {searchQuery || filterStatus !== 'all'
+                ? 'No staff members match your filters'
+                : 'No staff members yet. Click "+ Add Staff" to get started!'}
+            </div>
+          ) : (
+            filteredStaff.map((member) => (
+              <div key={member.id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{member.name}</p>
+                    {member.isOwner && (
+                      <p className="text-xs text-indigo-600 dark:text-indigo-400">
+                        {member.ownerRole === 'owner-a' ? 'Owner A' : 'Owner B'}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                      statusColors[member.status]
+                    }`}
+                  >
+                    {STATUS_LABELS[member.status]}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                      roleColors[member.primaryRole]
+                    }`}
+                  >
+                    {ROLE_LABELS[member.primaryRole]}
+                  </span>
+                  <span className="text-zinc-600 dark:text-zinc-400">{member.phone}</span>
+                </div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{member.email}</p>
+
+                <div className="flex gap-1">
+                  {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as DayOfWeek[]).map(
+                    (day) => (
+                      <div
+                        key={day}
+                        className={`flex h-6 w-6 items-center justify-center rounded text-xs ${
+                          member.weeklyAvailability[day]
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                            : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600'
+                        }`}
+                        title={`${DAY_LABELS[day]}: ${
+                          member.weeklyAvailability[day] ? 'Available' : 'Unavailable'
+                        }`}
+                      >
+                        {DAY_LABELS[day][0]}
+                      </div>
+                    )
+                  )}
+                </div>
+
+                <div className="flex gap-4 text-sm font-medium">
+                  <button
+                    onClick={() => openStaffEditor(member)}
+                    className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete ${member.name}? This action cannot be undone.`)) {
+                        saveStaff(staff.filter((s) => s.id !== member.id));
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full">
             <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
               <tr>
@@ -534,25 +637,7 @@ export default function StaffPage() {
                     <td className="px-4 py-4 text-right text-sm">
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => {
-                            setSelectedStaff(member);
-                            setIsEditing(true);
-                            setFormData({
-                              name: member.name,
-                              email: member.email,
-                              phone: member.phone,
-                              primaryRole: member.primaryRole,
-                              secondaryRoles: member.secondaryRoles,
-                              status: member.status,
-                              isOwner: member.isOwner,
-                              ownerRole: member.ownerRole,
-                              weeklyAvailability: { ...member.weeklyAvailability },
-                              hourlyRate: member.hourlyRate ? member.hourlyRate.toString() : '',
-                              notes: member.notes || '',
-                              hireDate: member.hireDate,
-                            });
-                            setShowModal(true);
-                          }}
+                          onClick={() => openStaffEditor(member)}
                           className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                         >
                           Edit

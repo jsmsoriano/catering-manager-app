@@ -27,6 +27,7 @@ export default function BookingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [formStep, setFormStep] = useState(1);
   const [sortField, setSortField] = useState<'eventDate' | 'customerName' | 'eventType' | 'guests' | 'total' | 'status'>('eventDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
@@ -230,6 +231,7 @@ export default function BookingsPage() {
   const resetForm = () => {
     setSelectedBooking(null);
     setIsEditing(false);
+    setFormStep(1);
     setFormData({
       eventType: 'private-dinner',
       eventDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
@@ -248,6 +250,11 @@ export default function BookingsPage() {
     });
   };
 
+  const closeModal = () => {
+    setShowModal(false);
+    resetForm();
+  };
+
   const handleDelete = () => {
     if (selectedBooking && confirm(`Delete booking for ${selectedBooking.customerName}?`)) {
       saveBookings(bookings.filter((b) => b.id !== selectedBooking.id));
@@ -264,6 +271,29 @@ export default function BookingsPage() {
           : b
       )
     );
+  };
+
+  const openBookingEditor = (booking: Booking) => {
+    setSelectedBooking(booking);
+    setIsEditing(true);
+    setFormData({
+      eventType: booking.eventType,
+      eventDate: booking.eventDate,
+      eventTime: booking.eventTime,
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      customerPhone: booking.customerPhone,
+      adults: booking.adults,
+      children: booking.children,
+      location: booking.location,
+      distanceMiles: booking.distanceMiles,
+      premiumAddOn: booking.premiumAddOn,
+      notes: booking.notes,
+      staffAssignments: booking.staffAssignments,
+      staffingProfileId: booking.staffingProfileId,
+    });
+    setFormStep(1);
+    setShowModal(true);
   };
 
   const handleSort = (field: typeof sortField) => {
@@ -373,10 +403,43 @@ export default function BookingsPage() {
     cancelled: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400',
   };
 
+  const stepLabels = ['Customer', 'Event', 'Staffing', 'Review'];
+
+  const canAdvanceStep = (step: number) => {
+    if (step === 1) {
+      return (
+        formData.customerName.trim() &&
+        formData.customerEmail.trim() &&
+        formData.customerPhone.trim()
+      );
+    }
+    if (step === 2) {
+      return (
+        formData.eventDate &&
+        formData.eventTime &&
+        formData.location.trim() &&
+        formData.adults > 0
+      );
+    }
+    return true;
+  };
+
+  const goToNextStep = () => {
+    if (!canAdvanceStep(formStep)) {
+      alert('Please complete the required fields before continuing.');
+      return;
+    }
+    setFormStep((prev) => Math.min(prev + 1, stepLabels.length));
+  };
+
+  const goToPreviousStep = () => {
+    setFormStep((prev) => Math.max(prev - 1, 1));
+  };
+
   return (
-    <div className="h-full p-8">
+    <div className="h-full p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
             Bookings Management
@@ -390,7 +453,7 @@ export default function BookingsPage() {
             resetForm();
             setShowModal(true);
           }}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
+          className="w-full rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 sm:w-auto"
         >
           + New Booking
         </button>
@@ -584,27 +647,7 @@ export default function BookingsPage() {
                       {dayBookings.map((booking) => (
                         <button
                           key={booking.id}
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setIsEditing(true);
-                            setFormData({
-                              eventType: booking.eventType,
-                              eventDate: booking.eventDate,
-                              eventTime: booking.eventTime,
-                              customerName: booking.customerName,
-                              customerEmail: booking.customerEmail,
-                              customerPhone: booking.customerPhone,
-                              adults: booking.adults,
-                              children: booking.children,
-                              location: booking.location,
-                              distanceMiles: booking.distanceMiles,
-                              premiumAddOn: booking.premiumAddOn,
-                              notes: booking.notes,
-                              staffAssignments: booking.staffAssignments,
-                              staffingProfileId: booking.staffingProfileId,
-                            });
-                            setShowModal(true);
-                          }}
+                          onClick={() => openBookingEditor(booking)}
                           className={`w-full rounded px-1 py-0.5 text-left text-xs ${
                             statusColors[booking.status]
                           } truncate hover:opacity-80`}
@@ -643,159 +686,232 @@ export default function BookingsPage() {
       ) : (
         /* Bookings Table */
         <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
-              <tr>
-                {([
-                  ['eventDate', 'Event Date'],
-                  ['customerName', 'Customer'],
-                  ['eventType', 'Type'],
-                  ['guests', 'Guests'],
-                  ['total', 'Total'],
-                  ['status', 'Status'],
-                ] as const).map(([field, label]) => (
-                  <th
-                    key={field}
-                    onClick={() => handleSort(field)}
-                    className="cursor-pointer select-none px-4 py-3 text-left text-sm font-semibold text-zinc-900 hover:bg-zinc-100 dark:text-zinc-50 dark:hover:bg-zinc-700"
-                  >
-                    {label} {sortField === field && (sortDirection === 'asc' ? '↑' : '↓')}
-                  </th>
-                ))}
-                <th className="px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Reconcile
-                </th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {filteredBookings.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400"
-                  >
-                    {searchQuery || filterStatus !== 'all'
-                      ? 'No bookings match your filters'
-                      : 'No bookings yet. Click "+ New Booking" to get started!'}
-                  </td>
-                </tr>
-              ) : (
-                filteredBookings.map((booking) => (
-                  <tr
-                    key={booking.id}
-                    className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                  >
-                    <td className="px-4 py-4 text-sm text-zinc-900 dark:text-zinc-100">
-                      {format(new Date(booking.eventDate), 'MMM dd, yyyy')}
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {booking.eventTime}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-sm">
-                      <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {booking.customerName}
-                      </div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {booking.customerEmail}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-zinc-700 dark:text-zinc-300">
-                      {booking.eventType === 'private-dinner' ? 'Private' : 'Buffet'}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-zinc-700 dark:text-zinc-300">
-                      {booking.adults + booking.children}
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        ({booking.adults}A + {booking.children}C)
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                      {formatCurrency(booking.total)}
-                    </td>
-                    <td className="px-4 py-4 text-sm">
-                      <select
-                        value={booking.status}
-                        onChange={(e) =>
-                          updateBookingStatus(booking, e.target.value as BookingStatus)
-                        }
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                          statusColors[booking.status]
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-800 md:hidden">
+            {filteredBookings.length === 0 ? (
+              <div className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400">
+                {searchQuery || filterStatus !== 'all'
+                  ? 'No bookings match your filters'
+                  : 'No bookings yet. Click "+ New Booking" to get started!'}
+              </div>
+            ) : (
+              filteredBookings.map((booking) => (
+                <div key={booking.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-zinc-900 dark:text-zinc-100">{booking.customerName}</p>
+                      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                        {format(new Date(booking.eventDate), 'MMM dd, yyyy')} at {booking.eventTime}
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">{booking.customerEmail}</p>
+                    </div>
+                    <select
+                      value={booking.status}
+                      onChange={(e) => updateBookingStatus(booking, e.target.value as BookingStatus)}
+                      className={`rounded-full px-2 py-1 text-xs font-semibold ${statusColors[booking.status]}`}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                      Type:{' '}
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {booking.eventType === 'private-dinner' ? 'Private' : 'Buffet'}
+                      </span>
+                    </p>
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                      Guests:{' '}
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {booking.adults + booking.children}
+                      </span>
+                    </p>
+                    <p className="col-span-2 text-zinc-600 dark:text-zinc-400">
+                      Total:{' '}
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {formatCurrency(booking.total)}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 text-sm font-medium">
+                    {(booking.status === 'completed' || booking.reconciliationId) ? (
+                      <Link
+                        href={`/bookings/reconcile?bookingId=${booking.id}`}
+                        className={`${
+                          booking.reconciliationId
+                            ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
+                            : 'text-amber-600 hover:text-amber-700 dark:text-amber-400'
                         }`}
                       >
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                    </td>
-                    <td className="px-4 py-4 text-center text-sm">
-                      {(booking.status === 'completed' || booking.reconciliationId) ? (
-                        <Link
-                          href={`/bookings/reconcile?bookingId=${booking.id}`}
-                          className={`inline-flex items-center gap-1 font-medium ${
-                            booking.reconciliationId
-                              ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
-                              : 'text-amber-600 hover:text-amber-700 dark:text-amber-400'
-                          }`}
-                        >
-                          {booking.reconciliationId ? '✓ Reconciled' : '⚖ Reconcile'}
-                        </Link>
-                      ) : (
-                        <span className="text-zinc-400 dark:text-zinc-600">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 text-right text-sm">
-                      <div className="flex justify-end gap-3">
-                        {booking.eventType === 'private-dinner' && (
-                          <Link
-                            href={`/bookings/menu?bookingId=${booking.id}`}
-                            className={`${
-                              booking.menuId
-                                ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300'
-                                : 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300'
-                            }`}
-                            title={booking.menuId ? 'Edit menu' : 'Create menu'}
-                          >
-                            {booking.menuId ? '📋 Menu' : '➕ Menu'}
-                          </Link>
-                        )}
-                        <button
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setIsEditing(true);
-                            setFormData({
-                              eventType: booking.eventType,
-                              eventDate: booking.eventDate,
-                              eventTime: booking.eventTime,
-                              customerName: booking.customerName,
-                              customerEmail: booking.customerEmail,
-                              customerPhone: booking.customerPhone,
-                              adults: booking.adults,
-                              children: booking.children,
-                              location: booking.location,
-                              distanceMiles: booking.distanceMiles,
-                              premiumAddOn: booking.premiumAddOn,
-                              notes: booking.notes,
-                              staffAssignments: booking.staffAssignments,
-                              staffingProfileId: booking.staffingProfileId,
-                            });
-                            setShowModal(true);
-                          }}
-                          className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                        >
-                          Edit
-                        </button>
-                      </div>
+                        {booking.reconciliationId ? '✓ Reconciled' : '⚖ Reconcile'}
+                      </Link>
+                    ) : (
+                      <span className="text-zinc-400 dark:text-zinc-600">Reconcile unavailable</span>
+                    )}
+
+                    {booking.eventType === 'private-dinner' && (
+                      <Link
+                        href={`/bookings/menu?bookingId=${booking.id}`}
+                        className={`${
+                          booking.menuId
+                            ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300'
+                            : 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300'
+                        }`}
+                        title={booking.menuId ? 'Edit menu' : 'Create menu'}
+                      >
+                        {booking.menuId ? '📋 Menu' : '➕ Menu'}
+                      </Link>
+                    )}
+
+                    <button
+                      onClick={() => openBookingEditor(booking)}
+                      className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full">
+              <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                <tr>
+                  {([
+                    ['eventDate', 'Event Date'],
+                    ['customerName', 'Customer'],
+                    ['eventType', 'Type'],
+                    ['guests', 'Guests'],
+                    ['total', 'Total'],
+                    ['status', 'Status'],
+                  ] as const).map(([field, label]) => (
+                    <th
+                      key={field}
+                      onClick={() => handleSort(field)}
+                      className="cursor-pointer select-none px-4 py-3 text-left text-sm font-semibold text-zinc-900 hover:bg-zinc-100 dark:text-zinc-50 dark:hover:bg-zinc-700"
+                    >
+                      {label} {sortField === field && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                    Reconcile
+                  </th>
+                  <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {filteredBookings.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400"
+                    >
+                      {searchQuery || filterStatus !== 'all'
+                        ? 'No bookings match your filters'
+                        : 'No bookings yet. Click "+ New Booking" to get started!'}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  filteredBookings.map((booking) => (
+                    <tr
+                      key={booking.id}
+                      className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                    >
+                      <td className="px-4 py-4 text-sm text-zinc-900 dark:text-zinc-100">
+                        {format(new Date(booking.eventDate), 'MMM dd, yyyy')}
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {booking.eventTime}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                          {booking.customerName}
+                        </div>
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {booking.customerEmail}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                        {booking.eventType === 'private-dinner' ? 'Private' : 'Buffet'}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                        {booking.adults + booking.children}
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          ({booking.adults}A + {booking.children}C)
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        {formatCurrency(booking.total)}
+                      </td>
+                      <td className="px-4 py-4 text-sm">
+                        <select
+                          value={booking.status}
+                          onChange={(e) =>
+                            updateBookingStatus(booking, e.target.value as BookingStatus)
+                          }
+                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            statusColors[booking.status]
+                          }`}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="confirmed">Confirmed</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-4 text-center text-sm">
+                        {(booking.status === 'completed' || booking.reconciliationId) ? (
+                          <Link
+                            href={`/bookings/reconcile?bookingId=${booking.id}`}
+                            className={`inline-flex items-center gap-1 font-medium ${
+                              booking.reconciliationId
+                                ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
+                                : 'text-amber-600 hover:text-amber-700 dark:text-amber-400'
+                            }`}
+                          >
+                            {booking.reconciliationId ? '✓ Reconciled' : '⚖ Reconcile'}
+                          </Link>
+                        ) : (
+                          <span className="text-zinc-400 dark:text-zinc-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-right text-sm">
+                        <div className="flex justify-end gap-3">
+                          {booking.eventType === 'private-dinner' && (
+                            <Link
+                              href={`/bookings/menu?bookingId=${booking.id}`}
+                              className={`${
+                                booking.menuId
+                                  ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300'
+                                  : 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300'
+                              }`}
+                              title={booking.menuId ? 'Edit menu' : 'Create menu'}
+                            >
+                              {booking.menuId ? '📋 Menu' : '➕ Menu'}
+                            </Link>
+                          )}
+                          <button
+                            onClick={() => openBookingEditor(booking)}
+                            className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -808,10 +924,7 @@ export default function BookingsPage() {
                 {isEditing ? 'Edit Booking' : 'New Booking'}
               </h2>
               <button
-                onClick={() => {
-                  setShowModal(false);
-                  resetForm();
-                }}
+                onClick={closeModal}
                 className="text-zinc-500 hover:text-zinc-700"
               >
                 ✕
@@ -819,324 +932,362 @@ export default function BookingsPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Customer Info */}
-              <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
-                  Customer Information
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Customer Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.customerName}
-                      onChange={(e) =>
-                        setFormData({ ...formData, customerName: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.customerEmail}
-                      onChange={(e) =>
-                        setFormData({ ...formData, customerEmail: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Phone *
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      value={formData.customerPhone}
-                      onChange={(e) =>
-                        setFormData({ ...formData, customerPhone: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Event Details */}
-              <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
-                  Event Details
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Event Type *
-                    </label>
-                    <select
-                      value={formData.eventType}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          eventType: e.target.value as 'private-dinner' | 'buffet',
-                        })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    >
-                      <option value="private-dinner">Private Dinner</option>
-                      <option value="buffet">Buffet</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Event Date *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.eventDate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, eventDate: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Event Time *
-                    </label>
-                    <input
-                      type="time"
-                      required
-                      value={formData.eventTime}
-                      onChange={(e) =>
-                        setFormData({ ...formData, eventTime: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Location *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Adults *
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      required
-                      value={formData.adults}
-                      onChange={(e) =>
-                        setFormData({ ...formData, adults: parseInt(e.target.value) || 1 })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Children
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.children}
-                      onChange={(e) =>
-                        setFormData({ ...formData, children: parseInt(e.target.value) || 0 })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Distance (miles)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.distanceMiles}
-                      onChange={(e) =>
-                        setFormData({ ...formData, distanceMiles: parseInt(e.target.value) || 0 })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                      Premium Add-on ($/guest)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.premiumAddOn}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          premiumAddOn: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Staffing Profile Selector */}
-              {(rules.staffing.profiles || []).length > 0 && (
-                <div>
-                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
-                    Staffing Profile
-                  </h3>
-                  <select
-                    value={formData.staffingProfileId || ''}
-                    onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        staffingProfileId: e.target.value || undefined,
-                        staffAssignments: undefined, // Clear assignments when profile changes
-                      });
-                    }}
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                  >
-                    <option value="">Auto (best match)</option>
-                    {(rules.staffing.profiles || []).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.minGuests}–{p.maxGuests === 9999 ? '\u221E' : p.maxGuests} guests)
-                      </option>
-                    ))}
-                  </select>
-                  {currentFinancials?.staffingPlan.matchedProfileName && (
-                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                      Using profile: <span className="font-medium">{currentFinancials.staffingPlan.matchedProfileName}</span>
-                    </p>
-                  )}
-                  {!currentFinancials?.staffingPlan.matchedProfileId && (
-                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                      Using default staffing rules
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Staff Assignments */}
-              {currentFinancials && currentFinancials.staffingPlan.staff.length > 0 && (
-                <div>
-                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
-                    Staff Assignments
-                  </h3>
-                  <div className="space-y-3">
-                    {currentFinancials.staffingPlan.staff.map((position, idx) => {
-                      const available = getAvailableStaff(position.role);
-                      const assignment = findAssignmentForPosition(idx);
-                      const laborComp = currentFinancials.laborCompensation[idx];
-
-                      return (
-                        <div
-                          key={`${position.role}-${idx}`}
-                          className="flex items-center gap-4 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
-                        >
-                          <div className="min-w-[140px]">
-                            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                              {CHEF_ROLE_LABELS[position.role] || position.role}
-                            </div>
-                            {laborComp && (
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                Est. {formatCurrency(laborComp.finalPay)}
-                              </div>
-                            )}
-                          </div>
-                          <select
-                            value={assignment?.staffId || ''}
-                            onChange={(e) => updateStaffAssignment(idx, e.target.value)}
-                            className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                          >
-                            <option value="">Unassigned</option>
-                            {available.map((staff) => (
-                              <option key={staff.id} value={staff.id}>
-                                {staff.name}
-                                {staff.primaryRole === CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE]
-                                  ? ''
-                                  : ` (${STAFF_ROLE_LABELS[staff.primaryRole] || staff.primaryRole})`}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {staffRecords.filter((s) => s.status === 'active').length === 0 && (
-                    <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-                      No active staff found. Add staff members on the Staff page to assign them here.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Notes
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-                  placeholder="Special requests, dietary restrictions, etc."
-                />
-              </div>
-
-              {/* Menu Link */}
-              {isEditing && selectedBooking && formData.eventType === 'private-dinner' && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-amber-900 dark:text-amber-200">
-                        Guest Menu
-                      </h3>
-                      <p className="text-sm text-amber-700 dark:text-amber-400">
-                        {selectedBooking.menuId
-                          ? 'Menu selections have been configured for this event.'
-                          : 'No menu configured yet. Set up guest-by-guest protein and side selections.'}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/bookings/menu?bookingId=${selectedBooking.id}`}
-                      className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-                        selectedBooking.menuId
-                          ? 'bg-emerald-600 hover:bg-emerald-700'
-                          : 'bg-amber-600 hover:bg-amber-700'
+              <div className="grid grid-cols-4 gap-2">
+                {stepLabels.map((label, idx) => {
+                  const stepNumber = idx + 1;
+                  const isCurrent = formStep === stepNumber;
+                  const isComplete = formStep > stepNumber;
+                  return (
+                    <div
+                      key={label}
+                      className={`rounded-md px-2 py-2 text-center text-xs font-semibold ${
+                        isCurrent
+                          ? 'bg-indigo-600 text-white'
+                          : isComplete
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
                       }`}
                     >
-                      {selectedBooking.menuId ? 'Edit Menu' : 'Create Menu'}
-                    </Link>
+                      {stepNumber}. {label}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {formStep === 1 && (
+                <div>
+                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                    Customer Information
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Customer Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.customerName}
+                        onChange={(e) =>
+                          setFormData({ ...formData, customerName: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Email *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={formData.customerEmail}
+                        onChange={(e) =>
+                          setFormData({ ...formData, customerEmail: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Phone *
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={formData.customerPhone}
+                        onChange={(e) =>
+                          setFormData({ ...formData, customerPhone: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="flex justify-between">
+              {formStep === 2 && (
                 <div>
-                  {isEditing && (
+                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                    Event Details
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Event Type *
+                      </label>
+                      <select
+                        value={formData.eventType}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            eventType: e.target.value as 'private-dinner' | 'buffet',
+                          })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      >
+                        <option value="private-dinner">Private Dinner</option>
+                        <option value="buffet">Buffet</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Event Date *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={formData.eventDate}
+                        onChange={(e) =>
+                          setFormData({ ...formData, eventDate: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Event Time *
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={formData.eventTime}
+                        onChange={(e) =>
+                          setFormData({ ...formData, eventTime: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Location *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.location}
+                        onChange={(e) =>
+                          setFormData({ ...formData, location: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Adults *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={formData.adults}
+                        onChange={(e) =>
+                          setFormData({ ...formData, adults: parseInt(e.target.value) || 1 })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Children
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.children}
+                        onChange={(e) =>
+                          setFormData({ ...formData, children: parseInt(e.target.value) || 0 })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Distance (miles)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.distanceMiles}
+                        onChange={(e) =>
+                          setFormData({ ...formData, distanceMiles: parseInt(e.target.value) || 0 })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Premium Add-on ($/guest)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.premiumAddOn}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            premiumAddOn: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {formStep === 3 && (
+                <div className="space-y-6">
+                  {(rules.staffing.profiles || []).length > 0 && (
+                    <div>
+                      <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Staffing Profile
+                      </h3>
+                      <select
+                        value={formData.staffingProfileId || ''}
+                        onChange={(e) => {
+                          setFormData({
+                            ...formData,
+                            staffingProfileId: e.target.value || undefined,
+                            staffAssignments: undefined,
+                          });
+                        }}
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      >
+                        <option value="">Auto (best match)</option>
+                        {(rules.staffing.profiles || []).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.minGuests}-{p.maxGuests === 9999 ? '\u221E' : p.maxGuests} guests)
+                          </option>
+                        ))}
+                      </select>
+                      {currentFinancials?.staffingPlan.matchedProfileName && (
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          Using profile:{' '}
+                          <span className="font-medium">{currentFinancials.staffingPlan.matchedProfileName}</span>
+                        </p>
+                      )}
+                      {!currentFinancials?.staffingPlan.matchedProfileId && (
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          Using default staffing rules
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {currentFinancials && currentFinancials.staffingPlan.staff.length > 0 && (
+                    <div>
+                      <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                        Staff Assignments
+                      </h3>
+                      <div className="space-y-3">
+                        {currentFinancials.staffingPlan.staff.map((position, idx) => {
+                          const available = getAvailableStaff(position.role);
+                          const assignment = findAssignmentForPosition(idx);
+                          const laborComp = currentFinancials.laborCompensation[idx];
+
+                          return (
+                            <div
+                              key={`${position.role}-${idx}`}
+                              className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 sm:flex-row sm:items-center dark:border-zinc-700 dark:bg-zinc-800/50"
+                            >
+                              <div className="min-w-[140px]">
+                                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                                  {CHEF_ROLE_LABELS[position.role] || position.role}
+                                </div>
+                                {laborComp && (
+                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                                    Est. {formatCurrency(laborComp.finalPay)}
+                                  </div>
+                                )}
+                              </div>
+                              <select
+                                value={assignment?.staffId || ''}
+                                onChange={(e) => updateStaffAssignment(idx, e.target.value)}
+                                className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                              >
+                                <option value="">Unassigned</option>
+                                {available.map((staff) => (
+                                  <option key={staff.id} value={staff.id}>
+                                    {staff.name}
+                                    {staff.primaryRole === CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE]
+                                      ? ''
+                                      : ` (${STAFF_ROLE_LABELS[staff.primaryRole] || staff.primaryRole})`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {staffRecords.filter((s) => s.status === 'active').length === 0 && (
+                        <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+                          No active staff found. Add staff members on the Staff page to assign them here.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {formStep === 4 && (
+                <div className="space-y-6">
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-800/50">
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">Review</p>
+                    <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+                      {formData.customerName} - {formData.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'} on {formData.eventDate} at {formData.eventTime}
+                    </p>
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                      Guests: {formData.adults + formData.children} ({formData.adults}A / {formData.children}C)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Notes
+                    </label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      rows={3}
+                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      placeholder="Special requests, dietary restrictions, etc."
+                    />
+                  </div>
+
+                  {isEditing && selectedBooking && formData.eventType === 'private-dinner' && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold text-amber-900 dark:text-amber-200">
+                            Guest Menu
+                          </h3>
+                          <p className="text-sm text-amber-700 dark:text-amber-400">
+                            {selectedBooking.menuId
+                              ? 'Menu selections have been configured for this event.'
+                              : 'No menu configured yet. Set up guest-by-guest protein and side selections.'}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/bookings/menu?bookingId=${selectedBooking.id}`}
+                          className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
+                            selectedBooking.menuId
+                              ? 'bg-emerald-600 hover:bg-emerald-700'
+                              : 'bg-amber-600 hover:bg-amber-700'
+                          }`}
+                        >
+                          {selectedBooking.menuId ? 'Edit Menu' : 'Create Menu'}
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+                <div>
+                  {isEditing && formStep === stepLabels.length && (
                     <button
                       type="button"
                       onClick={handleDelete}
@@ -1146,23 +1297,39 @@ export default function BookingsPage() {
                     </button>
                   )}
                 </div>
-                <div className="flex gap-2">
+                <div className="ml-auto flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowModal(false);
-                      resetForm();
-                    }}
+                    onClick={closeModal}
                     className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
-                  >
-                    {isEditing ? 'Update Booking' : 'Create Booking'}
-                  </button>
+                  {formStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={goToPreviousStep}
+                      className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    >
+                      Back
+                    </button>
+                  )}
+                  {formStep < stepLabels.length ? (
+                    <button
+                      type="button"
+                      onClick={goToNextStep}
+                      className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+                    >
+                      Next
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
+                    >
+                      {isEditing ? 'Update Booking' : 'Create Booking'}
+                    </button>
+                  )}
                 </div>
               </div>
             </form>

@@ -167,7 +167,7 @@ export default function ExpensesPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
             Expense Tracking
@@ -191,7 +191,7 @@ export default function ExpensesPage() {
               });
             }
           }}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 sm:w-auto"
         >
           {showForm ? 'Cancel' : '+ Add Expense'}
         </button>
@@ -399,100 +399,161 @@ export default function ExpensesPage() {
         </div>
 
         {sortedExpenses.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Category
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Description
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Linked Event
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                {sortedExpenses.map((expense) => {
-                  const linkedBooking = expense.bookingId
-                    ? bookings.find((b) => b.id === expense.bookingId)
-                    : null;
+          <>
+            <div className="divide-y divide-zinc-200 dark:divide-zinc-800 md:hidden">
+              {sortedExpenses.map((expense) => {
+                const linkedBooking = expense.bookingId
+                  ? bookings.find((b) => b.id === expense.bookingId)
+                  : null;
 
-                  return (
-                    <tr
-                      key={expense.id}
-                      className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                    >
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
-                        {format(parseLocalDate(expense.date), 'MMM d, yyyy')}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
-                            categoryColors[expense.category]
-                          }`}
-                        >
-                          {categoryLabels[expense.category]}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
-                        <div>
-                          <div className="font-medium">{expense.description}</div>
-                          {expense.notes && (
-                            <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                              {expense.notes}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">
-                        {linkedBooking ? (
-                          <div>
-                            <div className="font-medium text-zinc-900 dark:text-zinc-50">
-                              {linkedBooking.customerName}
-                            </div>
-                            <div className="text-xs">
-                              {format(parseLocalDate(linkedBooking.eventDate), 'MMM d')}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-zinc-400">General</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                return (
+                  <div key={expense.id} className="space-y-3 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                          {expense.description}
+                        </p>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                          {format(parseLocalDate(expense.date), 'MMM d, yyyy')}
+                        </p>
+                      </div>
+                      <p className="text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                         {formatCurrency(expense.amount)}
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                        <button
-                          onClick={() => handleEdit(expense)}
-                          className="mr-3 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(expense.id)}
-                          className="text-red-600 hover:text-red-700 dark:text-red-400"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </p>
+                    </div>
+
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                        categoryColors[expense.category]
+                      }`}
+                    >
+                      {categoryLabels[expense.category]}
+                    </span>
+
+                    {expense.notes && (
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">{expense.notes}</p>
+                    )}
+
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {linkedBooking
+                        ? `Linked: ${linkedBooking.customerName} (${format(parseLocalDate(linkedBooking.eventDate), 'MMM d')})`
+                        : 'General business expense'}
+                    </p>
+
+                    <div className="flex gap-4 text-sm font-medium">
+                      <button
+                        onClick={() => handleEdit(expense)}
+                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDelete(expense.id)}
+                        className="text-red-600 hover:text-red-700 dark:text-red-400"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full">
+                <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Category
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Description
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Linked Event
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  {sortedExpenses.map((expense) => {
+                    const linkedBooking = expense.bookingId
+                      ? bookings.find((b) => b.id === expense.bookingId)
+                      : null;
+
+                    return (
+                      <tr
+                        key={expense.id}
+                        className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                      >
+                        <td className="whitespace-nowrap px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                          {format(parseLocalDate(expense.date), 'MMM d, yyyy')}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                              categoryColors[expense.category]
+                            }`}
+                          >
+                            {categoryLabels[expense.category]}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                          <div>
+                            <div className="font-medium">{expense.description}</div>
+                            {expense.notes && (
+                              <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                                {expense.notes}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">
+                          {linkedBooking ? (
+                            <div>
+                              <div className="font-medium text-zinc-900 dark:text-zinc-50">
+                                {linkedBooking.customerName}
+                              </div>
+                              <div className="text-xs">
+                                {format(parseLocalDate(linkedBooking.eventDate), 'MMM d')}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-400">General</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                          {formatCurrency(expense.amount)}
+                        </td>
+                        <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
+                          <button
+                            onClick={() => handleEdit(expense)}
+                            className="mr-3 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(expense.id)}
+                            className="text-red-600 hover:text-red-700 dark:text-red-400"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <div className="px-6 py-12 text-center">
             <p className="text-zinc-600 dark:text-zinc-400">No expenses recorded yet</p>
