@@ -41,7 +41,7 @@ Implemented routes and utilities:
 
 - `app/login/page.tsx` - magic link login form
 - `app/auth/callback/route.ts` - exchanges auth code/token and redirects
-- `middleware.ts` - refreshes Supabase auth session cookies
+- `proxy.ts` - refreshes Supabase auth session cookies
 
 ## 4) Supabase clients
 
