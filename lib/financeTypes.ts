@@ -34,3 +34,14 @@ export interface RetainedEarningsTransaction {
   notes?: string;
   createdAt: string;
 }
+
+export interface ProfitDistributionOverride {
+  id: string;
+  bookingId: string;
+  ownerAPayout: number;
+  ownerBPayout: number;
+  retainedEarnings: number;
+  chefPayouts: number;
+  notes?: string;
+  updatedAt: string;
+}

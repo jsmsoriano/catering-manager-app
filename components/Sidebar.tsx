@@ -29,7 +29,7 @@ const navigation = [
     children: [
       { name: 'Dashboard', href: '/reports' },
       { name: 'Business Summary', href: '/reports/business-summary' },
-      { name: 'Owner Distribution & Profit Tracker', href: '/reports/owner-monthly' },
+      { name: 'Owner Profit Distribution', href: '/reports/owner-monthly' },
       { name: 'Staff Payouts', href: '/reports/comparative' },
     ],
   },

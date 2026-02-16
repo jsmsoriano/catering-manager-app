@@ -506,10 +506,10 @@ export default function ReportsDashboardPage() {
         </div>
       </div>
 
-      {/* Updated Report Sections (top visibility) */}
+      {/* Consolidated Report Sections */}
       <div className="mb-8 rounded-lg border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
-          Updated Report Sections
+          Consolidated Report Sections
         </h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Link
@@ -528,7 +528,7 @@ export default function ReportsDashboardPage() {
             href="/reports/owner-monthly"
             className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
           >
-            Owner Distribution + Profit Tracker
+            Owner Profit Distribution
           </Link>
           <Link
             href="/reports/comparative"
@@ -1123,28 +1123,16 @@ export default function ReportsDashboardPage() {
         <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
           Consolidated Report Views
         </h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link
           href="/reports/owner-monthly"
           className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
         >
           <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            Owner Distribution
+            Owner Profit Distribution
           </h3>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Detailed compensation breakdown for each owner
-          </p>
-        </Link>
-
-        <Link
-          href="/reports/owner-monthly"
-          className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-        >
-          <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
-            Profit Tracker
-          </h3>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Track earned vs paid owner profit and retained balances
+            Event-level owner payouts, retained earnings, and chef payouts
           </p>
         </Link>
 

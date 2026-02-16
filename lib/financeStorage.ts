@@ -2,11 +2,13 @@ import type {
   LaborPaymentRecord,
   OwnerProfitPayoutRecord,
   RetainedEarningsTransaction,
+  ProfitDistributionOverride,
 } from './financeTypes';
 
 export const LABOR_PAYMENTS_KEY = 'laborPayments';
 export const OWNER_PROFIT_PAYOUTS_KEY = 'ownerProfitPayouts';
 export const RETAINED_EARNINGS_KEY = 'retainedEarningsTransactions';
+export const PROFIT_DISTRIBUTION_OVERRIDES_KEY = 'profitDistributionOverrides';
 
 function canUseBrowserStorage() {
   return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
@@ -53,4 +55,16 @@ export function loadRetainedEarningsTransactions(): RetainedEarningsTransaction[
 
 export function saveRetainedEarningsTransactions(value: RetainedEarningsTransaction[]) {
   saveList<RetainedEarningsTransaction>(RETAINED_EARNINGS_KEY, value, 'retainedEarningsUpdated');
+}
+
+export function loadProfitDistributionOverrides(): ProfitDistributionOverride[] {
+  return loadList<ProfitDistributionOverride>(PROFIT_DISTRIBUTION_OVERRIDES_KEY);
+}
+
+export function saveProfitDistributionOverrides(value: ProfitDistributionOverride[]) {
+  saveList<ProfitDistributionOverride>(
+    PROFIT_DISTRIBUTION_OVERRIDES_KEY,
+    value,
+    'profitDistributionOverridesUpdated'
+  );
 }
