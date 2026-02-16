@@ -7,6 +7,14 @@ import type { StaffAssignment } from './staffTypes';
 import type { MenuPricingSnapshot } from './menuTypes';
 
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
+export type ServiceStatus = BookingStatus;
+export type PaymentStatus =
+  | 'unpaid'
+  | 'deposit-due'
+  | 'deposit-paid'
+  | 'balance-due'
+  | 'paid-in-full'
+  | 'refunded';
 
 export interface Booking {
   id: string;
@@ -34,6 +42,16 @@ export interface Booking {
 
   // Status & Notes
   status: BookingStatus;
+  serviceStatus?: ServiceStatus; // Operational workflow status (separate from payment lifecycle)
+  paymentStatus?: PaymentStatus; // Billing workflow status
+  depositPercent?: number; // Required deposit percentage (e.g., 30)
+  depositAmount?: number; // Required deposit amount in USD
+  depositDueDate?: string; // ISO date for deposit due
+  balanceDueDate?: string; // ISO date for final balance due (usually event date)
+  amountPaid?: number; // Total customer payments received
+  balanceDueAmount?: number; // Remaining receivable amount
+  confirmedAt?: string; // ISO datetime when service was confirmed
+  prepPurchaseByDate?: string; // ISO date target for ingredient purchasing (event - 2 days)
   notes: string;
 
   // Staff Assignments

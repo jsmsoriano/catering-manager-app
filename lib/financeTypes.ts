@@ -48,3 +48,23 @@ export interface ProfitDistributionOverride {
   notes?: string;
   updatedAt: string;
 }
+
+export type CustomerPaymentType = 'deposit' | 'payment' | 'refund';
+export type CustomerPaymentMethod =
+  | 'cash'
+  | 'zelle'
+  | 'venmo'
+  | 'card'
+  | 'bank-transfer'
+  | 'other';
+
+export interface CustomerPaymentRecord {
+  id: string;
+  bookingId: string;
+  paymentDate: string; // ISO local date string (YYYY-MM-DD)
+  amount: number;
+  type: CustomerPaymentType;
+  method?: CustomerPaymentMethod;
+  notes?: string;
+  recordedAt: string;
+}

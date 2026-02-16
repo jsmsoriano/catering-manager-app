@@ -16,11 +16,19 @@ import type {
   InventoryMovementType,
   InventoryTransaction,
 } from '@/lib/expenseTypes';
+import {
+  calculatePrepPurchaseByDate,
+  getBookingServiceStatus,
+  normalizeBookingWorkflowFields,
+} from '@/lib/bookingWorkflow';
 
 const EXPENSES_KEY = 'expenses';
 const BOOKINGS_KEY = 'bookings';
 const INVENTORY_ITEMS_KEY = 'inventoryItems';
 const INVENTORY_TRANSACTIONS_KEY = 'inventoryTransactions';
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const APPROX_EACH_PER_CASE = 100;
+const APPROX_EACH_PER_TRAY = 50;
 
 function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
@@ -40,6 +48,16 @@ function safeParseList<T>(raw: string | null): T[] {
 function loadInitialList<T>(key: string): T[] {
   if (typeof window === 'undefined') return [];
   return safeParseList<T>(window.localStorage.getItem(key));
+}
+
+function diffLocalDays(targetDate: string, baseDate: string): number {
+  return Math.round(
+    (parseLocalDate(targetDate).getTime() - parseLocalDate(baseDate).getTime()) / MS_PER_DAY
+  );
+}
+
+function loadInitialBookings(): Booking[] {
+  return loadInitialList<Booking>(BOOKINGS_KEY).map((booking) => normalizeBookingWorkflowFields(booking));
 }
 
 function getDefaultExpenseFormData(): ExpenseFormData {
@@ -119,10 +137,114 @@ function getInventoryStatus(item: InventoryItem): 'out' | 'low' | 'healthy' {
   return 'healthy';
 }
 
+interface PurchaseDemandTemplate {
+  category: InventoryCategory;
+  unit: 'lb' | 'bottle' | 'ea';
+  privateDinnerPerGuest: number;
+  buffetPerGuest: number;
+  minimumPerEvent: number;
+}
+
+interface PurchaseNeedSummary {
+  category: InventoryCategory;
+  unit: 'lb' | 'bottle' | 'ea';
+  requiredQty: number;
+  onHandQty: number;
+  shortfallQty: number;
+  avgUnitCost: number;
+  estimatedSpend: number;
+}
+
+const purchaseDemandTemplates: PurchaseDemandTemplate[] = [
+  {
+    category: 'protein',
+    unit: 'lb',
+    privateDinnerPerGuest: 0.55,
+    buffetPerGuest: 0.45,
+    minimumPerEvent: 8,
+  },
+  {
+    category: 'produce',
+    unit: 'lb',
+    privateDinnerPerGuest: 0.28,
+    buffetPerGuest: 0.24,
+    minimumPerEvent: 4,
+  },
+  {
+    category: 'dry-goods',
+    unit: 'lb',
+    privateDinnerPerGuest: 0.22,
+    buffetPerGuest: 0.28,
+    minimumPerEvent: 3,
+  },
+  {
+    category: 'sauces',
+    unit: 'bottle',
+    privateDinnerPerGuest: 0.06,
+    buffetPerGuest: 0.05,
+    minimumPerEvent: 1,
+  },
+  {
+    category: 'disposables',
+    unit: 'ea',
+    privateDinnerPerGuest: 1,
+    buffetPerGuest: 1,
+    minimumPerEvent: 12,
+  },
+];
+
+function convertQuantityToTargetUnit(
+  quantity: number,
+  fromUnit: InventoryItem['unit'],
+  targetUnit: PurchaseDemandTemplate['unit']
+): number | null {
+  if (targetUnit === 'lb') {
+    if (fromUnit === 'lb') return quantity;
+    if (fromUnit === 'kg') return quantity * 2.20462;
+    if (fromUnit === 'oz') return quantity / 16;
+    if (fromUnit === 'g') return quantity / 453.592;
+    return null;
+  }
+
+  if (targetUnit === 'bottle') {
+    return fromUnit === 'bottle' ? quantity : null;
+  }
+
+  if (fromUnit === 'ea') return quantity;
+  if (fromUnit === 'case') return quantity * APPROX_EACH_PER_CASE;
+  if (fromUnit === 'tray') return quantity * APPROX_EACH_PER_TRAY;
+  return null;
+}
+
+function convertUnitCostToTargetUnit(
+  unitCost: number,
+  fromUnit: InventoryItem['unit'],
+  targetUnit: PurchaseDemandTemplate['unit']
+): number | null {
+  if (targetUnit === 'lb') {
+    if (fromUnit === 'lb') return unitCost;
+    if (fromUnit === 'kg') return unitCost / 2.20462;
+    if (fromUnit === 'oz') return unitCost * 16;
+    if (fromUnit === 'g') return unitCost * 453.592;
+    return null;
+  }
+
+  if (targetUnit === 'bottle') {
+    return fromUnit === 'bottle' ? unitCost : null;
+  }
+
+  if (fromUnit === 'ea') return unitCost;
+  if (fromUnit === 'case') return unitCost / APPROX_EACH_PER_CASE;
+  if (fromUnit === 'tray') return unitCost / APPROX_EACH_PER_TRAY;
+  return null;
+}
+
 export default function ExpensesPage() {
-  const [activeSection, setActiveSection] = useState<'expenses' | 'inventory'>('expenses');
+  const [activeSection, setActiveSection] = useState<'expenses' | 'inventory' | 'purchasing'>(
+    'expenses'
+  );
   const [expenses, setExpenses] = useState<Expense[]>(() => loadInitialList<Expense>(EXPENSES_KEY));
-  const [bookings, setBookings] = useState<Booking[]>(() => loadInitialList<Booking>(BOOKINGS_KEY));
+  const [bookings, setBookings] = useState<Booking[]>(loadInitialBookings);
 
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
@@ -149,7 +271,11 @@ export default function ExpensesPage() {
   };
 
   const loadBookings = () => {
-    setBookings(safeParseList<Booking>(localStorage.getItem(BOOKINGS_KEY)));
+    setBookings(
+      safeParseList<Booking>(localStorage.getItem(BOOKINGS_KEY)).map((booking) =>
+        normalizeBookingWorkflowFields(booking)
+      )
+    );
   };
 
   const loadInventoryItems = () => {
@@ -591,6 +717,159 @@ export default function ExpensesPage() {
     [inventoryTransactions]
   );
 
+  const procurementEvents = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    return bookings
+      .map((booking) => normalizeBookingWorkflowFields(booking, today))
+      .filter((booking) => {
+        const serviceStatus = getBookingServiceStatus(booking);
+        return serviceStatus !== 'pending' && serviceStatus !== 'cancelled';
+      })
+      .filter((booking) => diffLocalDays(booking.eventDate, today) >= 0)
+      .map((booking) => {
+        const purchaseByDate = booking.prepPurchaseByDate || calculatePrepPurchaseByDate(booking.eventDate);
+        return {
+          booking,
+          purchaseByDate,
+          daysUntilPurchase: diffLocalDays(purchaseByDate, today),
+          daysUntilEvent: diffLocalDays(booking.eventDate, today),
+        };
+      })
+      .sort((a, b) => {
+        const byPurchaseDate = a.purchaseByDate.localeCompare(b.purchaseByDate);
+        if (byPurchaseDate !== 0) return byPurchaseDate;
+        const byEventDate = a.booking.eventDate.localeCompare(b.booking.eventDate);
+        if (byEventDate !== 0) return byEventDate;
+        return a.booking.eventTime.localeCompare(b.booking.eventTime);
+      });
+  }, [bookings]);
+
+  const duePurchaseEvents = useMemo(
+    () => procurementEvents.filter((event) => event.daysUntilPurchase <= 0),
+    [procurementEvents]
+  );
+
+  const upcomingPurchaseEvents = useMemo(
+    () =>
+      procurementEvents.filter(
+        (event) => event.daysUntilPurchase > 0 && event.daysUntilPurchase <= 7
+      ),
+    [procurementEvents]
+  );
+
+  const onHandByCategory = useMemo(() => {
+    const map = new Map<string, { quantity: number; totalValue: number }>();
+
+    inventoryItems.forEach((item) => {
+      const template = purchaseDemandTemplates.find((entry) => entry.category === item.category);
+      if (!template) return;
+
+      const convertedQty = convertQuantityToTargetUnit(item.currentStock, item.unit, template.unit);
+      const convertedUnitCost = convertUnitCostToTargetUnit(item.avgUnitCost, item.unit, template.unit);
+      if (convertedQty === null || convertedUnitCost === null) return;
+
+      const key = `${template.category}:${template.unit}`;
+      const current = map.get(key) || { quantity: 0, totalValue: 0 };
+      map.set(key, {
+        quantity: current.quantity + convertedQty,
+        totalValue: current.totalValue + convertedQty * convertedUnitCost,
+      });
+    });
+
+    return map;
+  }, [inventoryItems]);
+
+  const duePurchaseNeeds = useMemo(() => {
+    const requiredByCategory = new Map<string, number>();
+
+    duePurchaseEvents.forEach(({ booking }) => {
+      const guestCount = booking.adults + booking.children;
+      purchaseDemandTemplates.forEach((template) => {
+        const perGuest =
+          booking.eventType === 'buffet'
+            ? template.buffetPerGuest
+            : template.privateDinnerPerGuest;
+        const requiredRaw = Math.max(template.minimumPerEvent, guestCount * perGuest);
+        const required =
+          template.unit === 'lb' ? Math.round(requiredRaw * 100) / 100 : Math.ceil(requiredRaw);
+        const key = `${template.category}:${template.unit}`;
+        requiredByCategory.set(key, (requiredByCategory.get(key) || 0) + required);
+      });
+    });
+
+    return purchaseDemandTemplates.map((template): PurchaseNeedSummary => {
+      const key = `${template.category}:${template.unit}`;
+      const requiredQty = Math.round((requiredByCategory.get(key) || 0) * 100) / 100;
+      const onHandRecord = onHandByCategory.get(key);
+      const onHandQty = Math.round(((onHandRecord?.quantity || 0) + Number.EPSILON) * 100) / 100;
+      const avgUnitCost =
+        onHandRecord && onHandRecord.quantity > 0
+          ? onHandRecord.totalValue / onHandRecord.quantity
+          : 0;
+      const shortfallQty = Math.round(Math.max(0, requiredQty - onHandQty) * 100) / 100;
+      const estimatedSpend = Math.round(shortfallQty * avgUnitCost * 100) / 100;
+
+      return {
+        category: template.category,
+        unit: template.unit,
+        requiredQty,
+        onHandQty,
+        shortfallQty,
+        avgUnitCost,
+        estimatedSpend,
+      };
+    });
+  }, [duePurchaseEvents, onHandByCategory]);
+
+  const purchasingSummary = useMemo(() => {
+    const estimatedSpend = duePurchaseNeeds.reduce((sum, need) => sum + need.estimatedSpend, 0);
+    const overdueCount = duePurchaseEvents.filter((event) => event.daysUntilPurchase < 0).length;
+    const dueTodayCount = duePurchaseEvents.filter((event) => event.daysUntilPurchase === 0).length;
+    const categoriesWithShortfall = duePurchaseNeeds.filter((need) => need.shortfallQty > 0).length;
+    return {
+      dueTodayCount,
+      overdueCount,
+      categoriesWithShortfall,
+      estimatedSpend,
+      totalDueEvents: duePurchaseEvents.length,
+      upcomingCount: upcomingPurchaseEvents.length,
+    };
+  }, [duePurchaseNeeds, duePurchaseEvents, upcomingPurchaseEvents]);
+
+  const handleCreatePurchaseDraftExpenses = () => {
+    const shortfalls = duePurchaseNeeds.filter(
+      (need) => need.shortfallQty > 0 && need.estimatedSpend > 0
+    );
+    if (shortfalls.length === 0) {
+      alert('No shortfall spend to draft. Inventory on-hand currently covers due events.');
+      return;
+    }
+
+    const shouldCreate = confirm(
+      `Create ${shortfalls.length} draft expense entries from current T-2 shortfalls?`
+    );
+    if (!shouldCreate) return;
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const eventContext = duePurchaseEvents
+      .slice(0, 4)
+      .map((event) => `${event.booking.customerName} (${event.booking.eventDate})`)
+      .join(', ');
+
+    const draftExpenses: Expense[] = shortfalls.map((need) => ({
+      id: crypto.randomUUID(),
+      date: today,
+      category: need.category === 'disposables' ? 'supplies' : 'food',
+      amount: need.estimatedSpend,
+      description: `T-2 purchase plan: ${inventoryCategoryLabels[need.category]}`,
+      notes: `Planner shortfall ${need.shortfallQty} ${need.unit}. Due events: ${eventContext || 'n/a'}.`,
+    }));
+
+    saveExpenses([...expenses, ...draftExpenses]);
+    setActiveSection('expenses');
+    alert(`Created ${draftExpenses.length} draft expense records in Expense Tracking.`);
+  };
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8">
@@ -606,6 +885,7 @@ export default function ExpensesPage() {
         <p className="font-semibold text-indigo-900 dark:text-indigo-200">Recommended workflow</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-indigo-800 dark:text-indigo-300">
           <li>Load sample bookings from the Bookings page for realistic test volume.</li>
+          <li>Review Purchasing Planner daily for T-2 events and shortfalls.</li>
           <li>Record purchase receipts in Expense Tracking (event-linked when possible).</li>
           <li>Post stock movements in Inventory Management to keep on-hand counts accurate.</li>
         </ol>
@@ -637,6 +917,16 @@ export default function ExpensesPage() {
           }`}
         >
           Inventory Management
+        </button>
+        <button
+          onClick={() => setActiveSection('purchasing')}
+          className={`rounded-md px-4 py-2 text-sm font-medium ${
+            activeSection === 'purchasing'
+              ? 'bg-purple-600 text-white'
+              : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+          }`}
+        >
+          Purchasing Planner (T-2)
         </button>
       </div>
 
@@ -982,6 +1272,220 @@ export default function ExpensesPage() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {activeSection === 'purchasing' && (
+        <>
+          <div className="mb-6 rounded-lg border border-purple-200 bg-purple-50/70 p-4 text-sm dark:border-purple-900 dark:bg-purple-950/20">
+            <p className="font-semibold text-purple-900 dark:text-purple-200">
+              T-2 purchasing planner
+            </p>
+            <p className="mt-1 text-purple-800 dark:text-purple-300">
+              This planner estimates ingredient demand from confirmed bookings, targets purchasing at
+              event date minus 2 days, and compares it to on-hand inventory.
+            </p>
+            <p className="mt-2 text-xs text-purple-700 dark:text-purple-400">
+              Assumptions: weight unit conversions are automatic; case/tray-to-each conversions use
+              defaults for planning only.
+            </p>
+          </div>
+
+          <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/20">
+              <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200">Due Today</h3>
+              <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {purchasingSummary.dueTodayCount}
+              </p>
+              <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+                purchase windows opening now
+              </p>
+            </div>
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-900 dark:bg-red-950/20">
+              <h3 className="text-sm font-medium text-red-900 dark:text-red-200">Overdue Purchases</h3>
+              <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
+                {purchasingSummary.overdueCount}
+              </p>
+              <p className="mt-1 text-xs text-red-700 dark:text-red-300">events at risk</p>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-900 dark:bg-amber-950/20">
+              <h3 className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                Category Shortfalls
+              </h3>
+              <p className="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">
+                {purchasingSummary.categoriesWithShortfall}
+              </p>
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                of {duePurchaseNeeds.length} tracked categories
+              </p>
+            </div>
+            <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 dark:border-purple-900 dark:bg-purple-950/20">
+              <h3 className="text-sm font-medium text-purple-900 dark:text-purple-200">
+                Estimated Purchase Spend
+              </h3>
+              <p className="mt-2 text-3xl font-bold text-purple-600 dark:text-purple-400">
+                {formatCurrency(purchasingSummary.estimatedSpend)}
+              </p>
+              <p className="mt-1 text-xs text-purple-700 dark:text-purple-300">
+                {purchasingSummary.totalDueEvents} due now / {purchasingSummary.upcomingCount} next 7
+                days
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-8 rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                Events in purchasing window
+              </h2>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                Sorted by purchase-by date (event date - 2 days)
+              </span>
+            </div>
+            {procurementEvents.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Event
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Service Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Purchase By
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Guests
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Event In
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {procurementEvents.map((event) => {
+                      const purchaseStatusClass =
+                        event.daysUntilPurchase < 0
+                          ? 'text-red-700 dark:text-red-400'
+                          : event.daysUntilPurchase === 0
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : 'text-emerald-700 dark:text-emerald-400';
+                      return (
+                        <tr key={event.booking.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                          <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                            <Link
+                              href={`/bookings?bookingId=${event.booking.id}`}
+                              className="font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            >
+                              {event.booking.customerName}
+                            </Link>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {format(parseLocalDate(event.booking.eventDate), 'MMM d, yyyy')} •{' '}
+                              {event.booking.eventTime}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                            {getBookingServiceStatus(event.booking)}
+                          </td>
+                          <td className={`px-6 py-4 text-sm font-medium ${purchaseStatusClass}`}>
+                            {format(parseLocalDate(event.purchaseByDate), 'MMM d, yyyy')}
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {event.daysUntilPurchase < 0
+                                ? `${Math.abs(event.daysUntilPurchase)} day(s) overdue`
+                                : event.daysUntilPurchase === 0
+                                  ? 'Due today'
+                                  : `in ${event.daysUntilPurchase} day(s)`}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                            {event.booking.adults + event.booking.children}
+                          </td>
+                          <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                            {event.daysUntilEvent === 0
+                              ? 'Today'
+                              : `${event.daysUntilEvent} day(s)`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-6 py-12 text-center">
+                <p className="text-zinc-600 dark:text-zinc-400">
+                  No confirmed events in the purchasing window.
+                </p>
+                <p className="mt-2 text-sm text-zinc-500">Confirm bookings to activate T-2 planning.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                T-2 shortfall summary (due events)
+              </h2>
+              <button
+                onClick={handleCreatePurchaseDraftExpenses}
+                className="rounded-md border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950/20 dark:text-purple-300 dark:hover:bg-purple-950/40"
+              >
+                Create Draft Expenses
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Category
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Required
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      On Hand
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Shortfall
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Avg Cost
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Est. Spend
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  {duePurchaseNeeds.map((need) => (
+                    <tr key={`${need.category}-${need.unit}`} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                      <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                        {inventoryCategoryLabels[need.category]}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                        {need.requiredQty.toFixed(2)} {need.unit}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                        {need.onHandQty.toFixed(2)} {need.unit}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                        {need.shortfallQty.toFixed(2)} {need.unit}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                        {formatCurrency(need.avgUnitCost)}
+                      </td>
+                      <td className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                        {formatCurrency(need.estimatedSpend)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </>
       )}
 

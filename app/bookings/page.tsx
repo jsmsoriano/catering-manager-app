@@ -7,12 +7,28 @@ import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import { generateSampleBookings } from '@/lib/sampleBookings';
-import type { Booking, BookingStatus, BookingFormData } from '@/lib/bookingTypes';
+import type { Booking, BookingStatus, BookingFormData, PaymentStatus } from '@/lib/bookingTypes';
 import type { EventFinancials } from '@/lib/types';
 import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
 import { CHEF_ROLE_TO_STAFF_ROLE, ROLE_LABELS as STAFF_ROLE_LABELS } from '@/lib/staffTypes';
-import type { LaborPaymentRecord } from '@/lib/financeTypes';
-import { loadLaborPayments, saveLaborPayments } from '@/lib/financeStorage';
+import type {
+  CustomerPaymentMethod,
+  CustomerPaymentRecord,
+  LaborPaymentRecord,
+} from '@/lib/financeTypes';
+import {
+  loadCustomerPayments,
+  loadLaborPayments,
+  saveCustomerPayments,
+  saveLaborPayments,
+} from '@/lib/financeStorage';
+import {
+  applyConfirmationPaymentTerms,
+  applyPaymentToBooking,
+  getBookingServiceStatus,
+  normalizeBookingWorkflowFields,
+  toLocalDateISO,
+} from '@/lib/bookingWorkflow';
 
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
@@ -90,6 +106,7 @@ export default function BookingsPage() {
   const [sortField, setSortField] = useState<'eventDate' | 'customerName' | 'eventType' | 'guests' | 'total' | 'status'>('eventDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
+  const [customerPayments, setCustomerPayments] = useState<CustomerPaymentRecord[]>([]);
 
   const [formData, setFormData] = useState<BookingFormData>({
     eventType: 'private-dinner',
@@ -113,9 +130,10 @@ export default function BookingsPage() {
       const saved = localStorage.getItem('bookings');
       if (saved) {
         try {
-          const parsed = JSON.parse(saved);
-          console.log('📅 Bookings: Loaded', parsed.length, 'bookings from localStorage');
-          setBookings(parsed);
+          const parsed = JSON.parse(saved) as Booking[];
+          const normalized = parsed.map((booking) => normalizeBookingWorkflowFields(booking));
+          console.log('📅 Bookings: Loaded', normalized.length, 'bookings from localStorage');
+          setBookings(normalized);
         } catch (e) {
           console.error('Failed to load bookings:', e);
         }
@@ -174,6 +192,28 @@ export default function BookingsPage() {
     };
   }, []);
 
+  // Load customer payment records
+  useEffect(() => {
+    const loadPayments = () => {
+      setCustomerPayments(loadCustomerPayments());
+    };
+
+    loadPayments();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'customerPayments') loadPayments();
+    };
+    const handleCustom = () => loadPayments();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('customerPaymentsUpdated', handleCustom);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('customerPaymentsUpdated', handleCustom);
+    };
+  }, []);
+
   const staffById = useMemo(() => {
     const map = new Map<string, StaffRecord>();
     staffRecords.forEach((staff) => map.set(staff.id, staff));
@@ -193,7 +233,7 @@ export default function BookingsPage() {
 
     bookings.forEach((otherBooking) => {
       if (excludeBookingId && otherBooking.id === excludeBookingId) return;
-      if (otherBooking.status === 'cancelled') return;
+      if (getBookingServiceStatus(otherBooking) === 'cancelled') return;
       if (otherBooking.eventDate !== eventDate || otherBooking.eventTime !== eventTime) return;
       if (!otherBooking.staffAssignments || otherBooking.staffAssignments.length === 0) return;
 
@@ -216,9 +256,10 @@ export default function BookingsPage() {
   };
 
   const saveBookings = (newBookings: Booking[]) => {
-    console.log('📅 Bookings: Saving', newBookings.length, 'bookings to localStorage');
-    setBookings(newBookings);
-    localStorage.setItem('bookings', JSON.stringify(newBookings));
+    const normalized = newBookings.map((booking) => normalizeBookingWorkflowFields(booking));
+    console.log('📅 Bookings: Saving', normalized.length, 'bookings to localStorage');
+    setBookings(normalized);
+    localStorage.setItem('bookings', JSON.stringify(normalized));
     console.log('📅 Bookings: Dispatching bookingsUpdated event');
     window.dispatchEvent(new Event('bookingsUpdated'));
   };
@@ -243,7 +284,7 @@ export default function BookingsPage() {
     let result = bookings;
 
     if (filterStatus !== 'all') {
-      result = result.filter((b) => b.status === filterStatus);
+      result = result.filter((b) => getBookingServiceStatus(b) === filterStatus);
     }
 
     if (searchQuery) {
@@ -275,7 +316,7 @@ export default function BookingsPage() {
           comparison = a.total - b.total;
           break;
         case 'status':
-          comparison = a.status.localeCompare(b.status);
+          comparison = getBookingServiceStatus(a).localeCompare(getBookingServiceStatus(b));
           break;
       }
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -283,11 +324,11 @@ export default function BookingsPage() {
   }, [bookings, filterStatus, searchQuery, sortField, sortDirection]);
 
   const stats = useMemo(() => {
-    const pending = bookings.filter((b) => b.status === 'pending').length;
-    const confirmed = bookings.filter((b) => b.status === 'confirmed').length;
-    const completed = bookings.filter((b) => b.status === 'completed').length;
+    const pending = bookings.filter((b) => getBookingServiceStatus(b) === 'pending').length;
+    const confirmed = bookings.filter((b) => getBookingServiceStatus(b) === 'confirmed').length;
+    const completed = bookings.filter((b) => getBookingServiceStatus(b) === 'completed').length;
     const totalRevenue = bookings
-      .filter((b) => b.status !== 'cancelled')
+      .filter((b) => getBookingServiceStatus(b) !== 'cancelled')
       .reduce((sum, b) => sum + b.total, 0);
 
     return { pending, confirmed, completed, totalRevenue };
@@ -377,7 +418,8 @@ export default function BookingsPage() {
       rules
     );
 
-    const booking: Booking = {
+    const existingServiceStatus = selectedBooking ? getBookingServiceStatus(selectedBooking) : 'pending';
+    const baseBooking = normalizeBookingWorkflowFields({
       id: selectedBooking?.id || `booking-${Date.now()}`,
       eventType: formData.eventType,
       eventDate: formData.eventDate,
@@ -394,7 +436,17 @@ export default function BookingsPage() {
       gratuity: financials.gratuity,
       distanceFee: financials.distanceFee,
       total: financials.totalCharged,
-      status: selectedBooking?.status || 'pending',
+      status: existingServiceStatus,
+      serviceStatus: existingServiceStatus,
+      paymentStatus: selectedBooking?.paymentStatus,
+      depositPercent: selectedBooking?.depositPercent,
+      depositAmount: selectedBooking?.depositAmount,
+      depositDueDate: selectedBooking?.depositDueDate,
+      balanceDueDate: selectedBooking?.balanceDueDate,
+      amountPaid: selectedBooking?.amountPaid,
+      balanceDueAmount: selectedBooking?.balanceDueAmount,
+      confirmedAt: selectedBooking?.confirmedAt,
+      prepPurchaseByDate: selectedBooking?.prepPurchaseByDate,
       notes: formData.notes,
       staffAssignments: formData.staffAssignments,
       staffingProfileId: formData.staffingProfileId,
@@ -403,7 +455,18 @@ export default function BookingsPage() {
       reconciliationId: selectedBooking?.reconciliationId,
       createdAt: selectedBooking?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
+    });
+    const booking = normalizeBookingWorkflowFields(
+      existingServiceStatus === 'confirmed' || existingServiceStatus === 'completed'
+        ? {
+            ...baseBooking,
+            depositAmount:
+              Math.round(
+                baseBooking.total * ((baseBooking.depositPercent ?? 30) / 100) * 100
+              ) / 100,
+          }
+        : baseBooking
+    );
 
     if (isEditing && selectedBooking) {
       saveBookings(bookings.map((b) => (b.id === selectedBooking.id ? booking : b)));
@@ -440,6 +503,10 @@ export default function BookingsPage() {
     if (selectedBooking && confirm(`Delete booking for ${selectedBooking.customerName}?`)) {
       const remainingLaborPayments = loadLaborPayments().filter((record) => record.bookingId !== selectedBooking.id);
       saveLaborPayments(remainingLaborPayments);
+      const remainingCustomerPayments = loadCustomerPayments().filter(
+        (record) => record.bookingId !== selectedBooking.id
+      );
+      saveCustomerPayments(remainingCustomerPayments);
       saveBookings(bookings.filter((b) => b.id !== selectedBooking.id));
       setShowModal(false);
       resetForm();
@@ -448,6 +515,7 @@ export default function BookingsPage() {
 
   const updateBookingStatus = (booking: Booking, newStatus: BookingStatus) => {
     const now = new Date().toISOString();
+    const serviceStatus = getBookingServiceStatus(booking);
     let updatedAssignments = booking.staffAssignments;
 
     if (newStatus === 'completed') {
@@ -540,7 +608,7 @@ export default function BookingsPage() {
         }
       }
 
-      if (booking.status === 'completed') {
+      if (serviceStatus === 'completed') {
         const remainingLaborPayments = loadLaborPayments().filter((record) => record.bookingId !== booking.id);
         saveLaborPayments(remainingLaborPayments);
       }
@@ -554,13 +622,112 @@ export default function BookingsPage() {
       }
     }
 
+    const bookingWithNewServiceStatus: Booking = {
+      ...booking,
+      status: newStatus,
+      serviceStatus: newStatus,
+      staffAssignments: updatedAssignments,
+      updatedAt: now,
+    };
+
+    const nextBooking =
+      newStatus === 'confirmed'
+        ? applyConfirmationPaymentTerms(bookingWithNewServiceStatus, now)
+        : normalizeBookingWorkflowFields(
+            newStatus === 'completed' && !bookingWithNewServiceStatus.confirmedAt
+              ? { ...bookingWithNewServiceStatus, confirmedAt: now }
+              : bookingWithNewServiceStatus
+          );
+
     saveBookings(
       bookings.map((b) =>
         b.id === booking.id
-          ? { ...b, status: newStatus, staffAssignments: updatedAssignments, updatedAt: now }
+          ? nextBooking
           : b
       )
     );
+  };
+
+  const paymentStatusLabels: Record<PaymentStatus, string> = {
+    unpaid: 'Unpaid',
+    'deposit-due': 'Deposit Due',
+    'deposit-paid': 'Deposit Paid',
+    'balance-due': 'Balance Due',
+    'paid-in-full': 'Paid in Full',
+    refunded: 'Refunded',
+  };
+
+  const paymentStatusColors: Record<PaymentStatus, string> = {
+    unpaid: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
+    'deposit-due': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    'deposit-paid': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    'balance-due': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    'paid-in-full': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    refunded: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+  };
+
+  const handleRecordPayment = (booking: Booking) => {
+    const normalizedBooking = normalizeBookingWorkflowFields(booking);
+    const maxSuggestedAmount = normalizedBooking.balanceDueAmount ?? 0;
+    const amountPrompt = prompt(
+      `Record customer payment for ${normalizedBooking.customerName}\nCurrent due: ${formatCurrency(maxSuggestedAmount)}`,
+      maxSuggestedAmount > 0 ? maxSuggestedAmount.toFixed(2) : '0.00'
+    );
+    if (amountPrompt === null) return;
+
+    const amount = parseFloat(amountPrompt);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert('Enter a valid payment amount greater than $0.');
+      return;
+    }
+
+    const methodRaw =
+      prompt('Payment method (cash, zelle, venmo, card, bank-transfer, other):', 'zelle') ||
+      'other';
+    const validMethods: CustomerPaymentMethod[] = [
+      'cash',
+      'zelle',
+      'venmo',
+      'card',
+      'bank-transfer',
+      'other',
+    ];
+    const method: CustomerPaymentMethod = validMethods.includes(methodRaw as CustomerPaymentMethod)
+      ? (methodRaw as CustomerPaymentMethod)
+      : 'other';
+    const notes = prompt('Optional payment note/reference:', '') || undefined;
+    const paymentDate = toLocalDateISO(new Date());
+
+    const paymentType: CustomerPaymentRecord['type'] =
+      (normalizedBooking.amountPaid ?? 0) + 0.009 < (normalizedBooking.depositAmount ?? 0)
+        ? 'deposit'
+        : 'payment';
+
+    const paymentRecord: CustomerPaymentRecord = {
+      id: `custpay-${normalizedBooking.id}-${Date.now()}`,
+      bookingId: normalizedBooking.id,
+      paymentDate,
+      amount,
+      type: paymentType,
+      method,
+      notes,
+      recordedAt: new Date().toISOString(),
+    };
+
+    const existingPayments = loadCustomerPayments();
+    saveCustomerPayments([...existingPayments, paymentRecord]);
+
+    const updatedBooking = applyPaymentToBooking(normalizedBooking, amount, paymentDate);
+    saveBookings(
+      bookings.map((entry) =>
+        entry.id === normalizedBooking.id
+          ? { ...updatedBooking, updatedAt: new Date().toISOString() }
+          : entry
+      )
+    );
+    if (selectedBooking?.id === normalizedBooking.id) {
+      setSelectedBooking(updatedBooking);
+    }
   };
 
   const handleSort = (field: typeof sortField) => {
@@ -691,6 +858,13 @@ export default function BookingsPage() {
     completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
     cancelled: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400',
   };
+
+  const selectedBookingPayments = useMemo(() => {
+    if (!selectedBooking) return [];
+    return customerPayments
+      .filter((payment) => payment.bookingId === selectedBooking.id)
+      .sort((a, b) => `${b.paymentDate}-${b.recordedAt}`.localeCompare(`${a.paymentDate}-${a.recordedAt}`));
+  }, [customerPayments, selectedBooking]);
 
   return (
     <div className="h-full p-8">
@@ -933,7 +1107,7 @@ export default function BookingsPage() {
                             setShowModal(true);
                           }}
                           className={`w-full rounded px-1 py-0.5 text-left text-xs ${
-                            statusColors[booking.status]
+                            statusColors[getBookingServiceStatus(booking)]
                           } truncate hover:opacity-80`}
                           title={`${booking.customerName} - ${booking.eventTime}`}
                         >
@@ -990,6 +1164,9 @@ export default function BookingsPage() {
                     {label} {sortField === field && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                 ))}
+                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  Payment
+                </th>
                 <th className="px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   Reconcile
                 </th>
@@ -1002,7 +1179,7 @@ export default function BookingsPage() {
               {filteredBookings.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400"
                   >
                     {searchQuery || filterStatus !== 'all'
@@ -1047,12 +1224,12 @@ export default function BookingsPage() {
                     </td>
                     <td className="px-4 py-4 text-sm">
                       <select
-                        value={booking.status}
+                        value={getBookingServiceStatus(booking)}
                         onChange={(e) =>
                           updateBookingStatus(booking, e.target.value as BookingStatus)
                         }
                         className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                          statusColors[booking.status]
+                          statusColors[getBookingServiceStatus(booking)]
                         }`}
                       >
                         <option value="pending">Pending</option>
@@ -1061,8 +1238,35 @@ export default function BookingsPage() {
                         <option value="cancelled">Cancelled</option>
                       </select>
                     </td>
+                    <td className="px-4 py-4 text-sm">
+                      <div className="flex flex-col gap-2">
+                        <span
+                          className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${
+                            paymentStatusColors[booking.paymentStatus ?? 'unpaid']
+                          }`}
+                        >
+                          {paymentStatusLabels[booking.paymentStatus ?? 'unpaid']}
+                        </span>
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Paid {formatCurrency(booking.amountPaid ?? 0)} / Due{' '}
+                          {formatCurrency(
+                            booking.balanceDueAmount ?? Math.max(0, booking.total - (booking.amountPaid ?? 0))
+                          )}
+                        </div>
+                        {getBookingServiceStatus(booking) !== 'cancelled' &&
+                          (booking.paymentStatus ?? 'unpaid') !== 'paid-in-full' && (
+                            <button
+                              type="button"
+                              onClick={() => handleRecordPayment(booking)}
+                              className="w-fit text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                            >
+                              + Record Payment
+                            </button>
+                          )}
+                      </div>
+                    </td>
                     <td className="px-4 py-4 text-center text-sm">
-                      {(booking.status === 'completed' || booking.reconciliationId) ? (
+                      {(getBookingServiceStatus(booking) === 'completed' || booking.reconciliationId) ? (
                         <Link
                           href={`/bookings/reconcile?bookingId=${booking.id}`}
                           className={`inline-flex items-center gap-1 font-medium ${
@@ -1425,6 +1629,77 @@ export default function BookingsPage() {
                       No active staff found. Add staff members on the Staff page to assign them here.
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Billing Snapshot */}
+              {isEditing && selectedBooking && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
+                  <h3 className="font-semibold text-indigo-900 dark:text-indigo-200">
+                    Billing Workflow
+                  </h3>
+                  <p className="mt-1 text-sm text-indigo-700 dark:text-indigo-300">
+                    Service status and payment status are tracked separately in Phase 1.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                        statusColors[getBookingServiceStatus(selectedBooking)]
+                      }`}
+                    >
+                      Service: {getBookingServiceStatus(selectedBooking)}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                        paymentStatusColors[selectedBooking.paymentStatus ?? 'unpaid']
+                      }`}
+                    >
+                      Payment: {paymentStatusLabels[selectedBooking.paymentStatus ?? 'unpaid']}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-indigo-800 dark:text-indigo-300">
+                    Deposit {formatCurrency(selectedBooking.depositAmount ?? 0)} • Paid{' '}
+                    {formatCurrency(selectedBooking.amountPaid ?? 0)} • Due{' '}
+                    {formatCurrency(
+                      selectedBooking.balanceDueAmount ??
+                        Math.max(0, selectedBooking.total - (selectedBooking.amountPaid ?? 0))
+                    )}
+                  </div>
+                  {(selectedBooking.paymentStatus ?? 'unpaid') !== 'paid-in-full' &&
+                    getBookingServiceStatus(selectedBooking) !== 'cancelled' && (
+                      <button
+                        type="button"
+                        onClick={() => handleRecordPayment(selectedBooking)}
+                        className="mt-3 rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-zinc-800"
+                      >
+                        Record Payment
+                      </button>
+                    )}
+                  <div className="mt-4 rounded-md border border-indigo-200 bg-white p-3 dark:border-indigo-800 dark:bg-zinc-900">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
+                      Payment Log
+                    </h4>
+                    {selectedBookingPayments.length === 0 ? (
+                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                        No customer payments recorded for this booking yet.
+                      </p>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {selectedBookingPayments.slice(0, 6).map((payment) => (
+                          <div
+                            key={payment.id}
+                            className="flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300"
+                          >
+                            <span>
+                              {payment.paymentDate} • {payment.type}
+                              {payment.method ? ` • ${payment.method}` : ''}
+                            </span>
+                            <span className="font-semibold">{formatCurrency(payment.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

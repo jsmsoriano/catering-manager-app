@@ -1,4 +1,5 @@
 import type {
+  CustomerPaymentRecord,
   LaborPaymentRecord,
   OwnerProfitPayoutRecord,
   ProfitDistributionOverride,
@@ -9,6 +10,7 @@ export const LABOR_PAYMENTS_KEY = 'laborPayments';
 export const OWNER_PROFIT_PAYOUTS_KEY = 'ownerProfitPayouts';
 export const RETAINED_EARNINGS_KEY = 'retainedEarningsTransactions';
 export const PROFIT_DISTRIBUTION_OVERRIDES_KEY = 'profitDistributionOverrides';
+export const CUSTOMER_PAYMENTS_KEY = 'customerPayments';
 
 function canUseBrowserStorage() {
   return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
@@ -67,4 +69,12 @@ export function saveProfitDistributionOverrides(value: ProfitDistributionOverrid
     value,
     'profitDistributionOverridesUpdated'
   );
+}
+
+export function loadCustomerPayments(): CustomerPaymentRecord[] {
+  return loadList<CustomerPaymentRecord>(CUSTOMER_PAYMENTS_KEY);
+}
+
+export function saveCustomerPayments(value: CustomerPaymentRecord[]) {
+  saveList<CustomerPaymentRecord>(CUSTOMER_PAYMENTS_KEY, value, 'customerPaymentsUpdated');
 }

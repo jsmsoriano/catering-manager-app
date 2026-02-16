@@ -1,4 +1,9 @@
 import { addDays, addWeeks, format, startOfWeek } from 'date-fns';
+import {
+  DEFAULT_DEPOSIT_PERCENT,
+  calculatePrepPurchaseByDate,
+  normalizeBookingWorkflowFields,
+} from './bookingWorkflow';
 import { calculateEventFinancials } from './moneyRules';
 import type { Booking } from './bookingTypes';
 import type { EventType, MoneyRules } from './types';
@@ -172,8 +177,16 @@ function buildSampleBooking(options: BuildSampleBookingOptions): Booking {
   const customerName = CUSTOMER_NAMES[customerIdx];
   const emailSafeName = customerName.toLowerCase().replace(/\s+/g, '.');
   const createdAt = addDays(eventDate, -21).toISOString();
+  const status = getStatus(eventDate);
+  const depositAmount = Math.round((financials.totalCharged * (DEFAULT_DEPOSIT_PERCENT / 100)) * 100) / 100;
+  const amountPaid =
+    status === 'completed'
+      ? financials.totalCharged
+      : status === 'confirmed' && seededRandom(seed + 131) > 0.3
+        ? depositAmount
+        : 0;
 
-  return {
+  return normalizeBookingWorkflowFields({
     id: `sample-booking-${format(eventDate, 'yyyyMMdd')}-${slotIndex}`,
     eventType,
     eventDate: format(eventDate, 'yyyy-MM-dd'),
@@ -190,11 +203,20 @@ function buildSampleBooking(options: BuildSampleBookingOptions): Booking {
     gratuity: financials.gratuity,
     distanceFee: financials.distanceFee,
     total: financials.totalCharged,
-    status: getStatus(eventDate),
+    status,
+    serviceStatus: status,
+    depositPercent: DEFAULT_DEPOSIT_PERCENT,
+    depositAmount,
+    amountPaid,
+    confirmedAt:
+      status === 'confirmed' || status === 'completed'
+        ? addDays(eventDate, -21).toISOString()
+        : undefined,
+    prepPurchaseByDate: calculatePrepPurchaseByDate(format(eventDate, 'yyyy-MM-dd')),
     notes: NOTES[(weekIndex + slotIndex) % NOTES.length],
     createdAt,
     updatedAt: new Date().toISOString(),
-  };
+  });
 }
 
 export function generateSampleBookings(
