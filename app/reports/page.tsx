@@ -470,7 +470,7 @@ export default function ReportsDashboardPage() {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          Reports Dashboard
+          Reports
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
           Business performance overview and key metrics
@@ -511,13 +511,7 @@ export default function ReportsDashboardPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
           Consolidated Report Sections
         </h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Link
-            href="/reports"
-            className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
-          >
-            Reports Dashboard
-          </Link>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/reports/business-summary"
             className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
