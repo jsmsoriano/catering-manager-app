@@ -112,8 +112,10 @@ function EventShoppingListContent() {
       return;
     }
 
-    setBooking(foundBooking);
-    setShoppingList(ensureShoppingListForBooking(foundBooking.id));
+    queueMicrotask(() => {
+      setBooking(foundBooking);
+      setShoppingList(ensureShoppingListForBooking(foundBooking.id));
+    });
   }, [bookingId, router]);
 
   useEffect(() => {

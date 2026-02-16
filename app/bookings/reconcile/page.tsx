@@ -142,13 +142,15 @@ function ReconcileContent() {
   }, [booking, rules]);
   const financials = bookingFinancials?.financials ?? null;
   const pricingSource = bookingFinancials?.pricingSource ?? 'rules';
+  const shoppingTotals = useMemo(() => calculateShoppingListTotals(shoppingList), [shoppingList]);
+  const usingShoppingListFoodCost = Boolean(shoppingList);
 
   // Initialize reconciliation with estimated values when financials are ready
   useEffect(() => {
     if (!financials || !booking || reconciliation) return;
 
     // Load staff records to resolve names from assignments
-    let staffById = new Map<string, StaffRecord>();
+    const staffById = new Map<string, StaffRecord>();
     const staffData = localStorage.getItem('staff');
     if (staffData) {
       try {
@@ -250,9 +252,6 @@ function ReconcileContent() {
     });
     return { byCategory: totals, total };
   }, [linkedExpenses]);
-
-  const shoppingTotals = useMemo(() => calculateShoppingListTotals(shoppingList), [shoppingList]);
-  const usingShoppingListFoodCost = Boolean(shoppingList);
 
   // Computed actual profit from reconciliation data
   const actualProfit = useMemo(() => {
