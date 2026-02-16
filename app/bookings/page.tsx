@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
@@ -77,7 +76,6 @@ function getAssignmentForPosition(
 }
 
 export default function BookingsPage() {
-  const searchParams = useSearchParams();
   const openedBookingFromQueryRef = useRef<string | null>(null);
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -279,7 +277,9 @@ export default function BookingsPage() {
   }, [bookings]);
 
   useEffect(() => {
-    const bookingId = searchParams.get('bookingId');
+    if (typeof window === 'undefined') return;
+
+    const bookingId = new URLSearchParams(window.location.search).get('bookingId');
     if (!bookingId) return;
     if (openedBookingFromQueryRef.current === bookingId) return;
 
@@ -306,7 +306,7 @@ export default function BookingsPage() {
       staffingProfileId: booking.staffingProfileId,
     });
     setShowModal(true);
-  }, [bookings, searchParams]);
+  }, [bookings]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
