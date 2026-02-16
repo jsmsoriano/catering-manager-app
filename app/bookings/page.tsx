@@ -6,6 +6,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMont
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
+import { generateSampleBookings } from '@/lib/sampleBookings';
 import type { Booking, BookingStatus, BookingFormData } from '@/lib/bookingTypes';
 import type { EventFinancials } from '@/lib/types';
 import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
@@ -220,6 +221,22 @@ export default function BookingsPage() {
     localStorage.setItem('bookings', JSON.stringify(newBookings));
     console.log('📅 Bookings: Dispatching bookingsUpdated event');
     window.dispatchEvent(new Event('bookingsUpdated'));
+  };
+
+  const handleLoadSampleBookings = () => {
+    const shouldProceed = confirm(
+      'Load sample schedule?\n\nThis will replace current bookings with a structured sample set:\n- 5 bookings per week\n- 1 weekend lunch\n- 1 weekend dinner\n- 3 weekday dinners'
+    );
+    if (!shouldProceed) return;
+
+    const sampleBookings = generateSampleBookings(rules);
+    saveBookings(sampleBookings);
+    setFilterStatus('all');
+    setSearchQuery('');
+    setShowModal(false);
+    resetForm();
+
+    alert(`Loaded ${sampleBookings.length} sample bookings for testing.`);
   };
 
   const filteredBookings = useMemo(() => {
@@ -687,15 +704,23 @@ export default function BookingsPage() {
             Manage event bookings and customer information
           </p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
-        >
-          + New Booking
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleLoadSampleBookings}
+            className="rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+          >
+            Load Sample Schedule
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
+          >
+            + New Booking
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
