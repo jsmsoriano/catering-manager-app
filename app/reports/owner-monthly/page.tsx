@@ -1,448 +1,359 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { endOfMonth, format, isWithinInterval, startOfMonth } from 'date-fns';
 import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
-import type { Booking } from '@/lib/bookingTypes';
-import type { OwnerRole } from '@/lib/types';
-import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
-import { CHEF_ROLE_TO_STAFF_ROLE, STAFF_ROLE_TO_CHEF_ROLE } from '@/lib/staffTypes';
-import type {
-  OwnerProfitPayoutRecord,
-  RetainedEarningsTransaction,
-  RetainedEarningsTransactionType,
-} from '@/lib/financeTypes';
+import type { Booking, BookingStatus } from '@/lib/bookingTypes';
+import type { ProfitDistributionOverride, RetainedEarningsTransaction } from '@/lib/financeTypes';
 import {
-  loadOwnerProfitPayouts,
-  saveOwnerProfitPayouts,
+  PROFIT_DISTRIBUTION_OVERRIDES_KEY,
+  RETAINED_EARNINGS_KEY,
+  loadProfitDistributionOverrides,
+  saveProfitDistributionOverrides,
   loadRetainedEarningsTransactions,
-  saveRetainedEarningsTransactions,
 } from '@/lib/financeStorage';
 
-// Helper to parse date strings as local dates (not UTC)
 function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
   return new Date(year, month - 1, day);
 }
 
+const STATUS_BADGE: Record<BookingStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+  cancelled: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
+};
+
+interface DistributionRow {
+  bookingId: string;
+  eventDate: string;
+  eventTime: string;
+  customerName: string;
+  eventType: 'private-dinner' | 'buffet';
+  bookingStatus: BookingStatus;
+  guests: number;
+  autoTotalProfit: number;
+  autoChefPayouts: number;
+  autoOwnerAPayout: number;
+  autoOwnerBPayout: number;
+  autoRetainedEarnings: number;
+  appliedChefPayouts: number;
+  appliedOwnerAPayout: number;
+  appliedOwnerBPayout: number;
+  appliedRetainedEarnings: number;
+  appliedTotalProfit: number;
+  notes?: string;
+  isEdited: boolean;
+}
+
+interface DistributionSummary {
+  eventCount: number;
+  totalProfitEarned: number;
+  totalProfitRecorded: number;
+  chefEarned: number;
+  chefRecorded: number;
+  ownerAEarned: number;
+  ownerARecorded: number;
+  ownerBEarned: number;
+  ownerBRecorded: number;
+  retainedEarned: number;
+  retainedRecorded: number;
+}
+
+interface RetainedLogRow {
+  id: string;
+  date: string;
+  source: 'event-distribution' | 'manual';
+  bookingId?: string;
+  eventLabel: string;
+  amount: number;
+  notes?: string;
+}
+
+function buildSummary(rows: DistributionRow[]): DistributionSummary {
+  return rows.reduce<DistributionSummary>(
+    (acc, row) => {
+      acc.eventCount += 1;
+      acc.totalProfitEarned += row.autoTotalProfit;
+      acc.totalProfitRecorded += row.appliedTotalProfit;
+      acc.chefEarned += row.autoChefPayouts;
+      acc.chefRecorded += row.appliedChefPayouts;
+      acc.ownerAEarned += row.autoOwnerAPayout;
+      acc.ownerARecorded += row.appliedOwnerAPayout;
+      acc.ownerBEarned += row.autoOwnerBPayout;
+      acc.ownerBRecorded += row.appliedOwnerBPayout;
+      acc.retainedEarned += row.autoRetainedEarnings;
+      acc.retainedRecorded += row.appliedRetainedEarnings;
+      return acc;
+    },
+    {
+      eventCount: 0,
+      totalProfitEarned: 0,
+      totalProfitRecorded: 0,
+      chefEarned: 0,
+      chefRecorded: 0,
+      ownerAEarned: 0,
+      ownerARecorded: 0,
+      ownerBEarned: 0,
+      ownerBRecorded: 0,
+      retainedEarned: 0,
+      retainedRecorded: 0,
+    }
+  );
+}
+
 export default function OwnerMonthlyReportPage() {
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
-  const [selectedOwner, setSelectedOwner] = useState<OwnerRole>('owner-a');
-  const [ownerProfitPayouts, setOwnerProfitPayouts] = useState<OwnerProfitPayoutRecord[]>([]);
+  const [overrides, setOverrides] = useState<ProfitDistributionOverride[]>([]);
   const [retainedTransactions, setRetainedTransactions] = useState<RetainedEarningsTransaction[]>([]);
-  const [profitPayoutForm, setProfitPayoutForm] = useState({
-    ownerRole: 'owner-a' as OwnerRole,
-    amount: '',
-    payoutDate: new Date().toISOString().split('T')[0],
-    notes: '',
-  });
-  const [retainedForm, setRetainedForm] = useState({
-    type: 'withdrawal' as RetainedEarningsTransactionType,
-    amount: '',
-    transactionDate: new Date().toISOString().split('T')[0],
+  const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
+
+  const [editingRow, setEditingRow] = useState<DistributionRow | null>(null);
+  const [editForm, setEditForm] = useState({
+    chefPayouts: '',
+    ownerAPayout: '',
+    ownerBPayout: '',
+    retainedEarnings: '',
     notes: '',
   });
 
-  // Load bookings and staff, listen for updates
   useEffect(() => {
     const loadBookings = () => {
       const saved = localStorage.getItem('bookings');
-      if (saved) {
-        try {
-          setBookings(JSON.parse(saved));
-        } catch (e) {
-          console.error('Failed to load bookings:', e);
-        }
+      if (!saved) {
+        setBookings([]);
+        return;
       }
-    };
-
-    const loadStaff = () => {
-      const saved = localStorage.getItem('staff');
-      if (saved) {
-        try {
-          setStaffRecords(JSON.parse(saved));
-        } catch { /* ignore */ }
+      try {
+        setBookings(JSON.parse(saved));
+      } catch {
+        setBookings([]);
       }
     };
 
     loadBookings();
-    loadStaff();
 
-    const handleStorageChange = (e: StorageEvent) => {
+    const handleStorage = (e: StorageEvent) => {
       if (e.key === 'bookings') loadBookings();
-      if (e.key === 'staff') loadStaff();
     };
+    const handleCustom = () => loadBookings();
 
-    const handleBookingsUpdate = () => loadBookings();
-    const handleStaffUpdate = () => loadStaff();
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('bookingsUpdated', handleBookingsUpdate);
-    window.addEventListener('staffUpdated', handleStaffUpdate);
-
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('bookingsUpdated', handleCustom);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('bookingsUpdated', handleBookingsUpdate);
-      window.removeEventListener('staffUpdated', handleStaffUpdate);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('bookingsUpdated', handleCustom);
     };
   }, []);
 
   useEffect(() => {
-    const loadPayouts = () => {
-      setOwnerProfitPayouts(loadOwnerProfitPayouts());
+    const loadOverrides = () => setOverrides(loadProfitDistributionOverrides());
+    loadOverrides();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === PROFIT_DISTRIBUTION_OVERRIDES_KEY) loadOverrides();
     };
-    const loadRetained = () => {
-      setRetainedTransactions(loadRetainedEarningsTransactions());
-    };
+    const handleCustom = () => loadOverrides();
 
-    loadPayouts();
-    loadRetained();
-
-    window.addEventListener('ownerProfitPayoutsUpdated', loadPayouts);
-    window.addEventListener('retainedEarningsUpdated', loadRetained);
-
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('profitDistributionOverridesUpdated', handleCustom);
     return () => {
-      window.removeEventListener('ownerProfitPayoutsUpdated', loadPayouts);
-      window.removeEventListener('retainedEarningsUpdated', loadRetained);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('profitDistributionOverridesUpdated', handleCustom);
     };
   }, []);
 
-  // Filter bookings for selected month
-  const monthBookings = useMemo(() => {
-    const monthStart = startOfMonth(parseLocalDate(selectedMonth + '-01'));
-    const monthEnd = endOfMonth(monthStart);
+  useEffect(() => {
+    const loadRetained = () => setRetainedTransactions(loadRetainedEarningsTransactions());
+    loadRetained();
 
-    return bookings.filter((booking) => {
-      const bookingDate = parseLocalDate(booking.eventDate);
-      return (
-        isWithinInterval(bookingDate, { start: monthStart, end: monthEnd }) &&
-        booking.status !== 'cancelled'
-      );
-    });
-  }, [bookings, selectedMonth]);
-
-  // Build staff ID lookup for resolving assignments
-  const staffById = useMemo(() => {
-    const map = new Map<string, StaffRecord>();
-    staffRecords.forEach((s) => map.set(s.id, s));
-    return map;
-  }, [staffRecords]);
-
-  // Build role-based owner lookup (chefRole → staff record) as fallback
-  const ownerRoleLookup = useMemo(() => {
-    const lookup = new Map<string, StaffRecord>();
-    staffRecords
-      .filter((s) => s.isOwner && s.ownerRole === selectedOwner && s.status === 'active')
-      .forEach((s) => {
-        const chefRole = STAFF_ROLE_TO_CHEF_ROLE[s.primaryRole];
-        if (chefRole) {
-          lookup.set(chefRole, s);
-        }
-      });
-    return lookup;
-  }, [staffRecords, selectedOwner]);
-
-  const ROLE_LABELS: Record<string, string> = {
-    lead: 'Lead Chef',
-    overflow: 'Overflow Chef',
-    full: 'Full Chef',
-    buffet: 'Buffet Chef',
-    assistant: 'Assistant',
-  };
-
-  // Calculate detailed compensation
-  const reportData = useMemo(() => {
-    let totalLaborEarnings = 0;
-    let totalProfitDistribution = 0;
-    const eventDetails: Array<{
-      date: string;
-      customer: string;
-      eventType: string;
-      guests: number;
-      role: string;
-      laborPay: number;
-      profitShare: number;
-      total: number;
-    }> = [];
-
-    monthBookings.forEach((booking) => {
-      const { financials } = calculateBookingFinancials(booking, rules);
-
-      // Find the owner's labor compensation entry
-      let ownerLaborPay = 0;
-      let ownerRole = 'N/A';
-      let foundOwnerLabor = false;
-
-      // Priority 1: Check booking.staffAssignments for the selected owner
-      if (booking.staffAssignments) {
-        for (let compIdx = 0; compIdx < financials.laborCompensation.length; compIdx++) {
-          if (foundOwnerLabor) break;
-          const comp = financials.laborCompensation[compIdx];
-          const staffRole = CHEF_ROLE_TO_STAFF_ROLE[comp.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
-          if (!staffRole) continue;
-
-          // Count same-role positions before this index
-          let sameRoleIndex = 0;
-          for (let i = 0; i < compIdx; i++) {
-            if (financials.laborCompensation[i].role === comp.role) sameRoleIndex++;
-          }
-
-          // Find the nth assignment matching this role
-          let matchCount = 0;
-          const assignment = booking.staffAssignments.find((a) => {
-            if (a.role === staffRole) {
-              if (matchCount === sameRoleIndex) return true;
-              matchCount++;
-            }
-            return false;
-          });
-
-          if (assignment) {
-            const staffRecord = staffById.get(assignment.staffId);
-            if (staffRecord && staffRecord.isOwner && staffRecord.ownerRole === selectedOwner) {
-              ownerLaborPay = comp.finalPay;
-              ownerRole = ROLE_LABELS[comp.role] || comp.role;
-              foundOwnerLabor = true;
-            }
-          }
-        }
-      }
-
-      // Priority 2: Fallback to role-based owner matching
-      if (!foundOwnerLabor) {
-        for (const comp of financials.laborCompensation) {
-          const ownerStaff = ownerRoleLookup.get(comp.role);
-          if (ownerStaff) {
-            ownerLaborPay = comp.finalPay;
-            ownerRole = ROLE_LABELS[comp.role] || comp.role;
-            foundOwnerLabor = true;
-            break;
-          }
-        }
-      }
-
-      const profitShare =
-        selectedOwner === 'owner-a'
-          ? financials.ownerADistribution
-          : financials.ownerBDistribution;
-
-      totalLaborEarnings += ownerLaborPay;
-      totalProfitDistribution += profitShare;
-
-      eventDetails.push({
-        date: booking.eventDate,
-        customer: booking.customerName,
-        eventType:
-          booking.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet Catering',
-        guests: booking.adults + booking.children,
-        role: ownerRole,
-        laborPay: ownerLaborPay,
-        profitShare,
-        total: ownerLaborPay + profitShare,
-      });
-    });
-
-    return {
-      totalLaborEarnings,
-      totalProfitDistribution,
-      grandTotal: totalLaborEarnings + totalProfitDistribution,
-      eventDetails,
-      eventCount: monthBookings.length,
-      averagePerEvent:
-        monthBookings.length > 0
-          ? (totalLaborEarnings + totalProfitDistribution) / monthBookings.length
-          : 0,
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === RETAINED_EARNINGS_KEY) loadRetained();
     };
-  }, [monthBookings, rules, selectedOwner, staffById, ownerRoleLookup]);
+    const handleCustom = () => loadRetained();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('retainedEarningsUpdated', handleCustom);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('retainedEarningsUpdated', handleCustom);
+    };
+  }, []);
 
   const selectedMonthRange = useMemo(() => {
-    const start = startOfMonth(parseLocalDate(selectedMonth + '-01'));
+    const start = startOfMonth(parseLocalDate(`${selectedMonth}-01`));
     const end = endOfMonth(start);
     return { start, end };
   }, [selectedMonth]);
 
-  const profitTrackerData = useMemo(() => {
-    const completedBookings = bookings.filter((booking) => booking.status === 'completed');
+  const monthRows = useMemo(() => {
+    const overrideByBookingId = new Map(overrides.map((override) => [override.bookingId, override]));
 
-    let ownerAEarnedLifetime = 0;
-    let ownerBEarnedLifetime = 0;
-    let retainedEarnedLifetime = 0;
-    let grossProfitLifetime = 0;
+    return bookings
+      .filter((booking) => booking.status !== 'cancelled')
+      .filter((booking) => isWithinInterval(parseLocalDate(booking.eventDate), selectedMonthRange))
+      .map((booking) => {
+        const { financials } = calculateBookingFinancials(booking, rules);
+        const override = overrideByBookingId.get(booking.id);
 
-    let ownerAEarnedMonth = 0;
-    let ownerBEarnedMonth = 0;
-    let retainedEarnedMonth = 0;
-    let grossProfitMonth = 0;
+        const appliedChefPayouts = override?.chefPayouts ?? financials.totalLaborPaid;
+        const appliedOwnerAPayout = override?.ownerAPayout ?? financials.ownerADistribution;
+        const appliedOwnerBPayout = override?.ownerBPayout ?? financials.ownerBDistribution;
+        const appliedRetainedEarnings = override?.retainedEarnings ?? financials.retainedAmount;
 
-    completedBookings.forEach((booking) => {
-      const { financials } = calculateBookingFinancials(booking, rules);
-      ownerAEarnedLifetime += financials.ownerADistribution;
-      ownerBEarnedLifetime += financials.ownerBDistribution;
-      retainedEarnedLifetime += financials.retainedAmount;
-      grossProfitLifetime += financials.grossProfit;
+        return {
+          bookingId: booking.id,
+          eventDate: booking.eventDate,
+          eventTime: booking.eventTime,
+          customerName: booking.customerName,
+          eventType: booking.eventType,
+          bookingStatus: booking.status,
+          guests: booking.adults + booking.children,
+          autoTotalProfit: financials.grossProfit,
+          autoChefPayouts: financials.totalLaborPaid,
+          autoOwnerAPayout: financials.ownerADistribution,
+          autoOwnerBPayout: financials.ownerBDistribution,
+          autoRetainedEarnings: financials.retainedAmount,
+          appliedChefPayouts,
+          appliedOwnerAPayout,
+          appliedOwnerBPayout,
+          appliedRetainedEarnings,
+          appliedTotalProfit: appliedOwnerAPayout + appliedOwnerBPayout + appliedRetainedEarnings,
+          notes: override?.notes,
+          isEdited: Boolean(override),
+        } satisfies DistributionRow;
+      })
+      .sort((a, b) => {
+        const aKey = `${a.eventDate}T${a.eventTime}`;
+        const bKey = `${b.eventDate}T${b.eventTime}`;
+        return aKey.localeCompare(bKey);
+      });
+  }, [bookings, overrides, rules, selectedMonthRange]);
 
-      const bookingDate = parseLocalDate(booking.eventDate);
-      if (isWithinInterval(bookingDate, selectedMonthRange)) {
-        ownerAEarnedMonth += financials.ownerADistribution;
-        ownerBEarnedMonth += financials.ownerBDistribution;
-        retainedEarnedMonth += financials.retainedAmount;
-        grossProfitMonth += financials.grossProfit;
-      }
+  const completedRows = useMemo(
+    () => monthRows.filter((row) => row.bookingStatus === 'completed'),
+    [monthRows]
+  );
+
+  const summary = useMemo(() => buildSummary(completedRows), [completedRows]);
+
+  const retainedLogRows = useMemo(() => {
+    const eventRows: RetainedLogRow[] = completedRows.map((row) => ({
+      id: `event-${row.bookingId}`,
+      date: row.eventDate,
+      source: 'event-distribution',
+      bookingId: row.bookingId,
+      eventLabel: `${row.customerName} (${format(parseLocalDate(row.eventDate), 'MMM d')})`,
+      amount: row.appliedRetainedEarnings,
+      notes: row.notes,
+    }));
+
+    const manualRows: RetainedLogRow[] = retainedTransactions
+      .filter((tx) => isWithinInterval(parseLocalDate(tx.transactionDate), selectedMonthRange))
+      .map((tx) => ({
+        id: `manual-${tx.id}`,
+        date: tx.transactionDate,
+        source: 'manual',
+        eventLabel: tx.type === 'deposit' ? 'Manual deposit' : 'Manual withdrawal',
+        amount: tx.type === 'deposit' ? tx.amount : -tx.amount,
+        notes: tx.notes,
+      }));
+
+    return [...eventRows, ...manualRows].sort((a, b) => {
+      if (a.date === b.date) return a.id.localeCompare(b.id);
+      return b.date.localeCompare(a.date);
     });
+  }, [completedRows, retainedTransactions, selectedMonthRange]);
 
-    const payoutTotals = ownerProfitPayouts.reduce(
-      (acc, payout) => {
-        const amount = payout.amount;
-        if (payout.ownerRole === 'owner-a') acc.ownerALifetime += amount;
-        else acc.ownerBLifetime += amount;
+  const openEditModal = (row: DistributionRow) => {
+    setEditingRow(row);
+    setEditForm({
+      chefPayouts: row.appliedChefPayouts.toFixed(2),
+      ownerAPayout: row.appliedOwnerAPayout.toFixed(2),
+      ownerBPayout: row.appliedOwnerBPayout.toFixed(2),
+      retainedEarnings: row.appliedRetainedEarnings.toFixed(2),
+      notes: row.notes ?? '',
+    });
+  };
 
-        const payoutDate = parseLocalDate(payout.payoutDate);
-        if (isWithinInterval(payoutDate, selectedMonthRange)) {
-          if (payout.ownerRole === 'owner-a') acc.ownerAMonth += amount;
-          else acc.ownerBMonth += amount;
-        }
-        return acc;
-      },
-      { ownerALifetime: 0, ownerBLifetime: 0, ownerAMonth: 0, ownerBMonth: 0 }
-    );
-
-    const retainedTotals = retainedTransactions.reduce(
-      (acc, tx) => {
-        if (tx.type === 'deposit') acc.lifetimeDeposits += tx.amount;
-        else acc.lifetimeWithdrawals += tx.amount;
-
-        const txDate = parseLocalDate(tx.transactionDate);
-        if (isWithinInterval(txDate, selectedMonthRange)) {
-          if (tx.type === 'deposit') acc.monthDeposits += tx.amount;
-          else acc.monthWithdrawals += tx.amount;
-        }
-        return acc;
-      },
-      { lifetimeDeposits: 0, lifetimeWithdrawals: 0, monthDeposits: 0, monthWithdrawals: 0 }
-    );
-
-    return {
-      ownerAEarnedLifetime,
-      ownerBEarnedLifetime,
-      retainedEarnedLifetime,
-      grossProfitLifetime,
-      ownerAEarnedMonth,
-      ownerBEarnedMonth,
-      retainedEarnedMonth,
-      grossProfitMonth,
-      ownerAPaidLifetime: payoutTotals.ownerALifetime,
-      ownerBPaidLifetime: payoutTotals.ownerBLifetime,
-      ownerAPaidMonth: payoutTotals.ownerAMonth,
-      ownerBPaidMonth: payoutTotals.ownerBMonth,
-      ownerAOutstandingLifetime: ownerAEarnedLifetime - payoutTotals.ownerALifetime,
-      ownerBOutstandingLifetime: ownerBEarnedLifetime - payoutTotals.ownerBLifetime,
-      ownerAOutstandingMonth: ownerAEarnedMonth - payoutTotals.ownerAMonth,
-      ownerBOutstandingMonth: ownerBEarnedMonth - payoutTotals.ownerBMonth,
-      retainedManualDepositsLifetime: retainedTotals.lifetimeDeposits,
-      retainedManualWithdrawalsLifetime: retainedTotals.lifetimeWithdrawals,
-      retainedManualDepositsMonth: retainedTotals.monthDeposits,
-      retainedManualWithdrawalsMonth: retainedTotals.monthWithdrawals,
-      retainedExpectedBalanceLifetime:
-        retainedEarnedLifetime + retainedTotals.lifetimeDeposits - retainedTotals.lifetimeWithdrawals,
-      retainedExpectedBalanceMonth:
-        retainedEarnedMonth + retainedTotals.monthDeposits - retainedTotals.monthWithdrawals,
-      completedEventCount: completedBookings.length,
-      completedEventCountMonth: completedBookings.filter((booking) =>
-        isWithinInterval(parseLocalDate(booking.eventDate), selectedMonthRange)
-      ).length,
-    };
-  }, [bookings, rules, ownerProfitPayouts, retainedTransactions, selectedMonthRange]);
-
-  const handleAddOwnerPayout = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(profitPayoutForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      alert('Enter a valid payout amount greater than 0.');
-      return;
-    }
-
-    const next: OwnerProfitPayoutRecord = {
-      id: `owner-payout-${Date.now()}`,
-      ownerRole: profitPayoutForm.ownerRole,
-      amount,
-      payoutDate: profitPayoutForm.payoutDate,
-      notes: profitPayoutForm.notes.trim() || undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updated = [...ownerProfitPayouts, next].sort((a, b) => a.payoutDate.localeCompare(b.payoutDate));
-    setOwnerProfitPayouts(updated);
-    saveOwnerProfitPayouts(updated);
-    setProfitPayoutForm({
-      ownerRole: profitPayoutForm.ownerRole,
-      amount: '',
-      payoutDate: new Date().toISOString().split('T')[0],
+  const closeEditModal = () => {
+    setEditingRow(null);
+    setEditForm({
+      chefPayouts: '',
+      ownerAPayout: '',
+      ownerBPayout: '',
+      retainedEarnings: '',
       notes: '',
     });
   };
 
-  const handleAddRetainedTransaction = (e: React.FormEvent) => {
+  const handleSaveOverride = (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseFloat(retainedForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      alert('Enter a valid retained-earnings transaction amount greater than 0.');
+    if (!editingRow) return;
+
+    const chefPayouts = parseFloat(editForm.chefPayouts);
+    const ownerAPayout = parseFloat(editForm.ownerAPayout);
+    const ownerBPayout = parseFloat(editForm.ownerBPayout);
+    const retainedEarnings = parseFloat(editForm.retainedEarnings);
+
+    const values = [chefPayouts, ownerAPayout, ownerBPayout, retainedEarnings];
+    if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+      alert('All payout fields must be valid numbers greater than or equal to 0.');
       return;
     }
 
-    const next: RetainedEarningsTransaction = {
-      id: `retained-tx-${Date.now()}`,
-      type: retainedForm.type,
-      amount,
-      transactionDate: retainedForm.transactionDate,
-      notes: retainedForm.notes.trim() || undefined,
-      createdAt: new Date().toISOString(),
+    const nextOverride: ProfitDistributionOverride = {
+      id: `distribution-${editingRow.bookingId}`,
+      bookingId: editingRow.bookingId,
+      chefPayouts,
+      ownerAPayout,
+      ownerBPayout,
+      retainedEarnings,
+      notes: editForm.notes.trim() || undefined,
+      updatedAt: new Date().toISOString(),
     };
 
-    const updated = [...retainedTransactions, next].sort((a, b) =>
-      a.transactionDate.localeCompare(b.transactionDate)
-    );
-    setRetainedTransactions(updated);
-    saveRetainedEarningsTransactions(updated);
-    setRetainedForm({
-      type: retainedForm.type,
-      amount: '',
-      transactionDate: new Date().toISOString().split('T')[0],
-      notes: '',
-    });
+    const existingIdx = overrides.findIndex((override) => override.bookingId === editingRow.bookingId);
+    const updated = [...overrides];
+    if (existingIdx >= 0) updated[existingIdx] = nextOverride;
+    else updated.push(nextOverride);
+
+    setOverrides(updated);
+    saveProfitDistributionOverrides(updated);
+    closeEditModal();
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleResetToAutomatic = () => {
+    if (!editingRow) return;
+    const updated = overrides.filter((override) => override.bookingId !== editingRow.bookingId);
+    setOverrides(updated);
+    saveProfitDistributionOverrides(updated);
+    closeEditModal();
   };
 
-  const ownerName = selectedOwner === 'owner-a' ? 'Owner A (Head Chef)' : 'Owner B (Assistant/Operations)';
-  const equityPercent =
-    selectedOwner === 'owner-a'
-      ? rules.profitDistribution.ownerAEquityPercent
-      : rules.profitDistribution.ownerBEquityPercent;
+  const handlePrint = () => window.print();
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-      {/* Header - Hide on print */}
       <div className="mb-8 print:hidden">
         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          Owner Distribution Summary
+          Owner Profit Distribution
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          Detailed breakdown of labor earnings and profit distributions
+          Automatic distributions use your preset percentages. Edit any event row when reconciliation
+          needs a one-off adjustment.
         </p>
       </div>
 
-      {/* Filters - Hide on print */}
-      <div className="mb-8 flex flex-wrap gap-4 print:hidden">
+      <div className="mb-6 flex flex-wrap items-end gap-4 print:hidden">
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Month
+            Report Month
           </label>
           <input
             type="month"
@@ -451,475 +362,383 @@ export default function OwnerMonthlyReportPage() {
             className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Owner
-          </label>
-          <select
-            value={selectedOwner}
-            onChange={(e) => setSelectedOwner(e.target.value as OwnerRole)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          >
-            <option value="owner-a">Owner A (Head Chef - {rules.profitDistribution.ownerAEquityPercent}%)</option>
-            <option value="owner-b">Owner B (Operations - {rules.profitDistribution.ownerBEquityPercent}%)</option>
-          </select>
+        <button
+          onClick={handlePrint}
+          className="rounded-md bg-zinc-600 px-4 py-2 text-white hover:bg-zinc-700"
+        >
+          Print
+        </button>
+        <Link
+          href="/bookings"
+          className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+        >
+          View Bookings
+        </Link>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm dark:border-indigo-900 dark:bg-indigo-950/20">
+        <p className="font-semibold text-indigo-900 dark:text-indigo-200">Preset Distribution Rules</p>
+        <p className="mt-1 text-indigo-800 dark:text-indigo-300">
+          Owner pool: {rules.profitDistribution.ownerDistributionPercent}% of gross profit →
+          {' '}Owner A {rules.profitDistribution.ownerAEquityPercent}% / Owner B {rules.profitDistribution.ownerBEquityPercent}%.
+          {' '}Retained earnings: {rules.profitDistribution.businessRetainedPercent}% of gross profit.
+        </p>
+      </div>
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/20">
+          <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">Total Profit</p>
+          <p className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+            {formatCurrency(summary.totalProfitRecorded)}
+          </p>
+          <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+            auto {formatCurrency(summary.totalProfitEarned)}
+          </p>
         </div>
-        <div className="flex items-end">
-          <button
-            onClick={handlePrint}
-            className="rounded-md bg-zinc-600 px-4 py-2 text-white hover:bg-zinc-700"
-          >
-            🖨️ Print Report
-          </button>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950/20">
+          <p className="text-sm font-medium text-blue-900 dark:text-blue-200">Total Chef Payouts</p>
+          <p className="mt-2 text-2xl font-bold text-blue-700 dark:text-blue-300">
+            {formatCurrency(summary.chefRecorded)}
+          </p>
+          <p className="mt-1 text-xs text-blue-700 dark:text-blue-400">
+            auto {formatCurrency(summary.chefEarned)}
+          </p>
         </div>
-        <div className="flex items-end">
-          <a
-            href="#profit-tracker"
-            className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
-          >
-            Jump to Profit Tracker
-          </a>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-5 dark:border-purple-900 dark:bg-purple-950/20">
+          <p className="text-sm font-medium text-purple-900 dark:text-purple-200">Total Retained Earnings</p>
+          <p className="mt-2 text-2xl font-bold text-purple-700 dark:text-purple-300">
+            {formatCurrency(summary.retainedRecorded)}
+          </p>
+          <p className="mt-1 text-xs text-purple-700 dark:text-purple-400">
+            auto {formatCurrency(summary.retainedEarned)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 dark:border-amber-900 dark:bg-amber-950/20">
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Total Events Completed</p>
+          <p className="mt-2 text-2xl font-bold text-amber-700 dark:text-amber-300">
+            {summary.eventCount}
+          </p>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+            {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}
+          </p>
         </div>
       </div>
 
-      {/* Report Content - Print friendly */}
-      <div className="space-y-8 rounded-lg border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900 print:border-0 print:shadow-none">
-        {/* Print Header */}
-        <div className="hidden border-b border-zinc-300 pb-6 print:block">
-          <h1 className="text-3xl font-bold text-zinc-900">Hibachi A Go Go</h1>
-          <h2 className="mt-2 text-xl font-semibold text-zinc-700">
-            Owner Distribution Summary
+      <div className="mb-8 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Distribution Summary</h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+              <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                <th className="px-4 py-3 font-semibold">Period</th>
+                <th className="px-4 py-3 text-right font-semibold">Events Completed</th>
+                <th className="px-4 py-3 text-right font-semibold">Chef (Earned / Recorded)</th>
+                <th className="px-4 py-3 text-right font-semibold">Owner A (Earned / Recorded)</th>
+                <th className="px-4 py-3 text-right font-semibold">Owner B (Earned / Recorded)</th>
+                <th className="px-4 py-3 text-right font-semibold">Retained (Earned / Recorded)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tr>
+                <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                  {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">{summary.eventCount}</td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.chefEarned)} / {formatCurrency(summary.chefRecorded)}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.ownerAEarned)} / {formatCurrency(summary.ownerARecorded)}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.ownerBEarned)} / {formatCurrency(summary.ownerBRecorded)}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.retainedEarned)} / {formatCurrency(summary.retainedRecorded)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="mb-8 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Event Payouts Summary
           </h2>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600">
-            <div>
-              <strong>Report Period:</strong> {format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy')}
-            </div>
-            <div>
-              <strong>Owner:</strong> {ownerName}
-            </div>
-            <div>
-              <strong>Generated:</strong> {format(new Date(), 'PPP')}
-            </div>
-            <div>
-              <strong>Equity Share:</strong> {equityPercent}%
-            </div>
-          </div>
         </div>
-
-        {/* Summary Cards */}
-        <div className="grid gap-6 sm:grid-cols-3">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/20 print:border-blue-300">
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200">
-              Total Labor Earnings
-            </h3>
-            <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
-              {formatCurrency(reportData.totalLaborEarnings)}
-            </p>
-            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
-              From {reportData.eventCount} events worked
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/20 print:border-emerald-300">
-            <h3 className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-              Profit Distribution
-            </h3>
-            <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(reportData.totalProfitDistribution)}
-            </p>
-            <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
-              {equityPercent}% equity share
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 dark:border-purple-900 dark:bg-purple-950/20 print:border-purple-300">
-            <h3 className="text-sm font-medium text-purple-900 dark:text-purple-200">
-              Total Compensation
-            </h3>
-            <p className="mt-2 text-3xl font-bold text-purple-600 dark:text-purple-400">
-              {formatCurrency(reportData.grandTotal)}
-            </p>
-            <p className="mt-1 text-xs text-purple-700 dark:text-purple-300">
-              {formatCurrency(reportData.averagePerEvent)} avg/event
-            </p>
-          </div>
-        </div>
-
-        {/* Event-by-Event Breakdown */}
-        {reportData.eventDetails.length > 0 ? (
-          <div className="mt-8">
-            <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-              Event-by-Event Breakdown
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b-2 border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
-                      Date
-                    </th>
-                    <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
-                      Customer
-                    </th>
-                    <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
-                      Guests
-                    </th>
-                    <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
-                      Role
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
-                      Labor Pay
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
-                      Profit Share
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
-                      Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  {reportData.eventDetails.map((event, idx) => (
-                    <tr
-                      key={idx}
-                      className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                    >
-                      <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
-                        {format(parseLocalDate(event.date), 'MMM d')}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
-                        {event.customer}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                        {event.eventType}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
-                        {event.guests}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                        {event.role}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(event.laborPay)}
-                      </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(event.profitShare)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
-                        {formatCurrency(event.total)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="border-t-2 border-zinc-300 bg-zinc-100 font-semibold dark:border-zinc-700 dark:bg-zinc-800">
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50"
-                    >
-                      Totals:
-                    </td>
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                      {formatCurrency(reportData.totalLaborEarnings)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                      {formatCurrency(reportData.totalProfitDistribution)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
-                      {formatCurrency(reportData.grandTotal)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+        {monthRows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            No events found in {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}.
           </div>
         ) : (
-          <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-700 dark:bg-zinc-800">
-            <p className="text-zinc-600 dark:text-zinc-400">
-              No events found for {format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy')}
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              Create bookings in the Bookings page to see compensation data here.
-            </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+                <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="px-4 py-3 font-semibold">Event</th>
+                  <th className="px-4 py-3 text-center font-semibold">Status</th>
+                  <th className="px-4 py-3 text-right font-semibold">Chef Payouts</th>
+                  <th className="px-4 py-3 text-right font-semibold">Owner A</th>
+                  <th className="px-4 py-3 text-right font-semibold">Owner B</th>
+                  <th className="px-4 py-3 text-right font-semibold">Retained Earnings</th>
+                  <th className="px-4 py-3 text-right font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {monthRows.map((row) => (
+                  <tr key={row.bookingId}>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/bookings?bookingId=${row.bookingId}`}
+                        className="font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                      >
+                        {row.customerName}
+                      </Link>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {format(parseLocalDate(row.eventDate), 'MMM d, yyyy')} at {row.eventTime} ·{' '}
+                        {row.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'} · {row.guests}{' '}
+                        guests
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE[row.bookingStatus]}`}>
+                        {row.bookingStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                      {formatCurrency(row.appliedChefPayouts)}
+                      {row.isEdited && (
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          auto {formatCurrency(row.autoChefPayouts)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                      {formatCurrency(row.appliedOwnerAPayout)}
+                      {row.isEdited && (
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          auto {formatCurrency(row.autoOwnerAPayout)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                      {formatCurrency(row.appliedOwnerBPayout)}
+                      {row.isEdited && (
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          auto {formatCurrency(row.autoOwnerBPayout)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                      {formatCurrency(row.appliedRetainedEarnings)}
+                      {row.isEdited && (
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          auto {formatCurrency(row.autoRetainedEarnings)}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => openEditModal(row)}
+                        className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-
-        {/* Profit Tracker Section */}
-        <div id="profit-tracker" className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-          <h3 className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Profit Tracker
-          </h3>
-          <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
-            Tracks earned profit allocations from completed events versus what has been paid out to owners, plus retained earnings movements for bank reconciliation.
-          </p>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
-              <p className="text-xs font-medium text-emerald-800 dark:text-emerald-300">Owner A Outstanding (Lifetime)</p>
-              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-300">
-                {formatCurrency(profitTrackerData.ownerAOutstandingLifetime)}
-              </p>
-              <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
-                Earned {formatCurrency(profitTrackerData.ownerAEarnedLifetime)} · Paid {formatCurrency(profitTrackerData.ownerAPaidLifetime)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
-              <p className="text-xs font-medium text-blue-800 dark:text-blue-300">Owner B Outstanding (Lifetime)</p>
-              <p className="mt-1 text-xl font-bold text-blue-700 dark:text-blue-300">
-                {formatCurrency(profitTrackerData.ownerBOutstandingLifetime)}
-              </p>
-              <p className="mt-1 text-xs text-blue-700 dark:text-blue-400">
-                Earned {formatCurrency(profitTrackerData.ownerBEarnedLifetime)} · Paid {formatCurrency(profitTrackerData.ownerBPaidLifetime)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-900 dark:bg-purple-950/20">
-              <p className="text-xs font-medium text-purple-800 dark:text-purple-300">Retained Expected Balance (Lifetime)</p>
-              <p className="mt-1 text-xl font-bold text-purple-700 dark:text-purple-300">
-                {formatCurrency(profitTrackerData.retainedExpectedBalanceLifetime)}
-              </p>
-              <p className="mt-1 text-xs text-purple-700 dark:text-purple-400">
-                Earned {formatCurrency(profitTrackerData.retainedEarnedLifetime)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-              <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Selected Month Snapshot</p>
-              <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-300">
-                {format(parseLocalDate(selectedMonth + '-01'), 'MMMM yyyy')}
-              </p>
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                {profitTrackerData.completedEventCountMonth} completed events
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <form onSubmit={handleAddOwnerPayout} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <h4 className="mb-3 font-semibold text-zinc-900 dark:text-zinc-50">Record Owner Profit Payout</h4>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Owner</label>
-                  <select
-                    value={profitPayoutForm.ownerRole}
-                    onChange={(e) =>
-                      setProfitPayoutForm({ ...profitPayoutForm, ownerRole: e.target.value as OwnerRole })
-                    }
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  >
-                    <option value="owner-a">Owner A</option>
-                    <option value="owner-b">Owner B</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Payout Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={profitPayoutForm.payoutDate}
-                    onChange={(e) => setProfitPayoutForm({ ...profitPayoutForm, payoutDate: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Amount</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={profitPayoutForm.amount}
-                    onChange={(e) => setProfitPayoutForm({ ...profitPayoutForm, amount: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Notes</label>
-                  <input
-                    type="text"
-                    value={profitPayoutForm.notes}
-                    onChange={(e) => setProfitPayoutForm({ ...profitPayoutForm, notes: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                    placeholder="Bank transfer reference, memo, etc."
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                className="mt-4 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-              >
-                Save Owner Payout
-              </button>
-            </form>
-
-            <form onSubmit={handleAddRetainedTransaction} className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <h4 className="mb-3 font-semibold text-zinc-900 dark:text-zinc-50">Record Retained Earnings Transaction</h4>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Type</label>
-                  <select
-                    value={retainedForm.type}
-                    onChange={(e) =>
-                      setRetainedForm({ ...retainedForm, type: e.target.value as RetainedEarningsTransactionType })
-                    }
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  >
-                    <option value="deposit">Deposit to retained account</option>
-                    <option value="withdrawal">Withdrawal from retained account</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Transaction Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={retainedForm.transactionDate}
-                    onChange={(e) => setRetainedForm({ ...retainedForm, transactionDate: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Amount</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={retainedForm.amount}
-                    onChange={(e) => setRetainedForm({ ...retainedForm, amount: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Notes</label>
-                  <input
-                    type="text"
-                    value={retainedForm.notes}
-                    onChange={(e) => setRetainedForm({ ...retainedForm, notes: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-                    placeholder="Reason for retained movement"
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Save Retained Transaction
-              </button>
-            </form>
-          </div>
-
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <h4 className="mb-3 font-semibold text-zinc-900 dark:text-zinc-50">Owner Profit Payout Log</h4>
-              {ownerProfitPayouts.length === 0 ? (
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">No owner profit payouts recorded yet.</p>
-              ) : (
-                <div className="max-h-60 overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-zinc-200 dark:border-zinc-700">
-                      <tr>
-                        <th className="py-2">Date</th>
-                        <th className="py-2">Owner</th>
-                        <th className="py-2 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {ownerProfitPayouts
-                        .slice()
-                        .reverse()
-                        .map((payout) => (
-                          <tr key={payout.id}>
-                            <td className="py-2">{format(parseLocalDate(payout.payoutDate), 'MMM d, yyyy')}</td>
-                            <td className="py-2">{payout.ownerRole === 'owner-a' ? 'Owner A' : 'Owner B'}</td>
-                            <td className="py-2 text-right font-medium">{formatCurrency(payout.amount)}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <h4 className="mb-3 font-semibold text-zinc-900 dark:text-zinc-50">Retained Earnings Transaction Log</h4>
-              {retainedTransactions.length === 0 ? (
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">No retained earnings transactions recorded yet.</p>
-              ) : (
-                <div className="max-h-60 overflow-y-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="border-b border-zinc-200 dark:border-zinc-700">
-                      <tr>
-                        <th className="py-2">Date</th>
-                        <th className="py-2">Type</th>
-                        <th className="py-2 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {retainedTransactions
-                        .slice()
-                        .reverse()
-                        .map((tx) => (
-                          <tr key={tx.id}>
-                            <td className="py-2">{format(parseLocalDate(tx.transactionDate), 'MMM d, yyyy')}</td>
-                            <td className="py-2">{tx.type === 'deposit' ? 'Deposit' : 'Withdrawal'}</td>
-                            <td className="py-2 text-right font-medium">{formatCurrency(tx.amount)}</td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Profit Distribution Explanation */}
-        {reportData.eventDetails.length > 0 && (
-          <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-            <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              How Your Compensation is Calculated
-            </h3>
-            <div className="space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
-              <div>
-                <strong className="text-zinc-900 dark:text-zinc-50">Labor Earnings:</strong>
-                <p>
-                  As a working chef/staff member, you earn a percentage of each event's revenue plus
-                  your share of gratuity. This varies by your role (lead chef, assistant, etc.) and
-                  is subject to caps configured in Business Rules.
-                </p>
-              </div>
-              <div>
-                <strong className="text-zinc-900 dark:text-zinc-50">Profit Distribution:</strong>
-                <p>
-                  As a {equityPercent}% owner, you receive your equity share of monthly profits.
-                  Profits are calculated after all costs (food, labor, supplies) are paid. The
-                  business retains {rules.profitDistribution.businessRetainedPercent}% for reserves,
-                  and the remaining {rules.profitDistribution.ownerDistributionPercent}% is
-                  distributed to owners based on equity.
-                </p>
-              </div>
-              <div className="border-t border-zinc-300 pt-3 dark:border-zinc-600">
-                <strong className="text-zinc-900 dark:text-zinc-50">Total Compensation</strong> =
-                Labor Earnings (as worker) + Profit Distribution (as owner)
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-8 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-700">
-          <p>
-            This report is generated based on current Business Rules settings. Historical events may
-            have used different rates.
-          </p>
-          <p className="mt-2">
-            Report generated on {format(new Date(), 'PPP')} at {format(new Date(), 'p')}
-          </p>
-        </div>
       </div>
+
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Retained Earnings Transaction Log
+          </h2>
+        </div>
+        {retainedLogRows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            No retained earnings transactions for this month.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+                <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="px-4 py-3 font-semibold">Date</th>
+                  <th className="px-4 py-3 font-semibold">Source</th>
+                  <th className="px-4 py-3 font-semibold">Reference</th>
+                  <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                  <th className="px-4 py-3 font-semibold">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {retainedLogRows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {format(parseLocalDate(row.date), 'MMM d, yyyy')}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {row.source === 'event-distribution' ? 'Event distribution' : 'Manual transaction'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.bookingId ? (
+                        <Link
+                          href={`/bookings?bookingId=${row.bookingId}`}
+                          className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                        >
+                          {row.eventLabel}
+                        </Link>
+                      ) : (
+                        <span className="text-zinc-700 dark:text-zinc-300">{row.eventLabel}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-zinc-700 dark:text-zinc-300">
+                      {row.amount < 0 ? '-' : ''}
+                      {formatCurrency(Math.abs(row.amount))}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{row.notes || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {editingRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                Edit Profit Distribution Record
+              </h3>
+              <button
+                onClick={closeEditModal}
+                className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+              {editingRow.customerName} · {format(parseLocalDate(editingRow.eventDate), 'MMM d, yyyy')} at{' '}
+              {editingRow.eventTime}
+            </p>
+
+            <form onSubmit={handleSaveOverride} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Chef Payouts
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={editForm.chefPayouts}
+                    onChange={(e) => setEditForm({ ...editForm, chefPayouts: e.target.value })}
+                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">Auto: {formatCurrency(editingRow.autoChefPayouts)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Owner A Payout
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={editForm.ownerAPayout}
+                    onChange={(e) => setEditForm({ ...editForm, ownerAPayout: e.target.value })}
+                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">Auto: {formatCurrency(editingRow.autoOwnerAPayout)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Owner B Payout
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={editForm.ownerBPayout}
+                    onChange={(e) => setEditForm({ ...editForm, ownerBPayout: e.target.value })}
+                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">Auto: {formatCurrency(editingRow.autoOwnerBPayout)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Retained Earnings
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={editForm.retainedEarnings}
+                    onChange={(e) => setEditForm({ ...editForm, retainedEarnings: e.target.value })}
+                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Auto: {formatCurrency(editingRow.autoRetainedEarnings)}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                  placeholder="Optional reconciliation note"
+                />
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetToAutomatic}
+                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Reset to Automatic
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={closeEditModal}
+                    className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    Save Distribution
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

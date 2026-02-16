@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
@@ -76,6 +77,8 @@ function getAssignmentForPosition(
 }
 
 export default function BookingsPage() {
+  const searchParams = useSearchParams();
+  const openedBookingFromQueryRef = useRef<string | null>(null);
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -274,6 +277,36 @@ export default function BookingsPage() {
 
     return { pending, confirmed, completed, totalRevenue };
   }, [bookings]);
+
+  useEffect(() => {
+    const bookingId = searchParams.get('bookingId');
+    if (!bookingId) return;
+    if (openedBookingFromQueryRef.current === bookingId) return;
+
+    const booking = bookings.find((entry) => entry.id === bookingId);
+    if (!booking) return;
+
+    openedBookingFromQueryRef.current = bookingId;
+    setSelectedBooking(booking);
+    setIsEditing(true);
+    setFormData({
+      eventType: booking.eventType,
+      eventDate: booking.eventDate,
+      eventTime: booking.eventTime,
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      customerPhone: booking.customerPhone,
+      adults: booking.adults,
+      children: booking.children,
+      location: booking.location,
+      distanceMiles: booking.distanceMiles,
+      premiumAddOn: booking.premiumAddOn,
+      notes: booking.notes,
+      staffAssignments: booking.staffAssignments,
+      staffingProfileId: booking.staffingProfileId,
+    });
+    setShowModal(true);
+  }, [bookings, searchParams]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
