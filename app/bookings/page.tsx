@@ -29,6 +29,10 @@ import {
   normalizeBookingWorkflowFields,
   toLocalDateISO,
 } from '@/lib/bookingWorkflow';
+import {
+  ensureShoppingListForBooking,
+  removeShoppingListForBooking,
+} from '@/lib/shoppingStorage';
 
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
@@ -507,6 +511,7 @@ export default function BookingsPage() {
         (record) => record.bookingId !== selectedBooking.id
       );
       saveCustomerPayments(remainingCustomerPayments);
+      removeShoppingListForBooking(selectedBooking.id);
       saveBookings(bookings.filter((b) => b.id !== selectedBooking.id));
       setShowModal(false);
       resetForm();
@@ -638,6 +643,10 @@ export default function BookingsPage() {
               ? { ...bookingWithNewServiceStatus, confirmedAt: now }
               : bookingWithNewServiceStatus
           );
+
+    if (newStatus === 'confirmed' || newStatus === 'completed') {
+      ensureShoppingListForBooking(booking.id);
+    }
 
     saveBookings(
       bookings.map((b) =>
@@ -1296,6 +1305,13 @@ export default function BookingsPage() {
                             {booking.menuId ? '📋 Menu' : '➕ Menu'}
                           </Link>
                         )}
+                        <Link
+                          href={`/bookings/shopping?bookingId=${booking.id}`}
+                          className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                          title="Event shopping list"
+                        >
+                          🛒 Shop
+                        </Link>
                         <button
                           onClick={() => {
                             setSelectedBooking(booking);

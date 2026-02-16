@@ -21,6 +21,8 @@ export interface EventReconciliation {
 
   // Actual Costs
   actualFoodCost?: number;
+  foodCostSource?: 'shopping-list' | 'manual';
+  foodCostSnapshot?: number;
   actualSuppliesCost?: number;
   actualTransportationCost?: number;
 

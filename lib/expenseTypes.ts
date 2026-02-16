@@ -15,6 +15,8 @@ export interface Expense {
   bookingId?: string; // Optional - links to a specific booking
   receiptPhoto?: string; // Optional - base64 image data
   notes?: string;
+  source?: 'manual' | 'shopping-list';
+  sourceId?: string;
 }
 
 export interface ExpenseFormData {

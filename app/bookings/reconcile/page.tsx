@@ -13,6 +13,9 @@ import type { Expense, ExpenseCategory } from '@/lib/expenseTypes';
 import type { EventReconciliation, ActualLaborEntry } from '@/lib/reconciliationTypes';
 import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
 import { CHEF_ROLE_TO_STAFF_ROLE } from '@/lib/staffTypes';
+import type { ShoppingList } from '@/lib/shoppingTypes';
+import { loadShoppingListForBooking } from '@/lib/shoppingStorage';
+import { calculateShoppingListTotals } from '@/lib/shoppingUtils';
 
 // Helper to parse date strings as local dates (not UTC)
 function parseLocalDate(dateString: string): Date {
@@ -43,6 +46,7 @@ function ReconcileContent() {
   const [booking, setBooking] = useState<Booking | null>(null);
   const [reconciliation, setReconciliation] = useState<EventReconciliation | null>(null);
   const [linkedExpenses, setLinkedExpenses] = useState<Expense[]>([]);
+  const [shoppingList, setShoppingList] = useState<ShoppingList | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
@@ -67,6 +71,7 @@ function ReconcileContent() {
       return;
     }
     setBooking(foundBooking);
+    setShoppingList(loadShoppingListForBooking(foundBooking.id));
 
     // Load linked expenses
     const expensesData = localStorage.getItem('expenses');
@@ -106,6 +111,27 @@ function ReconcileContent() {
 
     return () => {
       window.removeEventListener('expensesUpdated', reloadExpenses);
+    };
+  }, [bookingId]);
+
+  // Listen for shopping list updates
+  useEffect(() => {
+    if (!bookingId) return;
+
+    const reloadShoppingList = () => {
+      setShoppingList(loadShoppingListForBooking(bookingId));
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'shoppingLists') reloadShoppingList();
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('shoppingListsUpdated', reloadShoppingList);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('shoppingListsUpdated', reloadShoppingList);
     };
   }, [bookingId]);
 
@@ -172,7 +198,9 @@ function ReconcileContent() {
       actualGratuity: financials.gratuity,
       actualDistanceFee: financials.distanceFee,
       actualTotal: financials.totalCharged,
-      actualFoodCost: financials.foodCost,
+      actualFoodCost: shoppingList ? shoppingTotals.foodTotal : financials.foodCost,
+      foodCostSource: shoppingList ? 'shopping-list' : 'manual',
+      foodCostSnapshot: shoppingList ? shoppingTotals.foodTotal : financials.foodCost,
       actualSuppliesCost: financials.suppliesCost,
       actualTransportationCost: financials.transportationCost,
       actualLaborEntries: laborEntries,
@@ -181,7 +209,29 @@ function ReconcileContent() {
       createdAt: now,
       updatedAt: now,
     });
-  }, [financials, booking, reconciliation]);
+  }, [financials, booking, reconciliation, shoppingList, shoppingTotals.foodTotal]);
+
+  // Keep actual food cost aligned to shopping list totals whenever shopping list data changes
+  useEffect(() => {
+    if (!reconciliation || !shoppingList) return;
+    if (reconciliation.status === 'finalized') return;
+
+    const nextFoodCost = shoppingTotals.foodTotal;
+    const alreadySynced =
+      Math.abs((reconciliation.actualFoodCost ?? 0) - nextFoodCost) < 0.01 &&
+      reconciliation.foodCostSource === 'shopping-list';
+
+    if (alreadySynced) return;
+
+    setReconciliation({
+      ...reconciliation,
+      actualFoodCost: nextFoodCost,
+      foodCostSource: 'shopping-list',
+      foodCostSnapshot: nextFoodCost,
+      updatedAt: new Date().toISOString(),
+    });
+    setHasChanges(true);
+  }, [reconciliation, shoppingList, shoppingTotals.foodTotal]);
 
   // Expense totals by category
   const expenseTotals = useMemo(() => {
@@ -200,6 +250,9 @@ function ReconcileContent() {
     });
     return { byCategory: totals, total };
   }, [linkedExpenses]);
+
+  const shoppingTotals = useMemo(() => calculateShoppingListTotals(shoppingList), [shoppingList]);
+  const usingShoppingListFoodCost = Boolean(shoppingList);
 
   // Computed actual profit from reconciliation data
   const actualProfit = useMemo(() => {
@@ -224,7 +277,10 @@ function ReconcileContent() {
   }, [reconciliation, rules]);
 
   // Update a reconciliation field
-  const updateField = (field: keyof EventReconciliation, value: any) => {
+  const updateField = <K extends keyof EventReconciliation>(
+    field: K,
+    value: EventReconciliation[K]
+  ) => {
     if (!reconciliation) return;
     setReconciliation({ ...reconciliation, [field]: value, updatedAt: new Date().toISOString() });
     setHasChanges(true);
@@ -261,16 +317,28 @@ function ReconcileContent() {
   const handleSave = () => {
     if (!reconciliation || !booking) return;
 
+    const resolvedFoodCost = shoppingList
+      ? shoppingTotals.foodTotal
+      : reconciliation.actualFoodCost ?? 0;
+    const reconciliationToSave: EventReconciliation = {
+      ...reconciliation,
+      actualFoodCost: resolvedFoodCost,
+      foodCostSource: shoppingList ? 'shopping-list' : 'manual',
+      foodCostSnapshot: resolvedFoodCost,
+      updatedAt: new Date().toISOString(),
+    };
+
     const reconciliationsData = localStorage.getItem('reconciliations');
     const all: EventReconciliation[] = reconciliationsData ? JSON.parse(reconciliationsData) : [];
-    const idx = all.findIndex((r) => r.id === reconciliation.id);
+    const idx = all.findIndex((r) => r.id === reconciliationToSave.id);
     if (idx >= 0) {
-      all[idx] = reconciliation;
+      all[idx] = reconciliationToSave;
     } else {
-      all.push(reconciliation);
+      all.push(reconciliationToSave);
     }
     localStorage.setItem('reconciliations', JSON.stringify(all));
     window.dispatchEvent(new Event('reconciliationsUpdated'));
+    setReconciliation(reconciliationToSave);
 
     // Update booking with reconciliationId if not already set
     if (!booking.reconciliationId) {
@@ -279,12 +347,12 @@ function ReconcileContent() {
         const bookings: Booking[] = JSON.parse(bookingsData);
         const updatedBookings = bookings.map((b) =>
           b.id === booking.id
-            ? { ...b, reconciliationId: reconciliation.id, updatedAt: new Date().toISOString() }
+            ? { ...b, reconciliationId: reconciliationToSave.id, updatedAt: new Date().toISOString() }
             : b
         );
         localStorage.setItem('bookings', JSON.stringify(updatedBookings));
         window.dispatchEvent(new Event('bookingsUpdated'));
-        setBooking({ ...booking, reconciliationId: reconciliation.id });
+        setBooking({ ...booking, reconciliationId: reconciliationToSave.id });
       }
     }
 
@@ -297,23 +365,25 @@ function ReconcileContent() {
   const handleFinalize = () => {
     if (!reconciliation) return;
     const now = new Date().toISOString();
-    setReconciliation({
+    const resolvedFoodCost = shoppingList
+      ? shoppingTotals.foodTotal
+      : reconciliation.actualFoodCost ?? 0;
+
+    const finalizedRecon: EventReconciliation = {
       ...reconciliation,
+      actualFoodCost: resolvedFoodCost,
+      foodCostSource: shoppingList ? 'shopping-list' : 'manual',
+      foodCostSnapshot: resolvedFoodCost,
       status: 'finalized',
       reconciledAt: now,
       updatedAt: now,
-    });
+    };
+
+    setReconciliation(finalizedRecon);
     setHasChanges(true);
+
     // Save will be triggered after state update via the save button or we auto-save
     setTimeout(() => {
-      // Auto-save after finalize
-      const finalizedRecon = {
-        ...reconciliation,
-        status: 'finalized' as const,
-        reconciledAt: now,
-        updatedAt: now,
-      };
-
       const reconciliationsData = localStorage.getItem('reconciliations');
       const all: EventReconciliation[] = reconciliationsData ? JSON.parse(reconciliationsData) : [];
       const idx = all.findIndex((r) => r.id === finalizedRecon.id);
@@ -691,6 +761,17 @@ function ReconcileContent() {
                   <td className="py-3 text-zinc-900 dark:text-zinc-100">
                     Food Cost
                     <span className="ml-2 text-xs text-zinc-500">({financials.foodCostPercent}%)</span>
+                    {usingShoppingListFoodCost && (
+                      <div className="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
+                        Source: Shopping List ({formatCurrency(shoppingTotals.foodTotal)}) •{' '}
+                        <Link
+                          href={`/bookings/shopping?bookingId=${booking.id}`}
+                          className="underline hover:text-indigo-700 dark:hover:text-indigo-300"
+                        >
+                          View list
+                        </Link>
+                      </div>
+                    )}
                     {expenseTotals.byCategory.food > 0 && (
                       <div className="text-xs text-zinc-500 dark:text-zinc-500">
                         from expenses: {formatCurrency(expenseTotals.byCategory.food)}
@@ -699,14 +780,22 @@ function ReconcileContent() {
                   </td>
                   <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.foodCost)}</td>
                   <td className="py-3 text-right">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={reconciliation.actualFoodCost ?? 0}
-                      onChange={(e) => updateField('actualFoodCost', parseFloat(e.target.value) || 0)}
-                      disabled={isFinalized}
-                      className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
-                    />
+                    {usingShoppingListFoodCost ? (
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100 print:hidden">
+                        {formatCurrency(shoppingTotals.foodTotal)}
+                      </span>
+                    ) : (
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={reconciliation.actualFoodCost ?? 0}
+                        onChange={(e) =>
+                          updateField('actualFoodCost', parseFloat(e.target.value) || 0)
+                        }
+                        disabled={isFinalized}
+                        className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                      />
+                    )}
                     <span className="hidden font-medium print:inline">{formatCurrency(reconciliation.actualFoodCost ?? 0)}</span>
                   </td>
                   <td className={`py-3 text-right font-medium ${varianceColor(variance(financials.foodCost, reconciliation.actualFoodCost ?? 0), false)}`}>
@@ -809,12 +898,20 @@ function ReconcileContent() {
             <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
               Linked Expenses
             </h2>
-            <Link
-              href="/expenses"
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 print:hidden"
-            >
-              + Add Expense
-            </Link>
+            <div className="flex items-center gap-3 print:hidden">
+              <Link
+                href={`/bookings/shopping?bookingId=${booking.id}`}
+                className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+              >
+                🛒 Shopping List
+              </Link>
+              <Link
+                href="/expenses"
+                className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              >
+                + Add Expense
+              </Link>
+            </div>
           </div>
 
           {linkedExpenses.length > 0 ? (
