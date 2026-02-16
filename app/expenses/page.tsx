@@ -37,6 +37,11 @@ function safeParseList<T>(raw: string | null): T[] {
   }
 }
 
+function loadInitialList<T>(key: string): T[] {
+  if (typeof window === 'undefined') return [];
+  return safeParseList<T>(window.localStorage.getItem(key));
+}
+
 function getDefaultExpenseFormData(): ExpenseFormData {
   return {
     date: format(new Date(), 'yyyy-MM-dd'),
@@ -116,15 +121,19 @@ function getInventoryStatus(item: InventoryItem): 'out' | 'low' | 'healthy' {
 
 export default function ExpensesPage() {
   const [activeSection, setActiveSection] = useState<'expenses' | 'inventory'>('expenses');
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>(() => loadInitialList<Expense>(EXPENSES_KEY));
+  const [bookings, setBookings] = useState<Booking[]>(() => loadInitialList<Booking>(BOOKINGS_KEY));
 
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseFormData, setExpenseFormData] = useState<ExpenseFormData>(getDefaultExpenseFormData);
 
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-  const [inventoryTransactions, setInventoryTransactions] = useState<InventoryTransaction[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(() =>
+    loadInitialList<InventoryItem>(INVENTORY_ITEMS_KEY)
+  );
+  const [inventoryTransactions, setInventoryTransactions] = useState<InventoryTransaction[]>(() =>
+    loadInitialList<InventoryTransaction>(INVENTORY_TRANSACTIONS_KEY)
+  );
   const [showInventoryForm, setShowInventoryForm] = useState(false);
   const [showMovementForm, setShowMovementForm] = useState(false);
   const [editingInventoryId, setEditingInventoryId] = useState<string | null>(null);
@@ -154,11 +163,6 @@ export default function ExpensesPage() {
   };
 
   useEffect(() => {
-    loadExpenses();
-    loadBookings();
-    loadInventoryItems();
-    loadInventoryTransactions();
-
     const handleStorage = (e: StorageEvent) => {
       if (e.key === EXPENSES_KEY) loadExpenses();
       if (e.key === BOOKINGS_KEY) loadBookings();
@@ -942,7 +946,7 @@ export default function ExpensesPage() {
               <div className="px-6 py-12 text-center">
                 <p className="text-zinc-600 dark:text-zinc-400">No expenses recorded yet.</p>
                 <p className="mt-2 text-sm text-zinc-500">
-                  Click "Add Expense" to start tracking costs.
+                  Click Add Expense to start tracking costs.
                 </p>
               </div>
             )}
@@ -1532,7 +1536,7 @@ export default function ExpensesPage() {
               <div className="px-6 py-12 text-center">
                 <p className="text-zinc-600 dark:text-zinc-400">No inventory items yet.</p>
                 <p className="mt-2 text-sm text-zinc-500">
-                  Add your first item or use "Load Sample Inventory" to test flows.
+                  Add your first item or use Load Sample Inventory to test flows.
                 </p>
               </div>
             )}
