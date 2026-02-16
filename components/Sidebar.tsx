@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
+  HomeIcon,
   CogIcon,
   DocumentChartBarIcon,
   CalendarDaysIcon,
@@ -15,21 +16,23 @@ import {
 import ThemeToggle from './ThemeToggle';
 
 const navigation = [
-  {
-    name: 'Reports',
-    icon: DocumentChartBarIcon,
-    children: [
-      { name: 'Business Summary', href: '/reports/business-summary' },
-      { name: 'Owner Profit Distribution', href: '/reports/owner-monthly' },
-      { name: 'Staff Payouts', href: '/reports/comparative' },
-    ],
-  },
+  { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Bookings', href: '/bookings', icon: CalendarDaysIcon },
   { name: 'Menus', href: '/menus', icon: ClipboardDocumentListIcon },
   { name: 'Staff', href: '/staff', icon: UsersIcon },
   { name: 'Calculator', href: '/calculator', icon: CalculatorIcon },
   { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon },
   { name: 'Business Rules', href: '/business-rules', icon: CogIcon },
+  {
+    name: 'Reports',
+    icon: DocumentChartBarIcon,
+    children: [
+      { name: 'Dashboard', href: '/reports' },
+      { name: 'Business Summary', href: '/reports/business-summary' },
+      { name: 'Owner Profit Distribution', href: '/reports/owner-monthly' },
+      { name: 'Staff Payouts', href: '/reports/comparative' },
+    ],
+  },
 ];
 
 function classNames(...classes: string[]) {
