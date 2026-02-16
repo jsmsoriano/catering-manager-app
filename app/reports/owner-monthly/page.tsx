@@ -7,7 +7,11 @@ import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking, BookingStatus } from '@/lib/bookingTypes';
-import type { ProfitDistributionOverride, RetainedEarningsTransaction } from '@/lib/financeTypes';
+import type {
+  DistributionStatus,
+  ProfitDistributionOverride,
+  RetainedEarningsTransaction,
+} from '@/lib/financeTypes';
 import {
   PROFIT_DISTRIBUTION_OVERRIDES_KEY,
   RETAINED_EARNINGS_KEY,
@@ -28,6 +32,18 @@ const STATUS_BADGE: Record<BookingStatus, string> = {
   cancelled: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
 };
 
+const DISTRIBUTION_STATUS_BADGE: Record<DistributionStatus, string> = {
+  draft: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
+  posted: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+};
+
+const DISTRIBUTION_STATUS_LABEL: Record<DistributionStatus, string> = {
+  draft: 'Draft',
+  posted: 'Posted',
+  paid: 'Paid',
+};
+
 interface DistributionRow {
   bookingId: string;
   eventDate: string;
@@ -35,6 +51,7 @@ interface DistributionRow {
   customerName: string;
   eventType: 'private-dinner' | 'buffet';
   bookingStatus: BookingStatus;
+  distributionStatus: DistributionStatus;
   guests: number;
   autoTotalProfit: number;
   autoChefPayouts: number;
@@ -46,8 +63,11 @@ interface DistributionRow {
   appliedOwnerBPayout: number;
   appliedRetainedEarnings: number;
   appliedTotalProfit: number;
+  chefPayoutEdited: boolean;
+  ownerAPayoutEdited: boolean;
+  ownerBPayoutEdited: boolean;
+  retainedEarningsEdited: boolean;
   notes?: string;
-  isEdited: boolean;
 }
 
 interface DistributionSummary {
@@ -119,6 +139,7 @@ export default function OwnerMonthlyReportPage() {
     ownerAPayout: '',
     ownerBPayout: '',
     retainedEarnings: '',
+    distributionStatus: 'draft' as DistributionStatus,
     notes: '',
   });
 
@@ -205,6 +226,7 @@ export default function OwnerMonthlyReportPage() {
         const appliedOwnerAPayout = override?.ownerAPayout ?? financials.ownerADistribution;
         const appliedOwnerBPayout = override?.ownerBPayout ?? financials.ownerBDistribution;
         const appliedRetainedEarnings = override?.retainedEarnings ?? financials.retainedAmount;
+        const distributionStatus = override?.distributionStatus ?? 'draft';
 
         return {
           bookingId: booking.id,
@@ -213,6 +235,7 @@ export default function OwnerMonthlyReportPage() {
           customerName: booking.customerName,
           eventType: booking.eventType,
           bookingStatus: booking.status,
+          distributionStatus,
           guests: booking.adults + booking.children,
           autoTotalProfit: financials.grossProfit,
           autoChefPayouts: financials.totalLaborPaid,
@@ -224,8 +247,11 @@ export default function OwnerMonthlyReportPage() {
           appliedOwnerBPayout,
           appliedRetainedEarnings,
           appliedTotalProfit: appliedOwnerAPayout + appliedOwnerBPayout + appliedRetainedEarnings,
+          chefPayoutEdited: Math.abs(appliedChefPayouts - financials.totalLaborPaid) > 0.009,
+          ownerAPayoutEdited: Math.abs(appliedOwnerAPayout - financials.ownerADistribution) > 0.009,
+          ownerBPayoutEdited: Math.abs(appliedOwnerBPayout - financials.ownerBDistribution) > 0.009,
+          retainedEarningsEdited: Math.abs(appliedRetainedEarnings - financials.retainedAmount) > 0.009,
           notes: override?.notes,
-          isEdited: Boolean(override),
         } satisfies DistributionRow;
       })
       .sort((a, b) => {
@@ -277,6 +303,7 @@ export default function OwnerMonthlyReportPage() {
       ownerAPayout: row.appliedOwnerAPayout.toFixed(2),
       ownerBPayout: row.appliedOwnerBPayout.toFixed(2),
       retainedEarnings: row.appliedRetainedEarnings.toFixed(2),
+      distributionStatus: row.distributionStatus,
       notes: row.notes ?? '',
     });
   };
@@ -288,6 +315,7 @@ export default function OwnerMonthlyReportPage() {
       ownerAPayout: '',
       ownerBPayout: '',
       retainedEarnings: '',
+      distributionStatus: 'draft',
       notes: '',
     });
   };
@@ -314,6 +342,7 @@ export default function OwnerMonthlyReportPage() {
       ownerAPayout,
       ownerBPayout,
       retainedEarnings,
+      distributionStatus: editForm.distributionStatus,
       notes: editForm.notes.trim() || undefined,
       updatedAt: new Date().toISOString(),
     };
@@ -469,6 +498,10 @@ export default function OwnerMonthlyReportPage() {
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
             Event Payouts Summary
           </h2>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Event status tracks operations; distribution status tracks accounting progress (Draft,
+            Posted, Paid).
+          </p>
         </div>
         {monthRows.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
@@ -480,7 +513,8 @@ export default function OwnerMonthlyReportPage() {
               <thead className="bg-zinc-50 dark:bg-zinc-800/50">
                 <tr className="border-b border-zinc-200 dark:border-zinc-800">
                   <th className="px-4 py-3 font-semibold">Event</th>
-                  <th className="px-4 py-3 text-center font-semibold">Status</th>
+                  <th className="px-4 py-3 text-center font-semibold">Event Status</th>
+                  <th className="px-4 py-3 text-center font-semibold">Distribution</th>
                   <th className="px-4 py-3 text-right font-semibold">Chef Payouts</th>
                   <th className="px-4 py-3 text-right font-semibold">Owner A</th>
                   <th className="px-4 py-3 text-right font-semibold">Owner B</th>
@@ -509,9 +543,18 @@ export default function OwnerMonthlyReportPage() {
                         {row.bookingStatus}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          DISTRIBUTION_STATUS_BADGE[row.distributionStatus]
+                        }`}
+                      >
+                        {DISTRIBUTION_STATUS_LABEL[row.distributionStatus]}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedChefPayouts)}
-                      {row.isEdited && (
+                      {row.chefPayoutEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoChefPayouts)}
                         </div>
@@ -519,7 +562,7 @@ export default function OwnerMonthlyReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedOwnerAPayout)}
-                      {row.isEdited && (
+                      {row.ownerAPayoutEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoOwnerAPayout)}
                         </div>
@@ -527,7 +570,7 @@ export default function OwnerMonthlyReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedOwnerBPayout)}
-                      {row.isEdited && (
+                      {row.ownerBPayoutEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoOwnerBPayout)}
                         </div>
@@ -535,7 +578,7 @@ export default function OwnerMonthlyReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedRetainedEarnings)}
-                      {row.isEdited && (
+                      {row.retainedEarningsEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoRetainedEarnings)}
                         </div>
@@ -546,7 +589,7 @@ export default function OwnerMonthlyReportPage() {
                         onClick={() => openEditModal(row)}
                         className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                       >
-                        Edit
+                        Manage
                       </button>
                     </td>
                   </tr>
@@ -618,7 +661,7 @@ export default function OwnerMonthlyReportPage() {
           <div className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                Edit Profit Distribution Record
+                Manage Distribution Record
               </h3>
               <button
                 onClick={closeEditModal}
@@ -633,6 +676,29 @@ export default function OwnerMonthlyReportPage() {
             </p>
 
             <form onSubmit={handleSaveOverride} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Distribution Status
+                </label>
+                <select
+                  value={editForm.distributionStatus}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      distributionStatus: e.target.value as DistributionStatus,
+                    })
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="posted">Posted</option>
+                  <option value="paid">Paid</option>
+                </select>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  This accounting status is independent from the event status.
+                </p>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -717,7 +783,7 @@ export default function OwnerMonthlyReportPage() {
                   onClick={handleResetToAutomatic}
                   className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                  Reset to Automatic
+                  Reset to Auto + Draft
                 </button>
                 <div className="flex gap-2">
                   <button
