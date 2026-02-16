@@ -1,8 +1,8 @@
 import type {
   LaborPaymentRecord,
   OwnerProfitPayoutRecord,
-  RetainedEarningsTransaction,
   ProfitDistributionOverride,
+  RetainedEarningsTransaction,
 } from './financeTypes';
 
 export const LABOR_PAYMENTS_KEY = 'laborPayments';

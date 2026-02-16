@@ -6,12 +6,18 @@ import { endOfMonth, format, isWithinInterval, startOfMonth } from 'date-fns';
 import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
-import type { Booking } from '@/lib/bookingTypes';
-import type { ProfitDistributionOverride } from '@/lib/financeTypes';
+import type { Booking, BookingStatus } from '@/lib/bookingTypes';
+import type {
+  DistributionStatus,
+  ProfitDistributionOverride,
+  RetainedEarningsTransaction,
+} from '@/lib/financeTypes';
 import {
   PROFIT_DISTRIBUTION_OVERRIDES_KEY,
+  RETAINED_EARNINGS_KEY,
   loadProfitDistributionOverrides,
   saveProfitDistributionOverrides,
+  loadRetainedEarningsTransactions,
 } from '@/lib/financeStorage';
 
 function parseLocalDate(dateString: string): Date {
@@ -19,13 +25,35 @@ function parseLocalDate(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
+const STATUS_BADGE: Record<BookingStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+  cancelled: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
+};
+
+const DISTRIBUTION_STATUS_BADGE: Record<DistributionStatus, string> = {
+  draft: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
+  posted: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
+  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+};
+
+const DISTRIBUTION_STATUS_LABEL: Record<DistributionStatus, string> = {
+  draft: 'Draft',
+  posted: 'Posted',
+  paid: 'Paid',
+};
+
 interface DistributionRow {
   bookingId: string;
   eventDate: string;
   eventTime: string;
   customerName: string;
   eventType: 'private-dinner' | 'buffet';
+  bookingStatus: BookingStatus;
+  distributionStatus: DistributionStatus;
   guests: number;
+  autoTotalProfit: number;
   autoChefPayouts: number;
   autoOwnerAPayout: number;
   autoOwnerBPayout: number;
@@ -34,12 +62,18 @@ interface DistributionRow {
   appliedOwnerAPayout: number;
   appliedOwnerBPayout: number;
   appliedRetainedEarnings: number;
+  appliedTotalProfit: number;
+  chefPayoutEdited: boolean;
+  ownerAPayoutEdited: boolean;
+  ownerBPayoutEdited: boolean;
+  retainedEarningsEdited: boolean;
   notes?: string;
-  isEdited: boolean;
 }
 
-interface DistributionSnapshot {
+interface DistributionSummary {
   eventCount: number;
+  totalProfitEarned: number;
+  totalProfitRecorded: number;
   chefEarned: number;
   chefRecorded: number;
   ownerAEarned: number;
@@ -50,10 +84,22 @@ interface DistributionSnapshot {
   retainedRecorded: number;
 }
 
-function buildSnapshot(rows: DistributionRow[]): DistributionSnapshot {
-  return rows.reduce<DistributionSnapshot>(
+interface RetainedLogRow {
+  id: string;
+  date: string;
+  source: 'event-distribution' | 'manual';
+  bookingId?: string;
+  eventLabel: string;
+  amount: number;
+  notes?: string;
+}
+
+function buildSummary(rows: DistributionRow[]): DistributionSummary {
+  return rows.reduce<DistributionSummary>(
     (acc, row) => {
       acc.eventCount += 1;
+      acc.totalProfitEarned += row.autoTotalProfit;
+      acc.totalProfitRecorded += row.appliedTotalProfit;
       acc.chefEarned += row.autoChefPayouts;
       acc.chefRecorded += row.appliedChefPayouts;
       acc.ownerAEarned += row.autoOwnerAPayout;
@@ -66,6 +112,8 @@ function buildSnapshot(rows: DistributionRow[]): DistributionSnapshot {
     },
     {
       eventCount: 0,
+      totalProfitEarned: 0,
+      totalProfitRecorded: 0,
       chefEarned: 0,
       chefRecorded: 0,
       ownerAEarned: 0,
@@ -82,6 +130,7 @@ export default function OwnerMonthlyReportPage() {
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [overrides, setOverrides] = useState<ProfitDistributionOverride[]>([]);
+  const [retainedTransactions, setRetainedTransactions] = useState<RetainedEarningsTransaction[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(() => format(new Date(), 'yyyy-MM'));
 
   const [editingRow, setEditingRow] = useState<DistributionRow | null>(null);
@@ -90,6 +139,7 @@ export default function OwnerMonthlyReportPage() {
     ownerAPayout: '',
     ownerBPayout: '',
     retainedEarnings: '',
+    distributionStatus: 'draft' as DistributionStatus,
     notes: '',
   });
 
@@ -139,20 +189,44 @@ export default function OwnerMonthlyReportPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const loadRetained = () => setRetainedTransactions(loadRetainedEarningsTransactions());
+    loadRetained();
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === RETAINED_EARNINGS_KEY) loadRetained();
+    };
+    const handleCustom = () => loadRetained();
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('retainedEarningsUpdated', handleCustom);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('retainedEarningsUpdated', handleCustom);
+    };
+  }, []);
+
   const selectedMonthRange = useMemo(() => {
     const start = startOfMonth(parseLocalDate(`${selectedMonth}-01`));
     const end = endOfMonth(start);
     return { start, end };
   }, [selectedMonth]);
 
-  const allDistributionRows = useMemo(() => {
+  const monthRows = useMemo(() => {
     const overrideByBookingId = new Map(overrides.map((override) => [override.bookingId, override]));
 
     return bookings
-      .filter((booking) => booking.status === 'completed')
+      .filter((booking) => booking.status !== 'cancelled')
+      .filter((booking) => isWithinInterval(parseLocalDate(booking.eventDate), selectedMonthRange))
       .map((booking) => {
         const { financials } = calculateBookingFinancials(booking, rules);
         const override = overrideByBookingId.get(booking.id);
+
+        const appliedChefPayouts = override?.chefPayouts ?? financials.totalLaborPaid;
+        const appliedOwnerAPayout = override?.ownerAPayout ?? financials.ownerADistribution;
+        const appliedOwnerBPayout = override?.ownerBPayout ?? financials.ownerBDistribution;
+        const appliedRetainedEarnings = override?.retainedEarnings ?? financials.retainedAmount;
+        const distributionStatus = override?.distributionStatus ?? 'draft';
 
         return {
           bookingId: booking.id,
@@ -160,17 +234,24 @@ export default function OwnerMonthlyReportPage() {
           eventTime: booking.eventTime,
           customerName: booking.customerName,
           eventType: booking.eventType,
+          bookingStatus: booking.status,
+          distributionStatus,
           guests: booking.adults + booking.children,
+          autoTotalProfit: financials.grossProfit,
           autoChefPayouts: financials.totalLaborPaid,
           autoOwnerAPayout: financials.ownerADistribution,
           autoOwnerBPayout: financials.ownerBDistribution,
           autoRetainedEarnings: financials.retainedAmount,
-          appliedChefPayouts: override?.chefPayouts ?? financials.totalLaborPaid,
-          appliedOwnerAPayout: override?.ownerAPayout ?? financials.ownerADistribution,
-          appliedOwnerBPayout: override?.ownerBPayout ?? financials.ownerBDistribution,
-          appliedRetainedEarnings: override?.retainedEarnings ?? financials.retainedAmount,
+          appliedChefPayouts,
+          appliedOwnerAPayout,
+          appliedOwnerBPayout,
+          appliedRetainedEarnings,
+          appliedTotalProfit: appliedOwnerAPayout + appliedOwnerBPayout + appliedRetainedEarnings,
+          chefPayoutEdited: Math.abs(appliedChefPayouts - financials.totalLaborPaid) > 0.009,
+          ownerAPayoutEdited: Math.abs(appliedOwnerAPayout - financials.ownerADistribution) > 0.009,
+          ownerBPayoutEdited: Math.abs(appliedOwnerBPayout - financials.ownerBDistribution) > 0.009,
+          retainedEarningsEdited: Math.abs(appliedRetainedEarnings - financials.retainedAmount) > 0.009,
           notes: override?.notes,
-          isEdited: Boolean(override),
         } satisfies DistributionRow;
       })
       .sort((a, b) => {
@@ -178,23 +259,42 @@ export default function OwnerMonthlyReportPage() {
         const bKey = `${b.eventDate}T${b.eventTime}`;
         return aKey.localeCompare(bKey);
       });
-  }, [bookings, overrides, rules]);
+  }, [bookings, overrides, rules, selectedMonthRange]);
 
-  const monthRows = useMemo(
-    () =>
-      allDistributionRows.filter((row) =>
-        isWithinInterval(parseLocalDate(row.eventDate), selectedMonthRange)
-      ),
-    [allDistributionRows, selectedMonthRange]
+  const completedRows = useMemo(
+    () => monthRows.filter((row) => row.bookingStatus === 'completed'),
+    [monthRows]
   );
 
-  const summary = useMemo(
-    () => ({
-      month: buildSnapshot(monthRows),
-      lifetime: buildSnapshot(allDistributionRows),
-    }),
-    [allDistributionRows, monthRows]
-  );
+  const summary = useMemo(() => buildSummary(completedRows), [completedRows]);
+
+  const retainedLogRows = useMemo(() => {
+    const eventRows: RetainedLogRow[] = completedRows.map((row) => ({
+      id: `event-${row.bookingId}`,
+      date: row.eventDate,
+      source: 'event-distribution',
+      bookingId: row.bookingId,
+      eventLabel: `${row.customerName} (${format(parseLocalDate(row.eventDate), 'MMM d')})`,
+      amount: row.appliedRetainedEarnings,
+      notes: row.notes,
+    }));
+
+    const manualRows: RetainedLogRow[] = retainedTransactions
+      .filter((tx) => isWithinInterval(parseLocalDate(tx.transactionDate), selectedMonthRange))
+      .map((tx) => ({
+        id: `manual-${tx.id}`,
+        date: tx.transactionDate,
+        source: 'manual',
+        eventLabel: tx.type === 'deposit' ? 'Manual deposit' : 'Manual withdrawal',
+        amount: tx.type === 'deposit' ? tx.amount : -tx.amount,
+        notes: tx.notes,
+      }));
+
+    return [...eventRows, ...manualRows].sort((a, b) => {
+      if (a.date === b.date) return a.id.localeCompare(b.id);
+      return b.date.localeCompare(a.date);
+    });
+  }, [completedRows, retainedTransactions, selectedMonthRange]);
 
   const openEditModal = (row: DistributionRow) => {
     setEditingRow(row);
@@ -203,6 +303,7 @@ export default function OwnerMonthlyReportPage() {
       ownerAPayout: row.appliedOwnerAPayout.toFixed(2),
       ownerBPayout: row.appliedOwnerBPayout.toFixed(2),
       retainedEarnings: row.appliedRetainedEarnings.toFixed(2),
+      distributionStatus: row.distributionStatus,
       notes: row.notes ?? '',
     });
   };
@@ -214,6 +315,7 @@ export default function OwnerMonthlyReportPage() {
       ownerAPayout: '',
       ownerBPayout: '',
       retainedEarnings: '',
+      distributionStatus: 'draft',
       notes: '',
     });
   };
@@ -240,6 +342,7 @@ export default function OwnerMonthlyReportPage() {
       ownerAPayout,
       ownerBPayout,
       retainedEarnings,
+      distributionStatus: editForm.distributionStatus,
       notes: editForm.notes.trim() || undefined,
       updatedAt: new Date().toISOString(),
     };
@@ -271,8 +374,8 @@ export default function OwnerMonthlyReportPage() {
           Owner Profit Distribution
         </h1>
         <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-          Automatic event-level distributions based on your configured percentages. Edit any event
-          record when bank reconciliation requires adjustments.
+          Automatic distributions use your preset percentages. Edit any event row when reconciliation
+          needs a one-off adjustment.
         </p>
       </div>
 
@@ -305,10 +408,49 @@ export default function OwnerMonthlyReportPage() {
       <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm dark:border-indigo-900 dark:bg-indigo-950/20">
         <p className="font-semibold text-indigo-900 dark:text-indigo-200">Preset Distribution Rules</p>
         <p className="mt-1 text-indigo-800 dark:text-indigo-300">
-          Owner pool: {rules.profitDistribution.ownerDistributionPercent}% of gross profit
-          {' '}→ Owner A {rules.profitDistribution.ownerAEquityPercent}% / Owner B {rules.profitDistribution.ownerBEquityPercent}%.
+          Owner pool: {rules.profitDistribution.ownerDistributionPercent}% of gross profit →
+          {' '}Owner A {rules.profitDistribution.ownerAEquityPercent}% / Owner B {rules.profitDistribution.ownerBEquityPercent}%.
           {' '}Retained earnings: {rules.profitDistribution.businessRetainedPercent}% of gross profit.
         </p>
+      </div>
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900 dark:bg-emerald-950/20">
+          <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">Total Profit</p>
+          <p className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+            {formatCurrency(summary.totalProfitRecorded)}
+          </p>
+          <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+            auto {formatCurrency(summary.totalProfitEarned)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950/20">
+          <p className="text-sm font-medium text-blue-900 dark:text-blue-200">Total Chef Payouts</p>
+          <p className="mt-2 text-2xl font-bold text-blue-700 dark:text-blue-300">
+            {formatCurrency(summary.chefRecorded)}
+          </p>
+          <p className="mt-1 text-xs text-blue-700 dark:text-blue-400">
+            auto {formatCurrency(summary.chefEarned)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-5 dark:border-purple-900 dark:bg-purple-950/20">
+          <p className="text-sm font-medium text-purple-900 dark:text-purple-200">Total Retained Earnings</p>
+          <p className="mt-2 text-2xl font-bold text-purple-700 dark:text-purple-300">
+            {formatCurrency(summary.retainedRecorded)}
+          </p>
+          <p className="mt-1 text-xs text-purple-700 dark:text-purple-400">
+            auto {formatCurrency(summary.retainedEarned)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 dark:border-amber-900 dark:bg-amber-950/20">
+          <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Total Events Completed</p>
+          <p className="mt-2 text-2xl font-bold text-amber-700 dark:text-amber-300">
+            {summary.eventCount}
+          </p>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+            {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}
+          </p>
+        </div>
       </div>
 
       <div className="mb-8 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -320,49 +462,50 @@ export default function OwnerMonthlyReportPage() {
             <thead className="bg-zinc-50 dark:bg-zinc-800/50">
               <tr className="border-b border-zinc-200 dark:border-zinc-800">
                 <th className="px-4 py-3 font-semibold">Period</th>
-                <th className="px-4 py-3 text-right font-semibold">Events</th>
-                <th className="px-4 py-3 text-right font-semibold">Chef Payouts (Earned / Recorded)</th>
+                <th className="px-4 py-3 text-right font-semibold">Events Completed</th>
+                <th className="px-4 py-3 text-right font-semibold">Chef (Earned / Recorded)</th>
                 <th className="px-4 py-3 text-right font-semibold">Owner A (Earned / Recorded)</th>
                 <th className="px-4 py-3 text-right font-semibold">Owner B (Earned / Recorded)</th>
                 <th className="px-4 py-3 text-right font-semibold">Retained (Earned / Recorded)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {[
-                { label: format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy'), data: summary.month },
-                { label: 'Lifetime', data: summary.lifetime },
-              ].map((row) => (
-                <tr key={row.label}>
-                  <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{row.label}</td>
-                  <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">{row.data.eventCount}</td>
-                  <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
-                    {formatCurrency(row.data.chefEarned)} / {formatCurrency(row.data.chefRecorded)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
-                    {formatCurrency(row.data.ownerAEarned)} / {formatCurrency(row.data.ownerARecorded)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
-                    {formatCurrency(row.data.ownerBEarned)} / {formatCurrency(row.data.ownerBRecorded)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
-                    {formatCurrency(row.data.retainedEarned)} / {formatCurrency(row.data.retainedRecorded)}
-                  </td>
-                </tr>
-              ))}
+              <tr>
+                <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                  {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">{summary.eventCount}</td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.chefEarned)} / {formatCurrency(summary.chefRecorded)}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.ownerAEarned)} / {formatCurrency(summary.ownerARecorded)}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.ownerBEarned)} / {formatCurrency(summary.ownerBRecorded)}
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.retainedEarned)} / {formatCurrency(summary.retainedRecorded)}
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-8 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Event-Level Profit Distribution (one record per completed event)
+            Event Payouts Summary
           </h2>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Event status tracks operations; distribution status tracks accounting progress (Draft,
+            Posted, Paid).
+          </p>
         </div>
         {monthRows.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            No completed events in {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}.
+            No events found in {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -370,11 +513,12 @@ export default function OwnerMonthlyReportPage() {
               <thead className="bg-zinc-50 dark:bg-zinc-800/50">
                 <tr className="border-b border-zinc-200 dark:border-zinc-800">
                   <th className="px-4 py-3 font-semibold">Event</th>
+                  <th className="px-4 py-3 text-center font-semibold">Event Status</th>
+                  <th className="px-4 py-3 text-center font-semibold">Distribution</th>
                   <th className="px-4 py-3 text-right font-semibold">Chef Payouts</th>
                   <th className="px-4 py-3 text-right font-semibold">Owner A</th>
                   <th className="px-4 py-3 text-right font-semibold">Owner B</th>
                   <th className="px-4 py-3 text-right font-semibold">Retained Earnings</th>
-                  <th className="px-4 py-3 text-center font-semibold">Status</th>
                   <th className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
@@ -383,18 +527,34 @@ export default function OwnerMonthlyReportPage() {
                   <tr key={row.bookingId}>
                     <td className="px-4 py-3">
                       <Link
-                        href={`/bookings/reconcile?bookingId=${row.bookingId}`}
+                        href={`/bookings?bookingId=${row.bookingId}`}
                         className="font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                       >
                         {row.customerName}
                       </Link>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {format(parseLocalDate(row.eventDate), 'MMM d, yyyy')} at {row.eventTime} · {row.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'} · {row.guests} guests
+                        {format(parseLocalDate(row.eventDate), 'MMM d, yyyy')} at {row.eventTime} ·{' '}
+                        {row.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'} · {row.guests}{' '}
+                        guests
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE[row.bookingStatus]}`}>
+                        {row.bookingStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                          DISTRIBUTION_STATUS_BADGE[row.distributionStatus]
+                        }`}
+                      >
+                        {DISTRIBUTION_STATUS_LABEL[row.distributionStatus]}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedChefPayouts)}
-                      {row.isEdited && (
+                      {row.chefPayoutEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoChefPayouts)}
                         </div>
@@ -402,7 +562,7 @@ export default function OwnerMonthlyReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedOwnerAPayout)}
-                      {row.isEdited && (
+                      {row.ownerAPayoutEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoOwnerAPayout)}
                         </div>
@@ -410,7 +570,7 @@ export default function OwnerMonthlyReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedOwnerBPayout)}
-                      {row.isEdited && (
+                      {row.ownerBPayoutEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoOwnerBPayout)}
                         </div>
@@ -418,31 +578,76 @@ export default function OwnerMonthlyReportPage() {
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedRetainedEarnings)}
-                      {row.isEdited && (
+                      {row.retainedEarningsEdited && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           auto {formatCurrency(row.autoRetainedEarnings)}
                         </div>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                          row.isEdited
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                            : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
-                        }`}
-                      >
-                        {row.isEdited ? 'Edited' : 'Auto'}
-                      </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => openEditModal(row)}
                         className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                       >
-                        Edit
+                        Manage
                       </button>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Retained Earnings Transaction Log
+          </h2>
+        </div>
+        {retainedLogRows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            No retained earnings transactions for this month.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+                <tr className="border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="px-4 py-3 font-semibold">Date</th>
+                  <th className="px-4 py-3 font-semibold">Source</th>
+                  <th className="px-4 py-3 font-semibold">Reference</th>
+                  <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                  <th className="px-4 py-3 font-semibold">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {retainedLogRows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {format(parseLocalDate(row.date), 'MMM d, yyyy')}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {row.source === 'event-distribution' ? 'Event distribution' : 'Manual transaction'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.bookingId ? (
+                        <Link
+                          href={`/bookings?bookingId=${row.bookingId}`}
+                          className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                        >
+                          {row.eventLabel}
+                        </Link>
+                      ) : (
+                        <span className="text-zinc-700 dark:text-zinc-300">{row.eventLabel}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-zinc-700 dark:text-zinc-300">
+                      {row.amount < 0 ? '-' : ''}
+                      {formatCurrency(Math.abs(row.amount))}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{row.notes || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -456,7 +661,7 @@ export default function OwnerMonthlyReportPage() {
           <div className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                Edit Profit Distribution Record
+                Manage Distribution Record
               </h3>
               <button
                 onClick={closeEditModal}
@@ -471,6 +676,29 @@ export default function OwnerMonthlyReportPage() {
             </p>
 
             <form onSubmit={handleSaveOverride} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Distribution Status
+                </label>
+                <select
+                  value={editForm.distributionStatus}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      distributionStatus: e.target.value as DistributionStatus,
+                    })
+                  }
+                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="posted">Posted</option>
+                  <option value="paid">Paid</option>
+                </select>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  This accounting status is independent from the event status.
+                </p>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -555,7 +783,7 @@ export default function OwnerMonthlyReportPage() {
                   onClick={handleResetToAutomatic}
                   className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                  Reset to Automatic
+                  Reset to Auto + Draft
                 </button>
                 <div className="flex gap-2">
                   <button

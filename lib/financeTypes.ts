@@ -35,13 +35,16 @@ export interface RetainedEarningsTransaction {
   createdAt: string;
 }
 
+export type DistributionStatus = 'draft' | 'posted' | 'paid';
+
 export interface ProfitDistributionOverride {
   id: string;
   bookingId: string;
+  chefPayouts: number;
   ownerAPayout: number;
   ownerBPayout: number;
   retainedEarnings: number;
-  chefPayouts: number;
+  distributionStatus?: DistributionStatus;
   notes?: string;
   updatedAt: string;
 }
