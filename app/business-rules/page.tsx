@@ -131,10 +131,10 @@ export default function MoneyRulesPage() {
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-bold text-text-primary">
           Business Rules
         </h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-text-secondary">
           Configure all pricing, labor, and profit distribution rules for your business.
         </p>
       </div>
@@ -146,30 +146,30 @@ export default function MoneyRulesPage() {
           disabled={!hasChanges}
           className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
             hasChanges
-              ? 'bg-emerald-600 hover:bg-emerald-700'
-              : 'cursor-not-allowed bg-zinc-400'
+              ? 'bg-accent hover:bg-accent-hover'
+              : 'cursor-not-allowed bg-border'
           }`}
         >
           Save Changes
         </button>
         <button
           onClick={handleReset}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="rounded-md border border-border bg-card-elevated px-4 py-2 text-sm font-medium text-text-secondary hover:bg-card"
         >
           Reset to Defaults
         </button>
         {showSaveSuccess && (
-          <span className="text-sm font-medium text-emerald-600">
+          <span className="text-sm font-medium text-success">
             ✓ Saved successfully
           </span>
         )}
         {hasChanges && (
-          <span className="text-sm text-amber-600">● Unsaved changes</span>
+          <span className="text-sm text-warning">● Unsaved changes</span>
         )}
       </div>
 
       {/* Tab Bar */}
-      <div className="mb-8 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="mb-8 border-b border-border">
         <nav className="-mb-px flex space-x-8">
           {tabs.map((tab) => (
             <button
@@ -177,8 +177,8 @@ export default function MoneyRulesPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
                 activeTab === tab.id
-                  ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400'
-                  : 'border-transparent text-zinc-500 hover:border-zinc-300 hover:text-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:text-zinc-300'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-text-muted hover:border-border hover:text-text-primary'
               }`}
             >
               {tab.name}
@@ -192,13 +192,13 @@ export default function MoneyRulesPage() {
         {activeTab === 'pricing' && (
         <>
         {/* PRICING SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Pricing
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Private Dinner Base Price ($/person)
               </label>
               <input
@@ -209,11 +209,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['pricing', 'privateDinnerBasePrice'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Buffet Base Price ($/person)
               </label>
               <input
@@ -224,11 +224,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['pricing', 'buffetBasePrice'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Premium Add-on Min ($/person)
               </label>
               <input
@@ -239,11 +239,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['pricing', 'premiumAddOnMin'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Premium Add-on Max ($/person)
               </label>
               <input
@@ -254,11 +254,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['pricing', 'premiumAddOnMax'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Default Gratuity (%)
               </label>
               <input
@@ -269,11 +269,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['pricing', 'defaultGratuityPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Child Discount (%)
               </label>
               <input
@@ -284,7 +284,7 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['pricing', 'childDiscountPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
           </div>
@@ -297,13 +297,13 @@ export default function MoneyRulesPage() {
         {activeTab === 'staffing' && (
         <>
         {/* STAFFING SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Staffing Rules
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Max Guests per Chef (Private)
               </label>
               <input
@@ -313,11 +313,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['staffing', 'maxGuestsPerChefPrivate'], parseInt(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Max Guests per Chef (Buffet)
               </label>
               <input
@@ -327,7 +327,7 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['staffing', 'maxGuestsPerChefBuffet'], parseInt(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div className="sm:col-span-2">
@@ -340,7 +340,7 @@ export default function MoneyRulesPage() {
                   }
                   className="mr-2"
                 />
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="text-sm font-medium text-text-secondary">
                   Assistant Required (Private Events)
                 </span>
               </label>
@@ -349,13 +349,13 @@ export default function MoneyRulesPage() {
         </section>
 
         {/* STAFFING PROFILES SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <h2 className="text-xl font-semibold text-text-primary">
                 Staffing Profiles
               </h2>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              <p className="mt-1 text-sm text-text-muted ">
                 Define named staffing compositions for event type and guest ranges. Profiles override the default staffing rules above.
               </p>
             </div>
@@ -372,12 +372,12 @@ export default function MoneyRulesPage() {
           {/* Profile Form (inline) */}
           {showProfileForm && editingProfile && (
             <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-5 dark:border-blue-800 dark:bg-blue-950/30">
-              <h3 className="mb-4 text-lg font-medium text-zinc-900 dark:text-zinc-50">
+              <h3 className="mb-4 text-lg font-medium text-text-primary">
                 {editingProfile.id.startsWith('profile-') && !(rules.staffing.profiles || []).find(p => p.id === editingProfile.id) ? 'New Profile' : 'Edit Profile'}
               </h3>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Profile Name
                   </label>
                   <input
@@ -385,17 +385,17 @@ export default function MoneyRulesPage() {
                     value={editingProfile.name}
                     onChange={(e) => updateEditingProfile({ name: e.target.value })}
                     placeholder="e.g., Small Private Dinner"
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Event Type
                   </label>
                   <select
                     value={editingProfile.eventType}
                     onChange={(e) => updateEditingProfile({ eventType: e.target.value as EventType | 'any' })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
                   >
                     <option value="private-dinner">Private Dinner</option>
                     <option value="buffet">Buffet</option>
@@ -404,7 +404,7 @@ export default function MoneyRulesPage() {
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Min Guests
                     </label>
                     <input
@@ -412,11 +412,11 @@ export default function MoneyRulesPage() {
                       min="1"
                       value={editingProfile.minGuests}
                       onChange={(e) => updateEditingProfile({ minGuests: parseInt(e.target.value) || 1 })}
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Max Guests
                     </label>
                     <input
@@ -426,7 +426,7 @@ export default function MoneyRulesPage() {
                       placeholder={editingProfile.maxGuests === 9999 ? 'No limit' : ''}
                       onChange={(e) => updateEditingProfile({ maxGuests: parseInt(e.target.value) || 1 })}
                       disabled={editingProfile.maxGuests === 9999}
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary disabled:opacity-50 dark:border-border bg-card-elevated text-text-primary"
                     />
                   </div>
                 </div>
@@ -438,23 +438,23 @@ export default function MoneyRulesPage() {
                       onChange={(e) => updateEditingProfile({ maxGuests: e.target.checked ? 9999 : 30 })}
                       className="mr-2"
                     />
-                    <span className="text-sm text-zinc-600 dark:text-zinc-400">No upper guest limit</span>
+                    <span className="text-sm text-text-secondary">No upper guest limit</span>
                   </label>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Staff Roles
                   </label>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {editingProfile.roles.map((role, idx) => (
                       <span
                         key={idx}
-                        className="inline-flex items-center gap-1 rounded-full bg-zinc-200 px-3 py-1 text-sm font-medium text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200"
+                        className="inline-flex items-center gap-1 rounded-full bg-card-elevated px-3 py-1 text-sm font-medium text-text-primary"
                       >
                         {ROLE_DISPLAY_LABELS[role]}
                         <button
                           onClick={() => removeRoleFromProfile(idx)}
-                          className="ml-1 text-zinc-500 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
+                          className="ml-1 text-text-muted hover:text-red-600  dark:hover:text-red-400"
                         >
                           &times;
                         </button>
@@ -466,7 +466,7 @@ export default function MoneyRulesPage() {
                     onChange={(e) => {
                       if (e.target.value) addRoleToProfile(e.target.value as StaffingRoleEntry);
                     }}
-                    className="mt-2 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-2 rounded-md border border-border px-3 py-2 text-sm text-text-primary dark:border-border bg-card-elevated text-text-primary"
                   >
                     <option value="">+ Add role...</option>
                     {AVAILABLE_ROLES.map((r) => (
@@ -482,13 +482,13 @@ export default function MoneyRulesPage() {
                 <button
                   onClick={saveProfile}
                   disabled={!editingProfile.name.trim() || editingProfile.roles.length === 0}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {(rules.staffing.profiles || []).find(p => p.id === editingProfile.id) ? 'Update Profile' : 'Create Profile'}
                 </button>
                 <button
                   onClick={() => { setShowProfileForm(false); setEditingProfile(null); }}
-                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-card"
                 >
                   Cancel
                 </button>
@@ -498,8 +498,8 @@ export default function MoneyRulesPage() {
 
           {/* Profile List */}
           {(rules.staffing.profiles || []).length === 0 && !showProfileForm ? (
-            <div className="rounded-lg border-2 border-dashed border-zinc-300 p-8 text-center dark:border-zinc-700">
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            <div className="rounded-lg border-2 border-dashed border-border p-8 text-center dark:border-border">
+              <p className="text-sm text-text-muted ">
                 No staffing profiles defined — using default staffing rules based on guest count.
               </p>
             </div>
@@ -508,11 +508,11 @@ export default function MoneyRulesPage() {
               {(rules.staffing.profiles || []).map((profile) => (
                 <div
                   key={profile.id}
-                  className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50"
+                  className="flex items-center justify-between rounded-lg border border-border bg-card-elevated p-4"
                 >
                   <div>
-                    <h4 className="font-medium text-zinc-900 dark:text-zinc-100">{profile.name}</h4>
-                    <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+                    <h4 className="font-medium text-text-primary text-text-primary">{profile.name}</h4>
+                    <p className="mt-0.5 text-sm text-text-muted ">
                       {profile.eventType === 'private-dinner' ? 'Private Dinner' : profile.eventType === 'buffet' ? 'Buffet' : 'Any Event'}
                       {' · '}
                       {profile.minGuests}–{profile.maxGuests === 9999 ? '\u221E' : profile.maxGuests} guests
@@ -531,7 +531,7 @@ export default function MoneyRulesPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => openProfileForm(profile)}
-                      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-card"
                     >
                       Edit
                     </button>
@@ -555,13 +555,13 @@ export default function MoneyRulesPage() {
         {activeTab === 'labor' && (
         <>
         {/* PRIVATE LABOR SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Private Event Labor
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Lead Chef Base (%)
               </label>
               <input
@@ -572,11 +572,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['privateLabor', 'leadChefBasePercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Lead Chef Cap ($)
               </label>
               <input
@@ -586,11 +586,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['privateLabor', 'leadChefCap'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Overflow Chef Base (%)
               </label>
               <input
@@ -601,11 +601,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['privateLabor', 'overflowChefBasePercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Overflow Chef Cap ($)
               </label>
               <input
@@ -615,11 +615,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['privateLabor', 'overflowChefCap'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Full Chef Base (%)
               </label>
               <input
@@ -630,11 +630,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['privateLabor', 'fullChefBasePercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Full Chef Cap ($)
               </label>
               <input
@@ -644,11 +644,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['privateLabor', 'fullChefCap'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Assistant Base (%)
               </label>
               <input
@@ -659,11 +659,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['privateLabor', 'assistantBasePercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Assistant Cap ($ or leave 0 for no cap)
               </label>
               <input
@@ -674,22 +674,22 @@ export default function MoneyRulesPage() {
                   const val = parseFloat(e.target.value);
                   updateRules(['privateLabor', 'assistantCap'], val === 0 ? null : val);
                 }}
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
           </div>
 
           {/* Gratuity Split */}
-          <div className="mt-6 border-t border-zinc-200 pt-6 dark:border-zinc-700">
-            <h3 className="mb-4 text-lg font-medium text-zinc-900 dark:text-zinc-50">
+          <div className="mt-6 border-t border-border pt-6 dark:border-border">
+            <h3 className="mb-4 text-lg font-medium text-text-primary">
               Gratuity Split (Private Events)
             </h3>
-            <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="mb-4 text-sm text-text-muted ">
               How gratuity is divided between chefs and assistant. Must total 100%.
             </p>
             <div className="grid gap-6 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Chef(s) Gratuity Split (%)
                 </label>
                 <input
@@ -700,14 +700,14 @@ export default function MoneyRulesPage() {
                   onChange={(e) =>
                     updateRules(['privateLabor', 'chefGratuitySplitPercent'], parseFloat(e.target.value))
                   }
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
                 />
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mt-1 text-xs text-text-muted ">
                   Split equally among all chefs on the event
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Assistant Gratuity Split (%)
                 </label>
                 <input
@@ -718,7 +718,7 @@ export default function MoneyRulesPage() {
                   onChange={(e) =>
                     updateRules(['privateLabor', 'assistantGratuitySplitPercent'], parseFloat(e.target.value))
                   }
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
                 />
               </div>
             </div>
@@ -734,13 +734,13 @@ export default function MoneyRulesPage() {
         </section>
 
         {/* BUFFET LABOR SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Buffet Event Labor
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Chef Base (%)
               </label>
               <input
@@ -751,11 +751,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['buffetLabor', 'chefBasePercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Chef Cap ($)
               </label>
               <input
@@ -765,7 +765,7 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['buffetLabor', 'chefCap'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
           </div>
@@ -778,13 +778,13 @@ export default function MoneyRulesPage() {
         {activeTab === 'costs' && (
         <>
         {/* COST STRUCTURE SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Cost Structure
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Food Cost - Private (%)
               </label>
               <input
@@ -795,11 +795,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['costs', 'foodCostPercentPrivate'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Food Cost - Buffet (%)
               </label>
               <input
@@ -810,11 +810,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['costs', 'foodCostPercentBuffet'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Supplies Cost (%)
               </label>
               <input
@@ -825,11 +825,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['costs', 'suppliesCostPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Transportation Stipend ($)
               </label>
               <input
@@ -839,20 +839,20 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['costs', 'transportationStipend'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
           </div>
         </section>
 
         {/* DISTANCE FEES SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Distance Fees
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Free Distance (miles)
               </label>
               <input
@@ -862,11 +862,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['distance', 'freeDistanceMiles'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Base Distance Fee ($)
               </label>
               <input
@@ -876,11 +876,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['distance', 'baseDistanceFee'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Additional Fee per Increment ($)
               </label>
               <input
@@ -890,11 +890,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['distance', 'additionalFeePerIncrement'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Increment Miles
               </label>
               <input
@@ -904,7 +904,7 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['distance', 'incrementMiles'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
           </div>
@@ -917,13 +917,13 @@ export default function MoneyRulesPage() {
         {activeTab === 'profit' && (
         <>
         {/* PROFIT DISTRIBUTION SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Profit Distribution
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Business Retained (%)
               </label>
               <input
@@ -934,11 +934,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['profitDistribution', 'businessRetainedPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Owner Distribution (%)
               </label>
               <input
@@ -949,11 +949,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['profitDistribution', 'ownerDistributionPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Owner A Equity (%)
               </label>
               <input
@@ -964,11 +964,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['profitDistribution', 'ownerAEquityPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Owner B Equity (%)
               </label>
               <input
@@ -979,11 +979,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['profitDistribution', 'ownerBEquityPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Distribution Frequency
               </label>
               <select
@@ -991,7 +991,7 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['profitDistribution', 'distributionFrequency'], e.target.value)
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               >
                 <option value="monthly">Monthly</option>
                 <option value="quarterly">Quarterly</option>
@@ -1002,13 +1002,13 @@ export default function MoneyRulesPage() {
         </section>
 
         {/* SAFETY LIMITS SECTION */}
-        <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Safety Limits (Warnings Only)
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Max Total Labor (%)
               </label>
               <input
@@ -1019,11 +1019,11 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['safetyLimits', 'maxTotalLaborPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label className="block text-sm font-medium text-text-secondary">
                 Max Food Cost (%)
               </label>
               <input
@@ -1034,7 +1034,7 @@ export default function MoneyRulesPage() {
                 onChange={(e) =>
                   updateRules(['safetyLimits', 'maxFoodCostPercent'], parseFloat(e.target.value))
                 }
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
             <div className="sm:col-span-2">
@@ -1047,7 +1047,7 @@ export default function MoneyRulesPage() {
                   }
                   className="mr-2"
                 />
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="text-sm font-medium text-text-secondary">
                   Show Warnings When Exceeded
                 </span>
               </label>
@@ -1062,7 +1062,7 @@ export default function MoneyRulesPage() {
       <div className="mt-8 flex justify-end gap-4">
         <button
           onClick={handleReset}
-          className="rounded-md border border-zinc-300 px-6 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="rounded-md border border-border px-6 py-3 text-sm font-medium text-text-secondary hover:bg-card"
         >
           Reset to Defaults
         </button>
@@ -1071,8 +1071,8 @@ export default function MoneyRulesPage() {
           disabled={!hasChanges}
           className={`rounded-md px-6 py-3 text-sm font-medium text-white ${
             hasChanges
-              ? 'bg-emerald-600 hover:bg-emerald-700'
-              : 'cursor-not-allowed bg-zinc-400'
+              ? 'bg-accent hover:bg-accent-hover'
+              : 'cursor-not-allowed bg-border'
           }`}
         >
           Save All Changes

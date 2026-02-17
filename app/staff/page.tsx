@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { CalendarDaysIcon, ChevronDownIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import type {
   StaffMember,
   StaffFormData,
@@ -25,12 +26,12 @@ const roleColors: Record<StaffRole, string> = {
   'full-chef': 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
   'buffet-chef': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300',
   'assistant': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300',
-  'contractor': 'bg-zinc-100 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-300',
+  'contractor': 'bg-card-elevated text-text-primary',
 };
 
 const statusColors: Record<StaffStatus, string> = {
   'active': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  'inactive': 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400',
+  'inactive': 'bg-card-elevated text-text-secondary',
   'on-leave': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
 };
 
@@ -82,6 +83,21 @@ export default function StaffPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | StaffStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionsOpenForStaffId, setActionsOpenForStaffId] = useState<string | null>(null);
+  const actionsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const closeActionsDropdown = useCallback(() => setActionsOpenForStaffId(null), []);
+
+  useEffect(() => {
+    if (actionsOpenForStaffId === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(e.target as Node)) {
+        closeActionsDropdown();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionsOpenForStaffId, closeActionsDropdown]);
 
   const [formData, setFormData] = useState<StaffFormData>({
     name: '',
@@ -338,11 +354,11 @@ export default function StaffPage() {
       {/* Setup Modal */}
       {showSetup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="mb-4 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6">
+            <h2 className="mb-4 text-2xl font-bold text-text-primary">
               Welcome to Staff Management
             </h2>
-            <p className="mb-6 text-zinc-600 dark:text-zinc-400">
+            <p className="mb-6 text-text-secondary">
               Let us get started by creating your owner profiles. You can edit their details after creation.
             </p>
             <div className="flex gap-2">
@@ -354,7 +370,7 @@ export default function StaffPage() {
               </button>
               <button
                 onClick={() => setShowSetup(false)}
-                className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
               >
                 Skip
               </button>
@@ -366,10 +382,10 @@ export default function StaffPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-3xl font-bold text-text-primary">
             Staff Management
           </h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-text-secondary">
             Manage your team members and their availability
           </p>
         </div>
@@ -450,8 +466,8 @@ export default function StaffPage() {
             onClick={() => setFilterStatus('all')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             All
@@ -460,8 +476,8 @@ export default function StaffPage() {
             onClick={() => setFilterStatus('active')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'active'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             Active
@@ -470,8 +486,8 @@ export default function StaffPage() {
             onClick={() => setFilterStatus('on-leave')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'on-leave'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             On Leave
@@ -480,8 +496,8 @@ export default function StaffPage() {
             onClick={() => setFilterStatus('inactive')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'inactive'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             Inactive
@@ -493,42 +509,42 @@ export default function StaffPage() {
           placeholder="Search by name, email, or phone..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          className="flex-1 rounded-md border border-border bg-card-elevated px-4 py-2 text-sm text-text-primary"
         />
       </div>
 
       {/* Staff Table */}
-      <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-lg border border-border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+            <thead className="border-b border-border bg-card-elevated">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                   Name
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                   Role
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                   Contact
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                   Status
                 </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  Weekly Availability
+                <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
+                  Availability
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-right text-sm font-semibold text-text-primary">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border">
               {filteredStaff.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
-                    className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400"
+                    className="px-4 py-12 text-center text-text-muted"
                   >
                     {searchQuery || filterStatus !== 'all'
                       ? 'No staff members match your filters'
@@ -536,10 +552,12 @@ export default function StaffPage() {
                   </td>
                 </tr>
               ) : (
-                filteredStaff.map((member) => (
+                filteredStaff.map((member, rowIndex) => {
+                  const isLastRow = rowIndex === filteredStaff.length - 1;
+                  return (
                   <tr
                     key={member.id}
-                    className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                    className="hover:bg-card-elevated"
                   >
                     <td className="px-4 py-4 text-sm">
                       <div className="flex items-center gap-3">
@@ -558,16 +576,16 @@ export default function StaffPage() {
                           </div>
                         )}
                         <div>
-                          <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                          <div className="font-medium text-text-primary">
                             {member.name}
                           </div>
                           {member.isOwner && (
-                            <div className="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
+                            <div className="mt-1 text-xs text-accent dark:text-indigo-400">
                               {member.ownerRole === 'owner-a' ? 'Owner A' : 'Owner B'}
                             </div>
                           )}
                           {member.profileSummary && (
-                            <div className="mt-1 max-w-xs truncate text-xs text-zinc-500 dark:text-zinc-400">
+                            <div className="mt-1 max-w-xs truncate text-xs text-text-muted">
                               {member.profileSummary}
                             </div>
                           )}
@@ -583,9 +601,9 @@ export default function StaffPage() {
                         {ROLE_LABELS[member.primaryRole]}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-4 text-sm text-text-secondary">
                       <div>{member.phone}</div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="text-xs text-text-muted">
                         {member.email}
                       </div>
                     </td>
@@ -599,73 +617,96 @@ export default function StaffPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-sm">
-                      <div className="flex gap-1">
-                        {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as DayOfWeek[]).map(
-                          (day) => (
-                            <div
-                              key={day}
-                              className={`flex h-6 w-6 items-center justify-center rounded text-xs ${
-                                member.weeklyAvailability[day]
-                                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                  : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600'
-                              }`}
-                              title={`${DAY_LABELS[day]}: ${
-                                member.weeklyAvailability[day] ? 'Available' : 'Unavailable'
-                              }`}
+                      <Link
+                        href={`/staff/availability?staffId=${encodeURIComponent(member.id)}`}
+                        className="inline-flex items-center gap-1.5 font-medium text-accent hover:text-accent-hover"
+                      >
+                        <CalendarDaysIcon className="h-4 w-4" />
+                        Calendar
+                      </Link>
+                    </td>
+                    <td className="px-4 py-4 text-right text-sm">
+                      <div
+                        ref={actionsOpenForStaffId === member.id ? actionsDropdownRef : undefined}
+                        className="relative inline-block"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActionsOpenForStaffId((id) => (id === member.id ? null : member.id))
+                          }
+                          className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1.5 text-sm font-medium text-text-primary hover:bg-card-elevated"
+                          aria-expanded={actionsOpenForStaffId === member.id}
+                          aria-haspopup="true"
+                        >
+                          Actions
+                          <ChevronDownIcon
+                            className={`h-4 w-4 transition-transform ${
+                              actionsOpenForStaffId === member.id ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </button>
+                        {actionsOpenForStaffId === member.id && (
+                          <div
+                            className={`absolute right-0 z-20 min-w-[8rem] rounded-md border border-border bg-card py-1 shadow-lg ${
+                              isLastRow ? 'bottom-full mb-1' : 'mt-1'
+                            }`}
+                            role="menu"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                closeActionsDropdown();
+                                setSelectedStaff(member);
+                                setIsEditing(true);
+                                setFormData({
+                                  name: member.name,
+                                  email: member.email,
+                                  phone: member.phone,
+                                  profilePhoto: member.profilePhoto || '',
+                                  profileSummary: member.profileSummary || '',
+                                  primaryRole: member.primaryRole,
+                                  secondaryRoles: member.secondaryRoles,
+                                  status: member.status,
+                                  isOwner: member.isOwner,
+                                  ownerRole: member.ownerRole,
+                                  weeklyAvailability: { ...member.weeklyAvailability },
+                                  weeklyAvailabilityHours: withDefaultAvailabilityHours(
+                                    member.weeklyAvailabilityHours
+                                  ),
+                                  hourlyRate: member.hourlyRate ? member.hourlyRate.toString() : '',
+                                  notes: member.notes || '',
+                                  hireDate: member.hireDate,
+                                });
+                                setShowModal(true);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                              role="menuitem"
                             >
-                              {DAY_LABELS[day][0]}
-                            </div>
-                          )
+                              <PencilSquareIcon className="h-4 w-4 shrink-0" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                closeActionsDropdown();
+                                if (confirm(`Delete ${member.name}? This action cannot be undone.`)) {
+                                  saveStaff(staff.filter((s) => s.id !== member.id));
+                                }
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-card-elevated"
+                              role="menuitem"
+                            >
+                              <TrashIcon className="h-4 w-4 shrink-0" />
+                              Delete
+                            </button>
+                          </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-right text-sm">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedStaff(member);
-                            setIsEditing(true);
-                            setFormData({
-                              name: member.name,
-                              email: member.email,
-                              phone: member.phone,
-                              profilePhoto: member.profilePhoto || '',
-                              profileSummary: member.profileSummary || '',
-                              primaryRole: member.primaryRole,
-                              secondaryRoles: member.secondaryRoles,
-                              status: member.status,
-                              isOwner: member.isOwner,
-                              ownerRole: member.ownerRole,
-                              weeklyAvailability: { ...member.weeklyAvailability },
-                              weeklyAvailabilityHours: withDefaultAvailabilityHours(
-                                member.weeklyAvailabilityHours
-                              ),
-                              hourlyRate: member.hourlyRate ? member.hourlyRate.toString() : '',
-                              notes: member.notes || '',
-                              hireDate: member.hireDate,
-                            });
-                            setShowModal(true);
-                          }}
-                          className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (
-                              confirm(`Delete ${member.name}? This action cannot be undone.`)
-                            ) {
-                              saveStaff(staff.filter((s) => s.id !== member.id));
-                            }
-                          }}
-                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -675,9 +716,9 @@ export default function StaffPage() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-card p-6">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+              <h2 className="text-2xl font-bold text-text-primary">
                 {isEditing ? 'Edit Staff Member' : 'Add Staff Member'}
               </h2>
               <button
@@ -685,7 +726,7 @@ export default function StaffPage() {
                   setShowModal(false);
                   resetForm();
                 }}
-                className="text-zinc-500 hover:text-zinc-700"
+                className="text-text-muted hover:text-text-primary"
               >
                 ✕
               </button>
@@ -694,12 +735,12 @@ export default function StaffPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Personal Info */}
               <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                <h3 className="mb-4 font-semibold text-text-primary">
                   Personal Information
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Full Name *
                     </label>
                     <input
@@ -707,11 +748,11 @@ export default function StaffPage() {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Email *
                     </label>
                     <input
@@ -719,11 +760,11 @@ export default function StaffPage() {
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Phone *
                     </label>
                     <input
@@ -731,7 +772,7 @@ export default function StaffPage() {
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       required
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     />
                   </div>
                 </div>
@@ -739,12 +780,12 @@ export default function StaffPage() {
 
               {/* Profile */}
               <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                <h3 className="mb-4 font-semibold text-text-primary">
                   Profile
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Profile Photo
                     </label>
                     <div className="mt-2 flex items-center gap-4">
@@ -755,7 +796,7 @@ export default function StaffPage() {
                           width={64}
                           height={64}
                           unoptimized
-                          className="h-16 w-16 rounded-full object-cover ring-1 ring-zinc-300 dark:ring-zinc-700"
+                          className="h-16 w-16 rounded-full object-cover ring-1 ring-border"
                         />
                       ) : (
                         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-800">
@@ -763,7 +804,7 @@ export default function StaffPage() {
                         </div>
                       )}
                       <div className="flex flex-wrap items-center gap-2">
-                        <label className="cursor-pointer rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                        <label className="cursor-pointer rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-secondary hover:bg-card">
                           Upload Photo
                           <input
                             type="file"
@@ -781,14 +822,14 @@ export default function StaffPage() {
                             Remove
                           </button>
                         )}
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <p className="text-xs text-text-muted">
                           JPG, PNG, or WEBP up to 2 MB.
                         </p>
                       </div>
                     </div>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Profile Summary
                     </label>
                     <textarea
@@ -797,7 +838,7 @@ export default function StaffPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, profileSummary: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       placeholder="Short intro, specialties, certifications, or preferred station."
                     />
                   </div>
@@ -806,12 +847,12 @@ export default function StaffPage() {
 
               {/* Employment Details */}
               <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                <h3 className="mb-4 font-semibold text-text-primary">
                   Employment Details
                 </h3>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Primary Role *
                     </label>
                     <select
@@ -820,7 +861,7 @@ export default function StaffPage() {
                         setFormData({ ...formData, primaryRole: e.target.value as StaffRole })
                       }
                       required
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       {Object.entries(ROLE_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -830,7 +871,7 @@ export default function StaffPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Status *
                     </label>
                     <select
@@ -839,7 +880,7 @@ export default function StaffPage() {
                         setFormData({ ...formData, status: e.target.value as StaffStatus })
                       }
                       required
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       {Object.entries(STATUS_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -849,7 +890,7 @@ export default function StaffPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Hourly Rate ($/hr)
                     </label>
                     <input
@@ -860,11 +901,11 @@ export default function StaffPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, hourlyRate: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Hire Date *
                     </label>
                     <input
@@ -874,14 +915,14 @@ export default function StaffPage() {
                         setFormData({ ...formData, hireDate: e.target.value })
                       }
                       required
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     />
                   </div>
                 </div>
 
                 {/* Secondary Roles */}
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Secondary Roles (Optional)
                   </label>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -892,8 +933,8 @@ export default function StaffPage() {
                         onClick={() => toggleSecondaryRole(value as StaffRole)}
                         className={`rounded-full px-3 py-1 text-sm font-medium ${
                           formData.secondaryRoles.includes(value as StaffRole)
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                            ? 'bg-accent text-white'
+                            : 'bg-card-elevated text-text-secondary hover:bg-card'
                         }`}
                       >
                         {label}
@@ -905,7 +946,7 @@ export default function StaffPage() {
 
               {/* Owner Status */}
               <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                <h3 className="mb-4 font-semibold text-text-primary">
                   Owner Status
                 </h3>
                 <div className="space-y-3">
@@ -918,13 +959,13 @@ export default function StaffPage() {
                       }
                       className="mr-2 h-4 w-4"
                     />
-                    <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                    <span className="text-sm text-text-secondary">
                       This person is a business owner
                     </span>
                   </label>
                   {formData.isOwner && (
                     <div>
-                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      <label className="block text-sm font-medium text-text-secondary">
                         Owner Role *
                       </label>
                       <select
@@ -936,7 +977,7 @@ export default function StaffPage() {
                           })
                         }
                         required
-                        className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       >
                         <option value="">Select owner role...</option>
                         <option value="owner-a">Owner A</option>
@@ -947,16 +988,26 @@ export default function StaffPage() {
                 </div>
               </div>
 
-              {/* Weekly Availability */}
+              {/* Availability */}
               <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
-                  Weekly Availability
+                <h3 className="mb-4 font-semibold text-text-primary">
+                  Availability
                 </h3>
+                <p className="mb-3 text-sm text-text-muted">
+                  Set which weekdays this person can work. For date-specific blocks (e.g. days off), use their{' '}
+                  <Link
+                    href={isEditing ? `/staff/availability?staffId=${encodeURIComponent(selectedStaff?.id ?? '')}` : '/staff/availability'}
+                    className="text-accent hover:text-accent-hover"
+                  >
+                    calendar
+                  </Link>
+                  .
+                </p>
                 <div className="grid grid-cols-7 gap-2">
                   {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as DayOfWeek[]).map(
                     (day) => (
                       <div key={day} className="text-center">
-                        <div className="mb-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        <div className="mb-1 text-xs font-medium text-text-secondary">
                           {DAY_LABELS[day]}
                         </div>
                         <button
@@ -965,7 +1016,7 @@ export default function StaffPage() {
                           className={`h-10 w-full rounded-md text-sm font-medium ${
                             formData.weeklyAvailability[day]
                               ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                              : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                              : 'bg-card-elevated text-text-muted hover:bg-card'
                           }`}
                         >
                           {formData.weeklyAvailability[day] ? '✓' : '✕'}
@@ -978,14 +1029,14 @@ export default function StaffPage() {
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Notes
                 </label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   placeholder="Any additional information about this staff member..."
                 />
               </div>
@@ -1010,7 +1061,7 @@ export default function StaffPage() {
                       setShowModal(false);
                       resetForm();
                     }}
-                    className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
                   >
                     Cancel
                   </button>

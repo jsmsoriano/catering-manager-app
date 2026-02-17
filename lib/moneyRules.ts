@@ -402,17 +402,18 @@ function determineStaffing(
     };
   }
 
-  // Private dinner staffing
+  // Private dinner staffing: lead required; overflow only when guests exceed lead threshold; full chefs when further over
   const maxPerChef = rules.staffing.maxGuestsPerChefPrivate;
   const chefRoles: ChefRole[] = [];
 
   if (guestCount <= maxPerChef) {
     chefRoles.push('lead');
   } else if (guestCount <= maxPerChef * 2) {
+    chefRoles.push('lead');
     chefRoles.push('overflow');
   } else {
-    const additionalChefs = Math.ceil((guestCount - maxPerChef) / maxPerChef);
     chefRoles.push('lead');
+    const additionalChefs = Math.ceil((guestCount - maxPerChef) / maxPerChef);
     for (let i = 0; i < additionalChefs - 1; i++) {
       chefRoles.push('full');
     }

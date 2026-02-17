@@ -29,11 +29,11 @@ const STATUS_BADGE: Record<BookingStatus, string> = {
   pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
   confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
   completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-  cancelled: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
+  cancelled: 'bg-card-elevated text-text-primary',
 };
 
 const DISTRIBUTION_STATUS_BADGE: Record<DistributionStatus, string> = {
-  draft: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
+  draft: 'bg-card-elevated text-text-primary',
   posted: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
   paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
 };
@@ -370,10 +370,10 @@ export default function OwnerMonthlyReportPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8 print:hidden">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-bold text-text-primary">
           Owner Profit Distribution
         </h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-text-secondary">
           Automatic distributions use your preset percentages. Edit any event row when reconciliation
           needs a one-off adjustment.
         </p>
@@ -381,25 +381,25 @@ export default function OwnerMonthlyReportPage() {
 
       <div className="mb-6 flex flex-wrap items-end gap-4 print:hidden">
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             Report Month
           </label>
           <input
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           />
         </div>
         <button
           onClick={handlePrint}
-          className="rounded-md bg-zinc-600 px-4 py-2 text-white hover:bg-zinc-700"
+          className="rounded-md bg-card-elevated px-4 py-2 text-text-primary hover:bg-card"
         >
           Print
         </button>
         <Link
           href="/bookings"
-          className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+          className="rounded-md bg-accent px-4 py-2 text-white hover:bg-indigo-700"
         >
           View Bookings
         </Link>
@@ -453,14 +453,14 @@ export default function OwnerMonthlyReportPage() {
         </div>
       </div>
 
-      <div className="mb-8 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Distribution Summary</h2>
+      <div className="mb-8 overflow-hidden rounded-lg border border-border bg-card">
+        <div className="border-b border-border px-4 py-3 ">
+          <h2 className="text-lg font-semibold text-text-primary">Distribution Summary</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 dark:bg-zinc-800/50">
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
+            <thead className="bg-card-elevated">
+              <tr className="border-b border-border ">
                 <th className="px-4 py-3 font-semibold">Period</th>
                 <th className="px-4 py-3 text-right font-semibold">Events Completed</th>
                   <th className="px-4 py-3 text-right font-semibold">Total Profit (Earned / Recorded)</th>
@@ -470,25 +470,25 @@ export default function OwnerMonthlyReportPage() {
                 <th className="px-4 py-3 text-right font-semibold">Retained (Earned / Recorded)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border">
               <tr>
-                <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                <td className="px-4 py-3 font-medium text-text-primary">
                   {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}
                 </td>
-                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">{summary.eventCount}</td>
-                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                <td className="px-4 py-3 text-right text-text-secondary">{summary.eventCount}</td>
+                <td className="px-4 py-3 text-right text-text-secondary">
                   {formatCurrency(summary.totalProfitEarned)} / {formatCurrency(summary.totalProfitRecorded)}
                 </td>
-                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                <td className="px-4 py-3 text-right text-text-secondary">
                   {formatCurrency(summary.chefEarned)} / {formatCurrency(summary.chefRecorded)}
                 </td>
-                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                <td className="px-4 py-3 text-right text-text-secondary">
                   {formatCurrency(summary.ownerAEarned)} / {formatCurrency(summary.ownerARecorded)}
                 </td>
-                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                <td className="px-4 py-3 text-right text-text-secondary">
                   {formatCurrency(summary.ownerBEarned)} / {formatCurrency(summary.ownerBRecorded)}
                 </td>
-                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                <td className="px-4 py-3 text-right text-text-secondary">
                   {formatCurrency(summary.retainedEarned)} / {formatCurrency(summary.retainedRecorded)}
                 </td>
               </tr>
@@ -497,25 +497,25 @@ export default function OwnerMonthlyReportPage() {
         </div>
       </div>
 
-      <div className="mb-8 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <div className="mb-8 overflow-hidden rounded-lg border border-border bg-card">
+        <div className="border-b border-border px-4 py-3 ">
+          <h2 className="text-lg font-semibold text-text-primary">
             Event Payouts Summary
           </h2>
-          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1 text-xs text-text-secondary">
             Event status tracks operations; distribution status tracks accounting progress (Draft,
             Posted, Paid).
           </p>
         </div>
         {monthRows.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+          <div className="px-4 py-10 text-center text-sm text-text-muted">
             No events found in {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-zinc-50 dark:bg-zinc-800/50">
-                <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <thead className="bg-card-elevated">
+                <tr className="border-b border-border ">
                   <th className="px-4 py-3 font-semibold">Event</th>
                   <th className="px-4 py-3 text-right font-semibold">Guests</th>
                   <th className="px-4 py-3 text-center font-semibold">Event Status</th>
@@ -528,23 +528,23 @@ export default function OwnerMonthlyReportPage() {
                   <th className="px-4 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {monthRows.map((row) => (
                   <tr key={row.bookingId}>
                     <td className="px-4 py-3">
                       <Link
                         href={`/bookings?bookingId=${row.bookingId}`}
-                        className="font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                        className="font-medium text-accent hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                       >
                         {row.customerName}
                       </Link>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="text-xs text-text-muted">
                         {format(parseLocalDate(row.eventDate), 'MMM d, yyyy')} at {row.eventTime} ·{' '}
                         {row.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'} · {row.guests}{' '}
                         guests
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right text-text-secondary">
                       {row.guests}
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -561,42 +561,42 @@ export default function OwnerMonthlyReportPage() {
                         {DISTRIBUTION_STATUS_LABEL[row.distributionStatus]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right text-text-secondary">
                       {formatCurrency(row.appliedTotalProfit)}
                       {Math.abs(row.appliedTotalProfit - row.autoTotalProfit) > 0.009 && (
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="text-xs text-text-muted">
                           auto {formatCurrency(row.autoTotalProfit)}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right text-text-secondary">
                       {formatCurrency(row.appliedChefPayouts)}
                       {row.chefPayoutEdited && (
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="text-xs text-text-muted">
                           auto {formatCurrency(row.autoChefPayouts)}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right text-text-secondary">
                       {formatCurrency(row.appliedOwnerAPayout)}
                       {row.ownerAPayoutEdited && (
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="text-xs text-text-muted">
                           auto {formatCurrency(row.autoOwnerAPayout)}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right text-text-secondary">
                       {formatCurrency(row.appliedOwnerBPayout)}
                       {row.ownerBPayoutEdited && (
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="text-xs text-text-muted">
                           auto {formatCurrency(row.autoOwnerBPayout)}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right text-text-secondary">
                       {formatCurrency(row.appliedRetainedEarnings)}
                       {row.retainedEarningsEdited && (
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="text-xs text-text-muted">
                           auto {formatCurrency(row.autoRetainedEarnings)}
                         </div>
                       )}
@@ -604,7 +604,7 @@ export default function OwnerMonthlyReportPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => openEditModal(row)}
-                        className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                        className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
                       >
                         Manage
                       </button>
@@ -617,21 +617,21 @@ export default function OwnerMonthlyReportPage() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="border-b border-border px-4 py-3 ">
+          <h2 className="text-lg font-semibold text-text-primary">
             Retained Earnings Transaction Log
           </h2>
         </div>
         {retainedLogRows.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+          <div className="px-4 py-10 text-center text-sm text-text-muted">
             No retained earnings transactions for this month.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-zinc-50 dark:bg-zinc-800/50">
-                <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <thead className="bg-card-elevated">
+                <tr className="border-b border-border ">
                   <th className="px-4 py-3 font-semibold">Date</th>
                   <th className="px-4 py-3 font-semibold">Source</th>
                   <th className="px-4 py-3 font-semibold">Reference</th>
@@ -639,32 +639,32 @@ export default function OwnerMonthlyReportPage() {
                   <th className="px-4 py-3 font-semibold">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {retainedLogRows.map((row) => (
                   <tr key={row.id}>
-                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-text-secondary">
                       {format(parseLocalDate(row.date), 'MMM d, yyyy')}
                     </td>
-                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-text-secondary">
                       {row.source === 'event-distribution' ? 'Event distribution' : 'Manual transaction'}
                     </td>
                     <td className="px-4 py-3">
                       {row.bookingId ? (
                         <Link
                           href={`/bookings?bookingId=${row.bookingId}`}
-                          className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                          className="text-accent hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                         >
                           {row.eventLabel}
                         </Link>
                       ) : (
-                        <span className="text-zinc-700 dark:text-zinc-300">{row.eventLabel}</span>
+                        <span className="text-text-secondary">{row.eventLabel}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-3 text-right font-medium text-text-secondary">
                       {row.amount < 0 ? '-' : ''}
                       {formatCurrency(Math.abs(row.amount))}
                     </td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{row.notes || '—'}</td>
+                    <td className="px-4 py-3 text-text-secondary">{row.notes || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -675,26 +675,26 @@ export default function OwnerMonthlyReportPage() {
 
       {editingRow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-lg border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="w-full max-w-2xl rounded-lg border border-border bg-card p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <h3 className="text-xl font-semibold text-text-primary">
                 Manage Distribution Record
               </h3>
               <button
                 onClick={closeEditModal}
-                className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                className="text-text-muted hover:text-text-primary"
               >
                 ✕
               </button>
             </div>
-            <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mb-4 text-sm text-text-secondary">
               {editingRow.customerName} · {format(parseLocalDate(editingRow.eventDate), 'MMM d, yyyy')} at{' '}
               {editingRow.eventTime}
             </p>
 
             <form onSubmit={handleSaveOverride} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Distribution Status
                 </label>
                 <select
@@ -705,20 +705,20 @@ export default function OwnerMonthlyReportPage() {
                       distributionStatus: e.target.value as DistributionStatus,
                     })
                   }
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                  className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card-elevated"
                 >
                   <option value="draft">Draft</option>
                   <option value="posted">Posted</option>
                   <option value="paid">Paid</option>
                 </select>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mt-1 text-xs text-text-muted">
                   This accounting status is independent from the event status.
                 </p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Chef Payouts
                   </label>
                   <input
@@ -728,12 +728,12 @@ export default function OwnerMonthlyReportPage() {
                     required
                     value={editForm.chefPayouts}
                     onChange={(e) => setEditForm({ ...editForm, chefPayouts: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                    className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card-elevated"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">Auto: {formatCurrency(editingRow.autoChefPayouts)}</p>
+                  <p className="mt-1 text-xs text-text-muted">Auto: {formatCurrency(editingRow.autoChefPayouts)}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Owner A Payout
                   </label>
                   <input
@@ -743,12 +743,12 @@ export default function OwnerMonthlyReportPage() {
                     required
                     value={editForm.ownerAPayout}
                     onChange={(e) => setEditForm({ ...editForm, ownerAPayout: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                    className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card-elevated"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">Auto: {formatCurrency(editingRow.autoOwnerAPayout)}</p>
+                  <p className="mt-1 text-xs text-text-muted">Auto: {formatCurrency(editingRow.autoOwnerAPayout)}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Owner B Payout
                   </label>
                   <input
@@ -758,12 +758,12 @@ export default function OwnerMonthlyReportPage() {
                     required
                     value={editForm.ownerBPayout}
                     onChange={(e) => setEditForm({ ...editForm, ownerBPayout: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                    className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card-elevated"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">Auto: {formatCurrency(editingRow.autoOwnerBPayout)}</p>
+                  <p className="mt-1 text-xs text-text-muted">Auto: {formatCurrency(editingRow.autoOwnerBPayout)}</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Retained Earnings
                   </label>
                   <input
@@ -773,23 +773,23 @@ export default function OwnerMonthlyReportPage() {
                     required
                     value={editForm.retainedEarnings}
                     onChange={(e) => setEditForm({ ...editForm, retainedEarnings: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                    className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card-elevated"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">
+                  <p className="mt-1 text-xs text-text-muted">
                     Auto: {formatCurrency(editingRow.autoRetainedEarnings)}
                   </p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Notes
                 </label>
                 <textarea
                   rows={3}
                   value={editForm.notes}
                   onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+                  className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card-elevated"
                   placeholder="Optional reconciliation note"
                 />
               </div>
@@ -798,7 +798,7 @@ export default function OwnerMonthlyReportPage() {
                 <button
                   type="button"
                   onClick={handleResetToAutomatic}
-                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary bg-card-elevated hover:bg-card"
                 >
                   Reset to Auto + Draft
                 </button>
@@ -806,7 +806,7 @@ export default function OwnerMonthlyReportPage() {
                   <button
                     type="button"
                     onClick={closeEditModal}
-                    className="rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary bg-card-elevated hover:bg-card"
                   >
                     Cancel
                   </button>

@@ -303,14 +303,14 @@ export default function StaffProfilePage() {
   if (staff.length === 0) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">My Profile</h1>
-        <div className="mt-6 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-zinc-600 dark:text-zinc-400">
+        <h1 className="text-3xl font-bold text-text-primary">My Profile</h1>
+        <div className="mt-6 rounded-lg border border-border bg-card p-6  ">
+          <p className="text-text-secondary">
             No staff profiles exist yet. Ask an admin to create a staff member first.
           </p>
           <Link
             href="/staff"
-            className="mt-4 inline-block rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+            className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-white hover:bg-accent-hover"
           >
             Go to Staff Management
           </Link>
@@ -323,22 +323,22 @@ export default function StaffProfilePage() {
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">My Profile</h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+          <h1 className="text-3xl font-bold text-text-primary">My Profile</h1>
+          <p className="mt-2 text-text-secondary">
             Update your contact details, profile photo, and availability preferences.
           </p>
         </div>
         <Link
           href="/staff"
-          className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="rounded-md border border-border px-4 py-2 text-text-secondary hover:bg-card-elevated"
         >
           Back to Staff
         </Link>
       </div>
 
-      <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm dark:border-indigo-900 dark:bg-indigo-950/20">
-        <p className="font-semibold text-indigo-900 dark:text-indigo-200">How to use this page</p>
-        <p className="mt-1 text-indigo-800 dark:text-indigo-300">
+      <div className="mb-6 rounded-lg border border-border bg-accent-soft-bg p-4 text-sm ">
+        <p className="font-semibold text-text-primary">How to use this page</p>
+        <p className="mt-1 text-text-secondary">
           Keep your contact info current, set your normal weekly hours, and add date-specific
           blocks so schedulers avoid conflicts.
         </p>
@@ -346,13 +346,13 @@ export default function StaffProfilePage() {
 
       <div className="mb-6 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             Staff Profile
           </label>
           <select
             value={selectedStaffId}
             onChange={(event) => handleSelectStaff(event.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border px-3 py-2 text-text-primary  bg-card-elevated text-text-primary"
           >
             {staff.map((member) => (
               <option key={member.id} value={member.id}>
@@ -374,7 +374,7 @@ export default function StaffProfilePage() {
         )}
       </div>
 
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-lg border border-border bg-card p-6  ">
         <div className="mb-6 flex items-center gap-4">
           {formData.profilePhoto ? (
             <Image
@@ -383,15 +383,15 @@ export default function StaffProfilePage() {
               width={72}
               height={72}
               unoptimized
-              className="h-18 w-18 rounded-full object-cover ring-1 ring-zinc-300 dark:ring-zinc-700"
+              className="h-18 w-18 rounded-full object-cover ring-1 ring-border"
             />
           ) : (
-            <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-indigo-100 text-lg font-semibold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-800">
+            <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-accent-soft-bg text-lg font-semibold text-accent ring-1 ring-border">
               {getInitials(formData.name)}
             </div>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <label className="cursor-pointer rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+            <label className="cursor-pointer rounded-md border border-border px-3 py-2 text-sm text-text-secondary hover:bg-card-elevated">
               Upload Photo
               <input
                 type="file"
@@ -409,13 +409,13 @@ export default function StaffProfilePage() {
                 Remove
               </button>
             )}
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">JPG, PNG, WEBP up to 2 MB.</p>
+            <p className="text-xs text-text-muted">JPG, PNG, WEBP up to 2 MB.</p>
           </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="block text-sm font-medium text-text-secondary">
               Full Name
             </label>
             <input
@@ -424,11 +424,11 @@ export default function StaffProfilePage() {
               onChange={(event) =>
                 setFormData((prev) => ({ ...prev, name: event.target.value }))
               }
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary  bg-card-elevated text-text-primary"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="block text-sm font-medium text-text-secondary">
               Email
             </label>
             <input
@@ -437,11 +437,11 @@ export default function StaffProfilePage() {
               onChange={(event) =>
                 setFormData((prev) => ({ ...prev, email: event.target.value }))
               }
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary  bg-card-elevated text-text-primary"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="block text-sm font-medium text-text-secondary">
               Phone
             </label>
             <input
@@ -450,11 +450,11 @@ export default function StaffProfilePage() {
               onChange={(event) =>
                 setFormData((prev) => ({ ...prev, phone: event.target.value }))
               }
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary  bg-card-elevated text-text-primary"
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="block text-sm font-medium text-text-secondary">
               Profile Summary
             </label>
             <textarea
@@ -463,27 +463,27 @@ export default function StaffProfilePage() {
               onChange={(event) =>
                 setFormData((prev) => ({ ...prev, profileSummary: event.target.value }))
               }
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary  bg-card-elevated text-text-primary"
               placeholder="Share specialties, certifications, or preferred station."
             />
           </div>
         </div>
       </div>
 
-      <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <div className="mt-8 rounded-lg border border-border bg-card p-6  ">
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">
           Weekly Availability (Dates + Times)
         </h2>
         <div className="space-y-3">
           {DAY_ORDER.map((day) => (
             <div
               key={day}
-              className="grid grid-cols-1 items-center gap-3 rounded-md border border-zinc-200 p-3 sm:grid-cols-[120px_120px_1fr_1fr] dark:border-zinc-800"
+              className="grid grid-cols-1 items-center gap-3 rounded-md border border-border p-3 sm:grid-cols-[120px_120px_1fr_1fr] "
             >
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <span className="text-sm font-medium text-text-secondary">
                 {DAY_LABELS[day]}
               </span>
-              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
                 <input
                   type="checkbox"
                   checked={formData.weeklyAvailability[day]}
@@ -498,7 +498,7 @@ export default function StaffProfilePage() {
                   updateDayHours(day, 'startTime', event.target.value)
                 }
                 disabled={!formData.weeklyAvailability[day]}
-                className="rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-900"
+                className="rounded-md border border-border px-3 py-2 text-text-primary disabled:cursor-not-allowed disabled:bg-card-elevated bg-card-elevated text-text-primary disabled:opacity-50"
               />
               <input
                 type="time"
@@ -507,33 +507,33 @@ export default function StaffProfilePage() {
                   updateDayHours(day, 'endTime', event.target.value)
                 }
                 disabled={!formData.weeklyAvailability[day]}
-                className="rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-900"
+                className="rounded-md border border-border px-3 py-2 text-text-primary disabled:cursor-not-allowed disabled:bg-card-elevated bg-card-elevated text-text-primary disabled:opacity-50"
               />
             </div>
           ))}
         </div>
       </div>
 
-      <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <div className="mt-8 rounded-lg border border-border bg-card p-6  ">
+        <h2 className="mb-4 text-lg font-semibold text-text-primary">
           Date-Specific Unavailable Blocks
         </h2>
         <div className="flex flex-wrap items-end gap-2">
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <label className="block text-sm font-medium text-text-secondary">
               Unavailable Date
             </label>
             <input
               type="date"
               value={newUnavailableDate}
               onChange={(event) => setNewUnavailableDate(event.target.value)}
-              className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              className="mt-1 rounded-md border border-border px-3 py-2 text-text-primary  bg-card-elevated text-text-primary"
             />
           </div>
           <button
             type="button"
             onClick={addUnavailableDate}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+            className="rounded-md bg-accent px-4 py-2 text-white hover:bg-accent-hover"
           >
             Add Blocked Date
           </button>
@@ -544,7 +544,7 @@ export default function StaffProfilePage() {
             {formData.unavailableDates.map((date) => (
               <span
                 key={date}
-                className="inline-flex items-center gap-2 rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                className="inline-flex items-center gap-2 rounded-full bg-card-elevated px-3 py-1 text-sm text-text-secondary"
               >
                 {date}
                 <button
@@ -559,7 +559,7 @@ export default function StaffProfilePage() {
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-3 text-sm text-text-muted">
             No blocked dates added.
           </p>
         )}

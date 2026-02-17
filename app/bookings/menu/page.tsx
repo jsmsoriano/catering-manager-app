@@ -43,7 +43,7 @@ export default function BookingMenuPage() {
     <Suspense
       fallback={
         <div className="flex h-screen items-center justify-center">
-          <div className="text-lg text-zinc-600 dark:text-zinc-400">Loading menu...</div>
+          <div className="text-lg text-text-secondary">Loading menu...</div>
         </div>
       }
     >
@@ -309,7 +309,7 @@ function BookingMenuContent() {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
-          <div className="mb-4 text-lg text-zinc-600 dark:text-zinc-400">
+          <div className="mb-4 text-lg text-text-secondary">
             Loading...
           </div>
         </div>
@@ -323,20 +323,20 @@ function BookingMenuContent() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+            <h1 className="text-3xl font-bold text-text-primary">
               Guest Menu Selection
             </h1>
-            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+            <p className="mt-2 text-text-secondary">
               {booking.customerName} - {booking.eventDate} at {booking.eventTime}
             </p>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
+            <p className="mt-1 text-sm text-text-muted">
               {booking.adults} Adults, {booking.children} Children
             </p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => router.push('/bookings')}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
             >
               Cancel
             </button>
@@ -351,14 +351,14 @@ function BookingMenuContent() {
 
         {/* Summary Cards */}
         <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-6">
-          <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
-            <h3 className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
+          <div className="rounded-lg border border-border bg-accent-soft-bg p-4 ">
+            <h3 className="text-sm font-medium text-text-primary">
               Total Protein Selections
             </h3>
-            <p className="mt-2 text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+            <p className="mt-2 text-2xl font-bold text-accent">
               {summary.totalGuests * 2}
             </p>
-            <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">
+            <p className="mt-1 text-xs text-text-secondary">
               {summary.totalGuests} guests × 2 proteins
             </p>
           </div>
@@ -431,41 +431,41 @@ function BookingMenuContent() {
         )}
 
         {/* Guest Selection Table */}
-        <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-lg border border-border bg-card  ">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+              <thead className="border-b border-border bg-card-elevated  ">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     #
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Guest Name *
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Type
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Protein 1
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Protein 2
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Sides
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Special Requests
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Allergies
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {guestSelections.map((guest, index) => (
-                  <tr key={guest.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                    <td className="px-4 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <tr key={guest.id} className="hover:bg-card-elevated">
+                    <td className="px-4 py-4 text-sm font-medium text-text-primary">
                       {index + 1}
                     </td>
                     <td className="px-4 py-4">
@@ -476,7 +476,7 @@ function BookingMenuContent() {
                           updateGuestSelection(index, 'guestName', e.target.value)
                         }
                         placeholder="Enter name"
-                        className="w-full rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-full rounded-md border border-border px-2 py-1 text-sm bg-card-elevated text-text-primary"
                       />
                     </td>
                     <td className="px-4 py-4">
@@ -485,7 +485,7 @@ function BookingMenuContent() {
                         onChange={(e) =>
                           updateGuestSelection(index, 'isAdult', e.target.value === 'adult')
                         }
-                        className="w-24 rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-24 rounded-md border border-border px-2 py-1 text-sm bg-card-elevated text-text-primary"
                       >
                         <option value="adult">Adult</option>
                         <option value="child">Child</option>
@@ -497,7 +497,7 @@ function BookingMenuContent() {
                         onChange={(e) =>
                           updateGuestSelection(index, 'protein1', e.target.value)
                         }
-                        className="w-28 rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-28 rounded-md border border-border px-2 py-1 text-sm bg-card-elevated text-text-primary"
                       >
                         {proteinOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -512,7 +512,7 @@ function BookingMenuContent() {
                         onChange={(e) =>
                           updateGuestSelection(index, 'protein2', e.target.value)
                         }
-                        className="w-28 rounded-md border border-zinc-300 px-2 py-1 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-28 rounded-md border border-border px-2 py-1 text-sm bg-card-elevated text-text-primary"
                       >
                         {proteinOptions.map((opt) => (
                           <option key={opt.value} value={opt.value}>
@@ -530,9 +530,9 @@ function BookingMenuContent() {
                             onChange={(e) =>
                               updateGuestSelection(index, 'wantsFriedRice', e.target.checked)
                             }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
+                            className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-zinc-700 dark:text-zinc-300">Fried Rice</span>
+                          <span className="text-text-secondary">Fried Rice</span>
                         </label>
                         <label className="flex items-center gap-1">
                           <input
@@ -541,9 +541,9 @@ function BookingMenuContent() {
                             onChange={(e) =>
                               updateGuestSelection(index, 'wantsNoodles', e.target.checked)
                             }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
+                            className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-zinc-700 dark:text-zinc-300">Noodles</span>
+                          <span className="text-text-secondary">Noodles</span>
                         </label>
                         <label className="flex items-center gap-1">
                           <input
@@ -552,9 +552,9 @@ function BookingMenuContent() {
                             onChange={(e) =>
                               updateGuestSelection(index, 'wantsSalad', e.target.checked)
                             }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
+                            className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-zinc-700 dark:text-zinc-300">Salad</span>
+                          <span className="text-text-secondary">Salad</span>
                         </label>
                         <label className="flex items-center gap-1">
                           <input
@@ -563,9 +563,9 @@ function BookingMenuContent() {
                             onChange={(e) =>
                               updateGuestSelection(index, 'wantsVeggies', e.target.checked)
                             }
-                            className="h-3 w-3 rounded border-zinc-300 text-emerald-600"
+                            className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-zinc-700 dark:text-zinc-300">Veggies</span>
+                          <span className="text-text-secondary">Veggies</span>
                         </label>
                       </div>
                     </td>
@@ -577,7 +577,7 @@ function BookingMenuContent() {
                         }
                         placeholder="Special requests..."
                         rows={2}
-                        className="w-32 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-32 rounded-md border border-border bg-card-elevated px-2 py-1 text-xs text-text-primary"
                       />
                     </td>
                     <td className="px-4 py-4">
@@ -588,7 +588,7 @@ function BookingMenuContent() {
                         }
                         placeholder="Allergies..."
                         rows={2}
-                        className="w-32 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        className="w-32 rounded-md border border-border bg-card-elevated px-2 py-1 text-xs text-text-primary"
                       />
                     </td>
                   </tr>
@@ -602,7 +602,7 @@ function BookingMenuContent() {
         <div className="mt-8 flex justify-end gap-2">
           <button
             onClick={() => router.push('/bookings')}
-            className="rounded-md border border-zinc-300 px-6 py-3 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="rounded-md border border-border bg-card-elevated px-6 py-3 text-text-secondary hover:bg-card"
           >
             Cancel
           </button>

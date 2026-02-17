@@ -30,6 +30,16 @@ function parseLocalDate(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
+// Chart palette from design tokens
+const CHART_COLORS = {
+  accent: '#F97316',
+  accentHover: '#EA580C',
+  success: '#16A34A',
+  warning: '#F59E0B',
+  danger: '#DC2626',
+  info: '#3B82F6',
+} as const;
+
 export default function ReportsDashboardPage() {
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -381,13 +391,13 @@ export default function ReportsDashboardPage() {
         name: 'Private Dinners',
         value: Math.round(dashboardData.privateRevenue),
         count: dashboardData.privateCount,
-        color: '#3b82f6', // blue-500
+        color: CHART_COLORS.accent,
       },
       {
         name: 'Buffet Catering',
         value: Math.round(dashboardData.buffetRevenue),
         count: dashboardData.buffetCount,
-        color: '#10b981', // emerald-500
+        color: CHART_COLORS.success,
       },
     ].filter(item => item.value > 0);
   }, [dashboardData]);
@@ -396,12 +406,12 @@ export default function ReportsDashboardPage() {
   const expenseCategoryData = useMemo(() => {
     if (expenseData.totalExpenses === 0) return [];
 
-    const categoryColors = {
-      food: '#ef4444',
-      'gas-mileage': '#3b82f6',
-      supplies: '#eab308',
-      equipment: '#8b5cf6',
-      labor: '#f97316',
+    const categoryColors: Record<ExpenseCategory, string> = {
+      food: CHART_COLORS.danger,
+      'gas-mileage': CHART_COLORS.info,
+      supplies: CHART_COLORS.warning,
+      equipment: CHART_COLORS.info,
+      labor: CHART_COLORS.accent,
       other: '#71717a',
     };
 
@@ -429,22 +439,22 @@ export default function ReportsDashboardPage() {
       {
         category: 'Revenue',
         amount: Math.round(dashboardData.totalRevenue),
-        color: '#10b981', // emerald-500
+        color: CHART_COLORS.success,
       },
       {
         category: 'Food Costs',
         amount: Math.round(dashboardData.totalFoodCosts),
-        color: '#f59e0b', // amber-500
+        color: CHART_COLORS.warning,
       },
       {
         category: 'Labor Costs',
         amount: Math.round(dashboardData.totalLaborCosts),
-        color: '#8b5cf6', // purple-500
+        color: CHART_COLORS.info,
       },
       {
         category: 'Gross Profit',
         amount: Math.round(dashboardData.totalGrossProfit),
-        color: '#3b82f6', // blue-500
+        color: CHART_COLORS.accent,
       },
     ];
   }, [dashboardData]);
@@ -469,10 +479,10 @@ export default function ReportsDashboardPage() {
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-bold text-text-primary">
           Reports Dashboard
         </h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-text-secondary">
           Business performance overview and key metrics
         </p>
       </div>
@@ -480,14 +490,14 @@ export default function ReportsDashboardPage() {
       {/* Month Selector & Refresh */}
       <div className="mb-8 flex flex-wrap items-end gap-4">
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             Report Period
           </label>
           <input
             type="month"
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           />
         </div>
         <button
@@ -497,42 +507,42 @@ export default function ReportsDashboardPage() {
               setBookings(JSON.parse(saved));
             }
           }}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
         >
           🔄 Refresh Data
         </button>
-        <div className="text-sm text-zinc-600 dark:text-zinc-400">
+        <div className="text-sm text-text-secondary">
           {bookings.length} total bookings loaded
         </div>
       </div>
 
       {/* Consolidated Report Sections */}
-      <div className="mb-8 rounded-lg border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
+      <div className="mb-8 rounded-lg border border-border bg-accent-soft-bg p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-accent">
           Consolidated Report Sections
         </h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Link
             href="/reports"
-            className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-card-elevated"
           >
             Reports Dashboard
           </Link>
           <Link
             href="/reports/business-summary"
-            className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-card-elevated"
           >
             Business Summary
           </Link>
           <Link
             href="/reports/owner-monthly"
-            className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-card-elevated"
           >
             Owner Profit Distribution
           </Link>
           <Link
             href="/reports/comparative"
-            className="rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-800 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-card-elevated"
           >
             Staff Payouts
           </Link>
@@ -553,38 +563,38 @@ export default function ReportsDashboardPage() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/20">
-          <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Gross Profit
           </h3>
-          <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+          <p className="mt-2 text-3xl font-bold text-success">
             {formatCurrency(dashboardData.totalGrossProfit)}
           </p>
-          <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+          <p className="mt-1 text-xs text-text-secondary">
             {dashboardData.profitMargin.toFixed(1)}% margin
           </p>
         </div>
 
-        <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 dark:border-purple-900 dark:bg-purple-950/20">
-          <h3 className="text-sm font-medium text-purple-900 dark:text-purple-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Avg per Event
           </h3>
-          <p className="mt-2 text-3xl font-bold text-purple-600 dark:text-purple-400">
+          <p className="mt-2 text-3xl font-bold text-accent">
             {formatCurrency(dashboardData.avgRevenuePerEvent)}
           </p>
-          <p className="mt-1 text-xs text-purple-700 dark:text-purple-300">
+          <p className="mt-1 text-xs text-text-secondary">
             Revenue per booking
           </p>
         </div>
 
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-900 dark:bg-amber-950/20">
-          <h3 className="text-sm font-medium text-amber-900 dark:text-amber-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Upcoming Events
           </h3>
-          <p className="mt-2 text-3xl font-bold text-amber-600 dark:text-amber-400">
+          <p className="mt-2 text-3xl font-bold text-warning">
             {dashboardData.upcomingEvents.length}
           </p>
-          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+          <p className="mt-1 text-xs text-text-secondary">
             Confirmed bookings
           </p>
         </div>
@@ -604,80 +614,80 @@ export default function ReportsDashboardPage() {
           </p>
         </div>
 
-        <div className="rounded-lg border border-orange-200 bg-orange-50 p-6 dark:border-orange-900 dark:bg-orange-950/20">
-          <h3 className="text-sm font-medium text-orange-900 dark:text-orange-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Actual Food Costs
           </h3>
-          <p className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
+          <p className="mt-2 text-3xl font-bold text-accent">
             {formatCurrency(expenseData.byCategory.food)}
           </p>
-          <p className="mt-1 text-xs text-orange-700 dark:text-orange-300">
+          <p className="mt-1 text-xs text-text-secondary">
             Est: {formatCurrency(dashboardData.totalFoodCosts)}
           </p>
         </div>
 
-        <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-6 dark:border-cyan-900 dark:bg-cyan-950/20">
-          <h3 className="text-sm font-medium text-cyan-900 dark:text-cyan-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Event-Linked Expenses
           </h3>
-          <p className="mt-2 text-3xl font-bold text-cyan-600 dark:text-cyan-400">
+          <p className="mt-2 text-3xl font-bold text-info">
             {formatCurrency(expenseData.eventLinkedExpenses)}
           </p>
-          <p className="mt-1 text-xs text-cyan-700 dark:text-cyan-300">
+          <p className="mt-1 text-xs text-text-secondary">
             {formatCurrency(expenseData.generalExpenses)} general
           </p>
         </div>
 
-        <div className="rounded-lg border border-violet-200 bg-violet-50 p-6 dark:border-violet-900 dark:bg-violet-950/20">
-          <h3 className="text-sm font-medium text-violet-900 dark:text-violet-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Adjusted Profit
           </h3>
-          <p className="mt-2 text-3xl font-bold text-violet-600 dark:text-violet-400">
+          <p className="mt-2 text-3xl font-bold text-success">
             {formatCurrency(dashboardData.totalGrossProfit - expenseData.totalExpenses)}
           </p>
-          <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">
+          <p className="mt-1 text-xs text-text-secondary">
             After actual expenses
           </p>
         </div>
       </div>
 
       {/* Revenue Trend Chart */}
-      <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+      <div className="mb-8 rounded-lg border border-border bg-card p-6 dark:border-border ">
+        <h2 className="mb-6 text-xl font-semibold text-text-primary">
           Revenue & Profit Trends (6 Months)
         </h2>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={revenueTrendData}>
             <defs>
               <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                <stop offset="5%" stopColor={CHART_COLORS.accent} stopOpacity={0.8}/>
+                <stop offset="95%" stopColor={CHART_COLORS.accent} stopOpacity={0.1}/>
               </linearGradient>
               <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                <stop offset="5%" stopColor={CHART_COLORS.success} stopOpacity={0.8}/>
+                <stop offset="95%" stopColor={CHART_COLORS.success} stopOpacity={0.1}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis
               dataKey="month"
-              className="text-xs fill-zinc-600 dark:fill-zinc-400"
+              className="text-xs text-text-muted"
               tick={{ fill: 'currentColor' }}
             />
             <YAxis
-              className="text-xs fill-zinc-600 dark:fill-zinc-400"
+              className="text-xs text-text-muted"
               tick={{ fill: 'currentColor' }}
               tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'rgb(24 24 27)',
-                border: '1px solid rgb(63 63 70)',
+                backgroundColor: 'var(--card)',
+                border: '1px solid var(--border)',
                 borderRadius: '0.5rem',
-                color: 'rgb(244 244 245)',
+                color: 'var(--text-primary)',
               }}
               formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, '']}
-              labelStyle={{ color: 'rgb(161 161 170)' }}
+              labelStyle={{ color: 'var(--text-secondary)' }}
             />
             <Legend
               wrapperStyle={{ paddingTop: '20px' }}
@@ -686,7 +696,7 @@ export default function ReportsDashboardPage() {
             <Area
               type="monotone"
               dataKey="revenue"
-              stroke="#10b981"
+              stroke={CHART_COLORS.accent}
               fillOpacity={1}
               fill="url(#colorRevenue)"
               name="Revenue"
@@ -694,7 +704,7 @@ export default function ReportsDashboardPage() {
             <Area
               type="monotone"
               dataKey="profit"
-              stroke="#3b82f6"
+              stroke={CHART_COLORS.success}
               fillOpacity={1}
               fill="url(#colorProfit)"
               name="Profit"
@@ -704,48 +714,48 @@ export default function ReportsDashboardPage() {
       </div>
 
       {/* Expense Trend Chart */}
-      <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+      <div className="mb-8 rounded-lg border border-border bg-card p-6 dark:border-border ">
+        <h2 className="mb-6 text-xl font-semibold text-text-primary">
           Monthly Expense Trends (6 Months)
         </h2>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={expenseTrendData}>
             <defs>
               <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                <stop offset="5%" stopColor={CHART_COLORS.danger} stopOpacity={0.8}/>
+                <stop offset="95%" stopColor={CHART_COLORS.danger} stopOpacity={0.1}/>
               </linearGradient>
               <linearGradient id="colorFoodExpenses" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f97316" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#f97316" stopOpacity={0.1}/>
+                <stop offset="5%" stopColor={CHART_COLORS.accent} stopOpacity={0.8}/>
+                <stop offset="95%" stopColor={CHART_COLORS.accent} stopOpacity={0.1}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis
               dataKey="month"
-              className="text-xs fill-zinc-600 dark:fill-zinc-400"
+              className="text-xs text-text-muted"
               tick={{ fill: 'currentColor' }}
             />
             <YAxis
-              className="text-xs fill-zinc-600 dark:fill-zinc-400"
+              className="text-xs text-text-muted"
               tick={{ fill: 'currentColor' }}
               tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'rgb(24 24 27)',
-                border: '1px solid rgb(63 63 70)',
+                backgroundColor: 'var(--card)',
+                border: '1px solid var(--border)',
                 borderRadius: '0.5rem',
-                color: 'rgb(244 244 245)',
+                color: 'var(--text-primary)',
               }}
               formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, '']}
-              labelStyle={{ color: 'rgb(161 161 170)' }}
+              labelStyle={{ color: 'var(--text-secondary)' }}
             />
             <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
             <Area
               type="monotone"
               dataKey="expenses"
-              stroke="#ef4444"
+              stroke={CHART_COLORS.danger}
               fillOpacity={1}
               fill="url(#colorExpenses)"
               name="Total Expenses"
@@ -753,7 +763,7 @@ export default function ReportsDashboardPage() {
             <Area
               type="monotone"
               dataKey="foodExpenses"
-              stroke="#f97316"
+              stroke={CHART_COLORS.accent}
               fillOpacity={1}
               fill="url(#colorFoodExpenses)"
               name="Food Expenses"
@@ -765,8 +775,8 @@ export default function ReportsDashboardPage() {
       {/* Charts Row */}
       <div className="mb-8 grid gap-8 lg:grid-cols-2">
         {/* Event Type Breakdown Pie Chart */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Event Type Breakdown
           </h2>
           {eventTypeData.length > 0 ? (
@@ -779,7 +789,7 @@ export default function ReportsDashboardPage() {
                   labelLine={false}
                   label={({ name, percent }) => `${name}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
-                  fill="#8884d8"
+                  fill={CHART_COLORS.accent}
                   dataKey="value"
                 >
                   {eventTypeData.map((entry, index) => (
@@ -787,13 +797,13 @@ export default function ReportsDashboardPage() {
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgb(24 24 27)',
-                    border: '1px solid rgb(63 63 70)',
-                    borderRadius: '0.5rem',
-                    color: 'rgb(244 244 245)',
-                  }}
-                  formatter={(value: number | undefined, _name, props) => [
+contentStyle={{
+                backgroundColor: 'var(--card)',
+                border: '1px solid var(--border)',
+                borderRadius: '0.5rem',
+                color: 'var(--text-primary)',
+              }}
+              formatter={(value: number | undefined, _name, props) => [
                     `$${(value ?? 0).toLocaleString()} (${props.payload.count} events)`,
                     props.payload.name
                   ]}
@@ -801,42 +811,42 @@ export default function ReportsDashboardPage() {
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-[300px] items-center justify-center text-sm text-zinc-500">
+            <div className="flex h-[300px] items-center justify-center text-sm text-text-muted">
               No event data available
             </div>
           )}
         </div>
 
         {/* Cost Breakdown Bar Chart */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Financial Breakdown
           </h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={costBreakdownData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis
                 dataKey="category"
-                className="text-xs fill-zinc-600 dark:fill-zinc-400"
+                className="text-xs text-text-muted"
                 tick={{ fill: 'currentColor' }}
                 angle={-15}
                 textAnchor="end"
                 height={60}
               />
               <YAxis
-                className="text-xs fill-zinc-600 dark:fill-zinc-400"
+                className="text-xs text-text-muted"
                 tick={{ fill: 'currentColor' }}
                 tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'rgb(24 24 27)',
-                  border: '1px solid rgb(63 63 70)',
-                  borderRadius: '0.5rem',
-                  color: 'rgb(244 244 245)',
-                }}
-                formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, '']}
-                labelStyle={{ color: 'rgb(161 161 170)' }}
+backgroundColor: 'var(--card)',
+                border: '1px solid var(--border)',
+                borderRadius: '0.5rem',
+                color: 'var(--text-primary)',
+              }}
+              formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, '']}
+              labelStyle={{ color: 'var(--text-secondary)' }}
               />
               <Bar dataKey="amount" radius={[8, 8, 0, 0]}>
                 {costBreakdownData.map((entry, index) => (
@@ -851,8 +861,8 @@ export default function ReportsDashboardPage() {
       {/* Expense Charts Row */}
       <div className="mb-8 grid gap-8 lg:grid-cols-2">
         {/* Expense Category Breakdown */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Expense Category Breakdown
           </h2>
           {expenseCategoryData.length > 0 ? (
@@ -865,7 +875,7 @@ export default function ReportsDashboardPage() {
                   labelLine={false}
                   label={({ name, percent }) => `${name}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
-                  fill="#8884d8"
+                  fill={CHART_COLORS.accent}
                   dataKey="value"
                 >
                   {expenseCategoryData.map((entry, index) => (
@@ -874,53 +884,53 @@ export default function ReportsDashboardPage() {
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'rgb(24 24 27)',
-                    border: '1px solid rgb(63 63 70)',
+                    backgroundColor: 'var(--card)',
+                    border: '1px solid var(--border)',
                     borderRadius: '0.5rem',
-                    color: 'rgb(244 244 245)',
+                    color: 'var(--text-primary)',
                   }}
                   formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, '']}
                 />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-[300px] items-center justify-center text-sm text-zinc-500">
+            <div className="flex h-[300px] items-center justify-center text-sm text-text-muted">
               No expense data available
             </div>
           )}
         </div>
 
         {/* Estimated vs Actual */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Estimated vs Actual Costs
           </h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={estimatedVsActualData}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
               <XAxis
                 dataKey="category"
-                className="text-xs fill-zinc-600 dark:fill-zinc-400"
+                className="text-xs text-text-muted"
                 tick={{ fill: 'currentColor' }}
               />
               <YAxis
-                className="text-xs fill-zinc-600 dark:fill-zinc-400"
+                className="text-xs text-text-muted"
                 tick={{ fill: 'currentColor' }}
                 tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'rgb(24 24 27)',
-                  border: '1px solid rgb(63 63 70)',
-                  borderRadius: '0.5rem',
-                  color: 'rgb(244 244 245)',
-                }}
-                formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, '']}
-                labelStyle={{ color: 'rgb(161 161 170)' }}
+backgroundColor: 'var(--card)',
+                border: '1px solid var(--border)',
+                borderRadius: '0.5rem',
+                color: 'var(--text-primary)',
+              }}
+              formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, '']}
+              labelStyle={{ color: 'var(--text-secondary)' }}
               />
               <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="square" />
-              <Bar dataKey="estimated" fill="#3b82f6" name="Estimated" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="actual" fill="#ef4444" name="Actual" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="estimated" fill={CHART_COLORS.info} name="Estimated" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="actual" fill={CHART_COLORS.danger} name="Actual" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -928,23 +938,23 @@ export default function ReportsDashboardPage() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* Event Type Performance */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-4 text-xl font-semibold text-text-primary">
             Event Type Performance
           </h2>
           <div className="space-y-4">
             <div>
               <div className="mb-2 flex justify-between text-sm">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="font-medium text-text-secondary">
                   Private Dinners
                 </span>
-                <span className="text-zinc-900 dark:text-zinc-50">
+                <span className="text-text-primary">
                   {formatCurrency(dashboardData.privateRevenue)}
                 </span>
               </div>
-              <div className="h-3 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+              <div className="h-3 overflow-hidden rounded-full bg-border">
                 <div
-                  className="h-full bg-blue-500"
+                  className="h-full bg-accent"
                   style={{
                     width: `${
                       dashboardData.totalRevenue > 0
@@ -954,7 +964,7 @@ export default function ReportsDashboardPage() {
                   }}
                 />
               </div>
-              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              <p className="mt-1 text-xs text-text-secondary">
                 {dashboardData.privateCount} events (
                 {dashboardData.totalEvents > 0
                   ? ((dashboardData.privateCount / dashboardData.totalEvents) * 100).toFixed(0)
@@ -965,14 +975,14 @@ export default function ReportsDashboardPage() {
 
             <div>
               <div className="mb-2 flex justify-between text-sm">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="font-medium text-text-secondary">
                   Buffet Catering
                 </span>
-                <span className="text-zinc-900 dark:text-zinc-50">
+                <span className="text-text-primary">
                   {formatCurrency(dashboardData.buffetRevenue)}
                 </span>
               </div>
-              <div className="h-3 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+              <div className="h-3 overflow-hidden rounded-full bg-border">
                 <div
                   className="h-full bg-emerald-500"
                   style={{
@@ -984,7 +994,7 @@ export default function ReportsDashboardPage() {
                   }}
                 />
               </div>
-              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+              <p className="mt-1 text-xs text-text-secondary">
                 {dashboardData.buffetCount} events (
                 {dashboardData.totalEvents > 0
                   ? ((dashboardData.buffetCount / dashboardData.totalEvents) * 100).toFixed(0)
@@ -996,35 +1006,35 @@ export default function ReportsDashboardPage() {
         </div>
 
         {/* Booking Status */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-4 text-xl font-semibold text-text-primary">
             Booking Status
           </h2>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">Pending</span>
+                <div className="h-3 w-3 rounded-full bg-accent"></div>
+                <span className="text-sm text-text-secondary">Pending</span>
               </div>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+              <span className="font-semibold text-text-primary">
                 {dashboardData.statusCounts.pending}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-emerald-500"></div>
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">Confirmed</span>
+                <span className="text-sm text-text-secondary">Confirmed</span>
               </div>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+              <span className="font-semibold text-text-primary">
                 {dashboardData.statusCounts.confirmed}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-zinc-500"></div>
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">Completed</span>
+                <div className="h-3 w-3 rounded-full bg-text-muted"></div>
+                <span className="text-sm text-text-secondary">Completed</span>
               </div>
-              <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+              <span className="font-semibold text-text-primary">
                 {dashboardData.statusCounts.completed}
               </span>
             </div>
@@ -1032,44 +1042,44 @@ export default function ReportsDashboardPage() {
         </div>
 
         {/* Owner Compensation Summary */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <h2 className="text-xl font-semibold text-text-primary">
               Owner Compensation
             </h2>
             <Link
               href="/reports/owner-monthly"
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              className="text-sm text-accent hover:text-accent-hover"
             >
               View Details →
             </Link>
           </div>
           <div className="space-y-4">
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+            <div className="rounded-lg border border-border bg-card-elevated p-4">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="text-sm font-medium text-text-secondary">
                   Owner A (Head Chef)
                 </span>
-                <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                <span className="text-lg font-bold text-text-primary">
                   {formatCurrency(dashboardData.ownerATotal)}
                 </span>
               </div>
-              <div className="flex justify-between text-xs text-zinc-600 dark:text-zinc-400">
+              <div className="flex justify-between text-xs text-text-secondary">
                 <span>Labor: {formatCurrency(dashboardData.ownerALabor)}</span>
                 <span>Profit: {formatCurrency(dashboardData.ownerAProfit)}</span>
               </div>
             </div>
 
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
+            <div className="rounded-lg border border-border bg-card-elevated p-4">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <span className="text-sm font-medium text-text-secondary">
                   Owner B (Operations)
                 </span>
-                <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                <span className="text-lg font-bold text-text-primary">
                   {formatCurrency(dashboardData.ownerBTotal)}
                 </span>
               </div>
-              <div className="flex justify-between text-xs text-zinc-600 dark:text-zinc-400">
+              <div className="flex justify-between text-xs text-text-secondary">
                 <span>Labor: {formatCurrency(dashboardData.ownerBLabor)}</span>
                 <span>Profit: {formatCurrency(dashboardData.ownerBProfit)}</span>
               </div>
@@ -1078,14 +1088,14 @@ export default function ReportsDashboardPage() {
         </div>
 
         {/* Upcoming Events */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <h2 className="text-xl font-semibold text-text-primary">
               Upcoming Events
             </h2>
             <Link
               href="/bookings"
-              className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+              className="text-sm text-accent hover:text-accent-hover"
             >
               View Calendar →
             </Link>
@@ -1095,67 +1105,67 @@ export default function ReportsDashboardPage() {
               {dashboardData.upcomingEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center justify-between border-b border-zinc-200 pb-3 last:border-0 dark:border-zinc-700"
+                  className="flex items-center justify-between border-b border-border pb-3 last:border-0 "
                 >
                   <div>
-                    <p className="font-medium text-zinc-900 dark:text-zinc-50">
+                    <p className="font-medium text-text-primary">
                       {event.customer}
                     </p>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="text-xs text-text-secondary">
                       {format(parseLocalDate(event.date), 'MMM d, yyyy')} · {event.type} · {event.guests}{' '}
                       guests
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  <span className="text-sm font-semibold text-text-primary">
                     {formatCurrency(event.total)}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-center text-sm text-zinc-500">No upcoming confirmed events</p>
+            <p className="text-center text-sm text-text-muted">No upcoming confirmed events</p>
           )}
         </div>
       </div>
 
       {/* Quick Links */}
-      <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+      <div className="mt-8 rounded-lg border border-border bg-card-elevated p-5">
+        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-text-secondary">
           Consolidated Report Views
         </h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link
           href="/reports/owner-monthly"
-          className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          className="rounded-lg border border-border bg-card p-6 transition-colors hover:bg-card-elevated"
         >
-          <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+          <h3 className="font-semibold text-text-primary">
             Owner Profit Distribution
           </h3>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-sm text-text-secondary">
             Event-level owner payouts, retained earnings, and chef payouts
           </p>
         </Link>
 
         <Link
           href="/reports/business-summary"
-          className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          className="rounded-lg border border-border bg-card p-6 transition-colors hover:bg-card-elevated"
         >
-          <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+          <h3 className="font-semibold text-text-primary">
             Business Summary
           </h3>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-sm text-text-secondary">
             Overall performance and trends
           </p>
         </Link>
 
         <Link
           href="/reports/comparative"
-          className="rounded-lg border border-zinc-200 bg-white p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          className="rounded-lg border border-border bg-card p-6 transition-colors hover:bg-card-elevated"
         >
-          <h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
+          <h3 className="font-semibold text-text-primary">
             Staff Payouts
           </h3>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-sm text-text-secondary">
             Consolidated labor payout report across owners and staff
           </p>
         </Link>

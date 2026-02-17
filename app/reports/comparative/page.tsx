@@ -349,10 +349,10 @@ export default function StaffPayoutReportPage() {
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header - Hide on print */}
       <div className="mb-8 print:hidden">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-bold text-text-primary">
           Staff Payout Report
         </h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-text-secondary">
           Comprehensive breakdown of all staff payouts including owners
         </p>
       </div>
@@ -360,25 +360,25 @@ export default function StaffPayoutReportPage() {
       {/* Filters - Hide on print */}
       <div className="mb-8 flex flex-wrap items-end gap-4 print:hidden">
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             Start Date
           </label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             End Date
           </label>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           />
         </div>
         <button
@@ -387,18 +387,18 @@ export default function StaffPayoutReportPage() {
             setStartDate(format(startOfMonth(today), 'yyyy-MM-dd'));
             setEndDate(format(endOfMonth(today), 'yyyy-MM-dd'));
           }}
-          className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+          className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
         >
           This Month
         </button>
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             Staff
           </label>
           <select
             value={staffFilter}
             onChange={(e) => setStaffFilter(e.target.value as StaffFilter)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           >
             <option value="all">All Staff</option>
             <option value="owners">Owners Only</option>
@@ -406,13 +406,13 @@ export default function StaffPayoutReportPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             Role
           </label>
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value as RoleFilter)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           >
             <option value="all">All Roles</option>
             <option value="lead">Lead Chef</option>
@@ -424,16 +424,16 @@ export default function StaffPayoutReportPage() {
         </div>
         <button
           onClick={handlePrint}
-          className="rounded-md bg-zinc-600 px-4 py-2 text-white hover:bg-zinc-700"
+          className="rounded-md bg-card-elevated px-4 py-2 text-text-primary hover:bg-card"
         >
           Print Report
         </button>
       </div>
 
       {/* Report Content - Print friendly */}
-      <div className="space-y-8 rounded-lg border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900 print:border-0 print:shadow-none">
+      <div className="space-y-8 rounded-lg border border-border bg-card p-8 print:border-0 print:shadow-none">
         {/* Print Header */}
-        <div className="hidden border-b border-zinc-300 pb-6 print:block">
+        <div className="hidden border-b border-border pb-6 print:block">
           <div className="mb-4 flex justify-center">
             <Image
               src="/hibachisun.png"
@@ -444,10 +444,10 @@ export default function StaffPayoutReportPage() {
               priority
             />
           </div>
-          <h2 className="text-center text-xl font-semibold text-zinc-700">
+          <h2 className="text-center text-xl font-semibold text-text-primary">
             Staff Payout Report
           </h2>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600">
+          <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-text-secondary">
             <div>
               <strong>Report Period:</strong>{' '}
               {format(parseLocalDate(startDate), 'MMM d, yyyy')} -{' '}
@@ -508,7 +508,7 @@ export default function StaffPayoutReportPage() {
             <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
               Profit Share
             </p>
-            <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+            <p className="mt-2 text-3xl font-bold text-accent dark:text-indigo-400">
               {formatCurrency(filteredTotals.totalProfitShare)}
             </p>
             <p className="mt-1 text-xs text-indigo-700 dark:text-indigo-300">
@@ -533,46 +533,46 @@ export default function StaffPayoutReportPage() {
         {filteredRows.length > 0 ? (
           <>
             <div>
-              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <h3 className="mb-4 text-xl font-semibold text-text-primary">
                 Staff Payout Summary
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b-2 border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
+                  <thead className="border-b-2 border-border bg-card-elevated">
                     <tr>
-                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 font-semibold text-text-primary">
                         Name / Role
                       </th>
-                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 font-semibold text-text-primary">
                         Role
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Events
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Base Pay
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Gratuity
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Profit Share
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Total Pay
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Avg/Event
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                  <tbody className="divide-y divide-border">
                     {filteredRows.map((row) => (
                       <tr
                         key={row.key}
-                        className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                        className="hover:bg-card-elevated"
                       >
-                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-text-primary">
                           <div className="flex items-center gap-2">
                             {row.name}
                             {row.isOwner && (
@@ -582,56 +582,56 @@ export default function StaffPayoutReportPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-text-secondary">
                           {row.roleLabel}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-right text-text-secondary">
                           {row.eventsWorked}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right text-text-primary">
                           {formatCurrency(row.totalBasePay)}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right text-text-primary">
                           {formatCurrency(row.totalGratuity)}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right text-text-primary">
                           {row.isOwner ? formatCurrency(row.totalProfitShare) : (
-                            <span className="text-zinc-400 dark:text-zinc-600">&mdash;</span>
+                            <span className="text-text-muted">&mdash;</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right font-semibold text-text-primary">
                           {formatCurrency(row.totalPayout)}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-right text-text-secondary">
                           {formatCurrency(row.avgPerEvent)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="border-t-2 border-zinc-300 bg-zinc-100 font-semibold dark:border-zinc-700 dark:bg-zinc-800">
+                  <tfoot className="border-t-2 border-border bg-card-elevated font-semibold">
                     <tr>
                       <td
                         colSpan={2}
-                        className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50"
+                        className="px-4 py-3 text-right text-text-primary"
                       >
                         Totals:
                       </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                      <td className="px-4 py-3 text-right text-text-primary">
                         {filteredTotals.totalStaffEvents}
                       </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                      <td className="px-4 py-3 text-right text-text-primary">
                         {formatCurrency(filteredTotals.totalBasePay)}
                       </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                      <td className="px-4 py-3 text-right text-text-primary">
                         {formatCurrency(filteredTotals.totalGratuity)}
                       </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                      <td className="px-4 py-3 text-right text-text-primary">
                         {formatCurrency(filteredTotals.totalProfitShare)}
                       </td>
-                      <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                      <td className="px-4 py-3 text-right text-text-primary">
                         {formatCurrency(filteredTotals.totalPayout)}
                       </td>
-                      <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                      <td className="px-4 py-3 text-right text-text-secondary">
                         {filteredTotals.totalStaffEvents > 0
                           ? formatCurrency(
                               filteredTotals.totalPayout / filteredTotals.totalStaffEvents
@@ -646,64 +646,64 @@ export default function StaffPayoutReportPage() {
 
             {/* Event-by-Event Breakdown */}
             <div>
-              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <h3 className="mb-4 text-xl font-semibold text-text-primary">
                 Event-by-Event Breakdown
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="border-b-2 border-zinc-300 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
+                  <thead className="border-b-2 border-border bg-card-elevated">
                     <tr>
-                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 font-semibold text-text-primary">
                         Date
                       </th>
-                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 font-semibold text-text-primary">
                         Customer
                       </th>
-                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 font-semibold text-text-primary">
                         Type
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Guests
                       </th>
-                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 font-semibold text-text-primary">
                         Staff
                       </th>
-                      <th className="px-4 py-3 font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 font-semibold text-text-primary">
                         Role
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Base Pay
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Gratuity
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Profit Share
                       </th>
-                      <th className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                      <th className="px-4 py-3 text-right font-semibold text-text-primary">
                         Total
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                  <tbody className="divide-y divide-border">
                     {filteredDetails.map((row, idx) => (
                       <tr
                         key={idx}
-                        className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                        className="hover:bg-card-elevated"
                       >
-                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-text-primary">
                           {format(parseLocalDate(row.date), 'MMM d')}
                         </td>
-                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-text-primary">
                           {row.customer}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-text-secondary">
                           {row.eventType}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-right text-text-secondary">
                           {row.guests}
                         </td>
-                        <td className="px-4 py-3 text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-text-primary">
                           <div className="flex items-center gap-1">
                             {row.staffName}
                             {row.isOwner && (
@@ -713,21 +713,21 @@ export default function StaffPayoutReportPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-text-secondary">
                           {row.roleLabel}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right text-text-primary">
                           {formatCurrency(row.basePay)}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right text-text-primary">
                           {formatCurrency(row.gratuity)}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right text-text-primary">
                           {row.profitShare > 0 ? formatCurrency(row.profitShare) : (
-                            <span className="text-zinc-400 dark:text-zinc-600">&mdash;</span>
+                            <span className="text-text-muted">&mdash;</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-zinc-900 dark:text-zinc-50">
+                        <td className="px-4 py-3 text-right font-semibold text-text-primary">
                           {formatCurrency(row.total)}
                         </td>
                       </tr>
@@ -738,20 +738,20 @@ export default function StaffPayoutReportPage() {
             </div>
           </>
         ) : (
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-700 dark:bg-zinc-800">
-            <p className="text-zinc-600 dark:text-zinc-400">
+          <div className="rounded-lg border border-border bg-card-elevated p-12 text-center">
+            <p className="text-text-secondary">
               No payout data found for{' '}
               {format(parseLocalDate(startDate), 'MMM d, yyyy')} -{' '}
               {format(parseLocalDate(endDate), 'MMM d, yyyy')}
             </p>
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-text-muted">
               Create bookings in the Bookings page to see staff payout data here.
             </p>
           </div>
         )}
 
         {/* Footer */}
-        <div className="mt-8 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-700">
+        <div className="mt-8 border-t border-border pt-6 text-center text-xs text-text-muted ">
           <p>
             This report is generated based on current Business Rules settings.
             Historical events may have used different rates.

@@ -20,7 +20,7 @@ export default function ThemeToggle() {
   if (!mounted) {
     return (
       <button
-        className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+        className="rounded-lg p-2 text-text-muted transition-colors hover:bg-card"
         disabled
       >
         <div className="h-5 w-5" />
@@ -33,7 +33,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className="group relative rounded-lg p-2 text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-50"
+      className="group relative rounded-lg p-2 text-text-secondary transition-all hover:bg-card hover:text-text-primary focus-visible:outline focus-visible:ring-2 focus-visible:ring-accent"
       aria-label="Toggle theme"
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >

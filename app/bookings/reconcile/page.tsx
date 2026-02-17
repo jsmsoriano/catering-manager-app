@@ -28,7 +28,7 @@ export default function ReconcilePage() {
     <Suspense
       fallback={
         <div className="flex h-screen items-center justify-center">
-          <div className="text-lg text-zinc-600 dark:text-zinc-400">Loading reconciliation...</div>
+          <div className="text-lg text-text-secondary">Loading reconciliation...</div>
         </div>
       }
     >
@@ -419,7 +419,7 @@ function ReconcileContent() {
   // Variance helper
   const variance = (estimated: number, actual: number) => actual - estimated;
   const varianceColor = (v: number, isRevenue: boolean) => {
-    if (Math.abs(v) < 0.01) return 'text-zinc-500';
+    if (Math.abs(v) < 0.01) return 'text-text-muted';
     if (isRevenue) return v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
     return v <= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
   };
@@ -435,7 +435,7 @@ function ReconcileContent() {
   if (!booking || !financials || !reconciliation) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="text-lg text-zinc-600 dark:text-zinc-400">Loading...</div>
+        <div className="text-lg text-text-secondary">Loading...</div>
       </div>
     );
   }
@@ -465,10 +465,10 @@ function ReconcileContent() {
       <div className="mb-6 print:hidden">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+            <h1 className="text-3xl font-bold text-text-primary">
               Event Reconciliation
             </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+            <p className="mt-1 text-text-secondary">
               Compare estimated vs actual financials for this event
             </p>
           </div>
@@ -480,7 +480,7 @@ function ReconcileContent() {
             )}
             <button
               onClick={handlePrint}
-              className="rounded-md bg-zinc-600 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700"
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
             >
               Print
             </button>
@@ -490,7 +490,7 @@ function ReconcileContent() {
               className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
                 hasChanges
                   ? 'bg-blue-600 hover:bg-blue-700'
-                  : 'cursor-not-allowed bg-zinc-400'
+                  : 'cursor-not-allowed bg-border'
               }`}
             >
               Save Draft
@@ -510,7 +510,7 @@ function ReconcileContent() {
       {/* Report Content */}
       <div className="space-y-6 print:space-y-4">
         {/* Print Header — only visible when printing */}
-        <div className="hidden border-b border-zinc-300 pb-6 print:block">
+        <div className="hidden border-b border-border pb-6 print:block">
           <div className="mb-4 flex justify-center">
             <Image
               src="/hibachisun.png"
@@ -521,10 +521,10 @@ function ReconcileContent() {
               priority
             />
           </div>
-          <h2 className="text-center text-xl font-semibold text-zinc-700">
+          <h2 className="text-center text-xl font-semibold text-text-secondary">
             Event Reconciliation Summary
           </h2>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600">
+          <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-text-secondary">
             <div><strong>Customer:</strong> {booking.customerName}</div>
             <div><strong>Event Date:</strong> {format(parseLocalDate(booking.eventDate), 'MMM d, yyyy')}</div>
             <div><strong>Event Type:</strong> {booking.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'}</div>
@@ -535,27 +535,27 @@ function ReconcileContent() {
         </div>
 
         {/* Event Info Bar */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 print:border-0 print:p-0 print:hidden">
+        <div className="rounded-lg border border-border bg-card p-4   print:border-0 print:p-0 print:hidden">
           <div className="flex flex-wrap items-center gap-4">
             <div>
-              <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              <span className="text-lg font-semibold text-text-primary">
                 {booking.customerName}
               </span>
             </div>
-            <span className="text-zinc-400">|</span>
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="text-text-muted">|</span>
+            <span className="text-sm text-text-secondary">
               {format(parseLocalDate(booking.eventDate), 'MMM d, yyyy')} at {booking.eventTime}
             </span>
-            <span className="text-zinc-400">|</span>
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="text-text-muted">|</span>
+            <span className="text-sm text-text-secondary">
               {booking.eventType === 'private-dinner' ? 'Private Dinner' : 'Buffet'}
             </span>
-            <span className="text-zinc-400">|</span>
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="text-text-muted">|</span>
+            <span className="text-sm text-text-secondary">
               Pricing Source: {pricingSource === 'menu' ? 'Menu' : 'Rules'}
             </span>
-            <span className="text-zinc-400">|</span>
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="text-text-muted">|</span>
+            <span className="text-sm text-text-secondary">
               {booking.location}
             </span>
             <div className="ml-auto">
@@ -573,30 +573,30 @@ function ReconcileContent() {
         </div>
 
         {/* Revenue Section */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 print:border print:border-zinc-300 print:shadow-none">
-          <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6   print:border print:border-border print:shadow-none">
+          <h2 className="mb-4 text-xl font-semibold text-text-primary">
             Revenue
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                  <th className="pb-2 text-left font-medium text-zinc-600 dark:text-zinc-400">Line Item</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Estimated</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Actual</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Variance</th>
+                <tr className="border-b border-border ">
+                  <th className="pb-2 text-left font-medium text-text-secondary">Line Item</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Estimated</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Actual</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Variance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {/* Subtotal */}
                 <tr>
-                  <td className="py-3 text-zinc-900 dark:text-zinc-100">
+                  <td className="py-3 text-text-primary">
                     Subtotal
-                    <span className="ml-2 text-xs text-zinc-500">
+                    <span className="ml-2 text-xs text-text-muted">
                       ({financials.adultCount}A + {financials.childCount}C)
                     </span>
                   </td>
-                  <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.subtotal)}</td>
+                  <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.subtotal)}</td>
                   <td className="py-3 text-right">
                     <input
                       type="number"
@@ -604,7 +604,7 @@ function ReconcileContent() {
                       value={reconciliation.actualSubtotal ?? 0}
                       onChange={(e) => recalcActualTotal('actualSubtotal', parseFloat(e.target.value) || 0)}
                       disabled={isFinalized}
-                      className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                      className="w-28 rounded border border-border px-2 py-1 text-right text-sm bg-card-elevated text-text-primary print:hidden"
                     />
                     <span className="hidden font-medium print:inline">{formatCurrency(reconciliation.actualSubtotal ?? 0)}</span>
                   </td>
@@ -615,11 +615,11 @@ function ReconcileContent() {
 
                 {/* Gratuity */}
                 <tr>
-                  <td className="py-3 text-zinc-900 dark:text-zinc-100">
+                  <td className="py-3 text-text-primary">
                     Gratuity
-                    <span className="ml-2 text-xs text-zinc-500">({financials.gratuityPercent}%)</span>
+                    <span className="ml-2 text-xs text-text-muted">({financials.gratuityPercent}%)</span>
                   </td>
-                  <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.gratuity)}</td>
+                  <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.gratuity)}</td>
                   <td className="py-3 text-right">
                     <input
                       type="number"
@@ -627,7 +627,7 @@ function ReconcileContent() {
                       value={reconciliation.actualGratuity ?? 0}
                       onChange={(e) => recalcActualTotal('actualGratuity', parseFloat(e.target.value) || 0)}
                       disabled={isFinalized}
-                      className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                      className="w-28 rounded border border-border px-2 py-1 text-right text-sm bg-card-elevated text-text-primary print:hidden"
                     />
                     <span className="hidden font-medium print:inline">{formatCurrency(reconciliation.actualGratuity ?? 0)}</span>
                   </td>
@@ -638,8 +638,8 @@ function ReconcileContent() {
 
                 {/* Distance Fee */}
                 <tr>
-                  <td className="py-3 text-zinc-900 dark:text-zinc-100">Distance Fee</td>
-                  <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.distanceFee)}</td>
+                  <td className="py-3 text-text-primary">Distance Fee</td>
+                  <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.distanceFee)}</td>
                   <td className="py-3 text-right">
                     <input
                       type="number"
@@ -647,7 +647,7 @@ function ReconcileContent() {
                       value={reconciliation.actualDistanceFee ?? 0}
                       onChange={(e) => recalcActualTotal('actualDistanceFee', parseFloat(e.target.value) || 0)}
                       disabled={isFinalized}
-                      className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                      className="w-28 rounded border border-border px-2 py-1 text-right text-sm bg-card-elevated text-text-primary print:hidden"
                     />
                     <span className="hidden font-medium print:inline">{formatCurrency(reconciliation.actualDistanceFee ?? 0)}</span>
                   </td>
@@ -657,8 +657,8 @@ function ReconcileContent() {
                 </tr>
 
                 {/* Total */}
-                <tr className="border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
-                  <td className="py-3 text-zinc-900 dark:text-zinc-50">Total Charged</td>
+                <tr className="border-t-2 border-border  font-semibold">
+                  <td className="py-3 text-text-primary">Total Charged</td>
                   <td className="py-3 text-right text-emerald-600 dark:text-emerald-400">{formatCurrency(financials.totalCharged)}</td>
                   <td className="py-3 text-right text-emerald-600 dark:text-emerald-400">
                     {formatCurrency(reconciliation.actualTotal ?? 0)}
@@ -673,36 +673,36 @@ function ReconcileContent() {
         </div>
 
         {/* Labor & Staffing Section */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 print:border print:border-zinc-300 print:shadow-none">
-          <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6   print:border print:border-border print:shadow-none">
+          <h2 className="mb-4 text-xl font-semibold text-text-primary">
             Labor & Staffing
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                  <th className="pb-2 text-left font-medium text-zinc-600 dark:text-zinc-400">Staff Role</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Estimated</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Actual</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Variance</th>
+                <tr className="border-b border-border ">
+                  <th className="pb-2 text-left font-medium text-text-secondary">Staff Role</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Estimated</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Actual</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Variance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {financials.laborCompensation.map((comp, idx) => {
                   const actualEntry = reconciliation.actualLaborEntries?.[idx];
                   const actualPay = actualEntry?.actualPay ?? 0;
 
                   return (
                     <tr key={idx}>
-                      <td className="py-3 text-zinc-900 dark:text-zinc-100">
+                      <td className="py-3 text-text-primary">
                         {roleLabels[comp.role] || comp.role}
                         {actualEntry?.staffName && (
-                          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          <div className="text-xs text-text-muted dark:text-text-muted">
                             {actualEntry.staffName}
                           </div>
                         )}
                       </td>
-                      <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">
+                      <td className="py-3 text-right text-text-secondary">
                         {formatCurrency(comp.finalPay)}
                       </td>
                       <td className="py-3 text-right">
@@ -712,7 +712,7 @@ function ReconcileContent() {
                           value={actualPay}
                           onChange={(e) => updateLaborEntry(idx, parseFloat(e.target.value) || 0)}
                           disabled={isFinalized}
-                          className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                          className="w-28 rounded border border-border px-2 py-1 text-right text-sm bg-card-elevated text-text-primary print:hidden"
                         />
                         <span className="hidden font-medium print:inline">{formatCurrency(actualPay)}</span>
                       </td>
@@ -724,8 +724,8 @@ function ReconcileContent() {
                 })}
 
                 {/* Total Labor */}
-                <tr className="border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
-                  <td className="py-3 text-zinc-900 dark:text-zinc-50">Total Labor</td>
+                <tr className="border-t-2 border-border  font-semibold">
+                  <td className="py-3 text-text-primary">Total Labor</td>
                   <td className="py-3 text-right text-orange-600 dark:text-orange-400">{formatCurrency(financials.totalLaborPaid)}</td>
                   <td className="py-3 text-right text-orange-600 dark:text-orange-400">
                     {formatCurrency(reconciliation.actualTotalLaborPaid ?? 0)}
@@ -740,26 +740,26 @@ function ReconcileContent() {
         </div>
 
         {/* Operating Costs Section */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 print:border print:border-zinc-300 print:shadow-none">
-          <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6   print:border print:border-border print:shadow-none">
+          <h2 className="mb-4 text-xl font-semibold text-text-primary">
             Operating Costs
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                  <th className="pb-2 text-left font-medium text-zinc-600 dark:text-zinc-400">Cost Item</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Estimated</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Actual</th>
-                  <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Variance</th>
+                <tr className="border-b border-border ">
+                  <th className="pb-2 text-left font-medium text-text-secondary">Cost Item</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Estimated</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Actual</th>
+                  <th className="pb-2 text-right font-medium text-text-secondary">Variance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border">
                 {/* Food Cost */}
                 <tr>
-                  <td className="py-3 text-zinc-900 dark:text-zinc-100">
+                  <td className="py-3 text-text-primary">
                     Food Cost
-                    <span className="ml-2 text-xs text-zinc-500">({financials.foodCostPercent}%)</span>
+                    <span className="ml-2 text-xs text-text-muted">({financials.foodCostPercent}%)</span>
                     {usingShoppingListFoodCost && (
                       <div className="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
                         Source: Shopping List ({formatCurrency(shoppingTotals.foodTotal)}) •{' '}
@@ -772,15 +772,15 @@ function ReconcileContent() {
                       </div>
                     )}
                     {expenseTotals.byCategory.food > 0 && (
-                      <div className="text-xs text-zinc-500 dark:text-zinc-500">
+                      <div className="text-xs text-text-muted dark:text-text-muted">
                         from expenses: {formatCurrency(expenseTotals.byCategory.food)}
                       </div>
                     )}
                   </td>
-                  <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.foodCost)}</td>
+                  <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.foodCost)}</td>
                   <td className="py-3 text-right">
                     {usingShoppingListFoodCost ? (
-                      <span className="font-medium text-zinc-900 dark:text-zinc-100 print:hidden">
+                      <span className="font-medium text-text-primary print:hidden">
                         {formatCurrency(shoppingTotals.foodTotal)}
                       </span>
                     ) : (
@@ -792,7 +792,7 @@ function ReconcileContent() {
                           updateField('actualFoodCost', parseFloat(e.target.value) || 0)
                         }
                         disabled={isFinalized}
-                        className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                        className="w-28 rounded border border-border px-2 py-1 text-right text-sm bg-card-elevated text-text-primary print:hidden"
                       />
                     )}
                     <span className="hidden font-medium print:inline">{formatCurrency(reconciliation.actualFoodCost ?? 0)}</span>
@@ -804,15 +804,15 @@ function ReconcileContent() {
 
                 {/* Supplies */}
                 <tr>
-                  <td className="py-3 text-zinc-900 dark:text-zinc-100">
+                  <td className="py-3 text-text-primary">
                     Supplies
                     {expenseTotals.byCategory.supplies > 0 && (
-                      <div className="text-xs text-zinc-500 dark:text-zinc-500">
+                      <div className="text-xs text-text-muted dark:text-text-muted">
                         from expenses: {formatCurrency(expenseTotals.byCategory.supplies)}
                       </div>
                     )}
                   </td>
-                  <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.suppliesCost)}</td>
+                  <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.suppliesCost)}</td>
                   <td className="py-3 text-right">
                     <input
                       type="number"
@@ -820,7 +820,7 @@ function ReconcileContent() {
                       value={reconciliation.actualSuppliesCost ?? 0}
                       onChange={(e) => updateField('actualSuppliesCost', parseFloat(e.target.value) || 0)}
                       disabled={isFinalized}
-                      className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                      className="w-28 rounded border border-border px-2 py-1 text-right text-sm bg-card-elevated text-text-primary print:hidden"
                     />
                     <span className="hidden font-medium print:inline">{formatCurrency(reconciliation.actualSuppliesCost ?? 0)}</span>
                   </td>
@@ -831,15 +831,15 @@ function ReconcileContent() {
 
                 {/* Transportation */}
                 <tr>
-                  <td className="py-3 text-zinc-900 dark:text-zinc-100">
+                  <td className="py-3 text-text-primary">
                     Transportation
                     {expenseTotals.byCategory['gas-mileage'] > 0 && (
-                      <div className="text-xs text-zinc-500 dark:text-zinc-500">
+                      <div className="text-xs text-text-muted dark:text-text-muted">
                         from expenses: {formatCurrency(expenseTotals.byCategory['gas-mileage'])}
                       </div>
                     )}
                   </td>
-                  <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.transportationCost)}</td>
+                  <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.transportationCost)}</td>
                   <td className="py-3 text-right">
                     <input
                       type="number"
@@ -847,7 +847,7 @@ function ReconcileContent() {
                       value={reconciliation.actualTransportationCost ?? 0}
                       onChange={(e) => updateField('actualTransportationCost', parseFloat(e.target.value) || 0)}
                       disabled={isFinalized}
-                      className="w-28 rounded border border-zinc-300 px-2 py-1 text-right text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+                      className="w-28 rounded border border-border px-2 py-1 text-right text-sm bg-card-elevated text-text-primary print:hidden"
                     />
                     <span className="hidden font-medium print:inline">{formatCurrency(reconciliation.actualTransportationCost ?? 0)}</span>
                   </td>
@@ -857,8 +857,8 @@ function ReconcileContent() {
                 </tr>
 
                 {/* Total Costs */}
-                <tr className="border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
-                  <td className="py-3 text-zinc-900 dark:text-zinc-50">Total Costs</td>
+                <tr className="border-t-2 border-border  font-semibold">
+                  <td className="py-3 text-text-primary">Total Costs</td>
                   <td className="py-3 text-right text-red-600 dark:text-red-400">{formatCurrency(financials.totalCosts)}</td>
                   <td className="py-3 text-right text-red-600 dark:text-red-400">
                     {formatCurrency(
@@ -892,9 +892,9 @@ function ReconcileContent() {
         </div>
 
         {/* Linked Expenses Section */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 print:border print:border-zinc-300 print:shadow-none">
+        <div className="rounded-lg border border-border bg-card p-6   print:border print:border-border print:shadow-none">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <h2 className="text-xl font-semibold text-text-primary">
               Linked Expenses
             </h2>
             <div className="flex items-center gap-3 print:hidden">
@@ -917,37 +917,37 @@ function ReconcileContent() {
             <>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                    <th className="pb-2 text-left font-medium text-zinc-600 dark:text-zinc-400">Date</th>
-                    <th className="pb-2 text-left font-medium text-zinc-600 dark:text-zinc-400">Category</th>
-                    <th className="pb-2 text-left font-medium text-zinc-600 dark:text-zinc-400">Description</th>
-                    <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Amount</th>
+                  <tr className="border-b border-border ">
+                    <th className="pb-2 text-left font-medium text-text-secondary">Date</th>
+                    <th className="pb-2 text-left font-medium text-text-secondary">Category</th>
+                    <th className="pb-2 text-left font-medium text-text-secondary">Description</th>
+                    <th className="pb-2 text-right font-medium text-text-secondary">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                <tbody className="divide-y divide-border">
                   {linkedExpenses.map((expense) => (
                     <tr key={expense.id}>
-                      <td className="py-2 text-zinc-700 dark:text-zinc-300">
+                      <td className="py-2 text-text-secondary">
                         {format(parseLocalDate(expense.date), 'MMM d, yyyy')}
                       </td>
-                      <td className="py-2 text-zinc-700 dark:text-zinc-300">
+                      <td className="py-2 text-text-secondary">
                         {categoryLabels[expense.category]}
                       </td>
-                      <td className="py-2 text-zinc-900 dark:text-zinc-100">{expense.description}</td>
-                      <td className="py-2 text-right font-medium text-zinc-900 dark:text-zinc-100">
+                      <td className="py-2 text-text-primary">{expense.description}</td>
+                      <td className="py-2 text-right font-medium text-text-primary">
                         {formatCurrency(expense.amount)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="mt-3 flex justify-between border-t border-zinc-200 pt-3 dark:border-zinc-700">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">Total from expenses</span>
-                <span className="font-semibold text-zinc-900 dark:text-zinc-50">{formatCurrency(expenseTotals.total)}</span>
+              <div className="mt-3 flex justify-between border-t border-border pt-3 ">
+                <span className="font-medium text-text-secondary">Total from expenses</span>
+                <span className="font-semibold text-text-primary">{formatCurrency(expenseTotals.total)}</span>
               </div>
             </>
           ) : (
-            <p className="py-4 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            <p className="py-4 text-center text-sm text-text-muted dark:text-text-muted">
               No expenses linked to this event. Use the Expenses page to add expenses and link them to this booking.
             </p>
           )}
@@ -955,23 +955,23 @@ function ReconcileContent() {
 
         {/* Profit Summary Section */}
         {actualProfit && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/20 print:border print:border-zinc-300 print:bg-white print:shadow-none">
-            <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/20 print:border print:border-border print:bg-card print:shadow-none">
+            <h2 className="mb-4 text-xl font-semibold text-text-primary">
               Profit Summary
             </h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-emerald-200 dark:border-emerald-800">
-                    <th className="pb-2 text-left font-medium text-zinc-600 dark:text-zinc-400"></th>
-                    <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Estimated</th>
-                    <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Actual</th>
-                    <th className="pb-2 text-right font-medium text-zinc-600 dark:text-zinc-400">Variance</th>
+                    <th className="pb-2 text-left font-medium text-text-secondary"></th>
+                    <th className="pb-2 text-right font-medium text-text-secondary">Estimated</th>
+                    <th className="pb-2 text-right font-medium text-text-secondary">Actual</th>
+                    <th className="pb-2 text-right font-medium text-text-secondary">Variance</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-emerald-100 dark:divide-emerald-900/50">
                   <tr className="font-semibold">
-                    <td className="py-3 text-zinc-900 dark:text-zinc-50">Gross Profit</td>
+                    <td className="py-3 text-text-primary">Gross Profit</td>
                     <td className="py-3 text-right text-emerald-600 dark:text-emerald-400">{formatCurrency(financials.grossProfit)}</td>
                     <td className="py-3 text-right text-emerald-600 dark:text-emerald-400">{formatCurrency(actualProfit.grossProfit)}</td>
                     <td className={`py-3 text-right ${varianceColor(variance(financials.grossProfit, actualProfit.grossProfit), true)}`}>
@@ -979,25 +979,25 @@ function ReconcileContent() {
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-3 text-zinc-700 dark:text-zinc-300">Business Retained ({rules.profitDistribution.businessRetainedPercent}%)</td>
-                    <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(financials.retainedAmount)}</td>
-                    <td className="py-3 text-right text-zinc-700 dark:text-zinc-300">{formatCurrency(actualProfit.retained)}</td>
+                    <td className="py-3 text-text-secondary">Business Retained ({rules.profitDistribution.businessRetainedPercent}%)</td>
+                    <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.retainedAmount)}</td>
+                    <td className="py-3 text-right text-text-secondary">{formatCurrency(actualProfit.retained)}</td>
                     <td className={`py-3 text-right ${varianceColor(variance(financials.retainedAmount, actualProfit.retained), true)}`}>
                       {formatVariance(variance(financials.retainedAmount, actualProfit.retained))}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-3 pl-4 text-zinc-600 dark:text-zinc-400">Owner A ({rules.profitDistribution.ownerAEquityPercent}%)</td>
-                    <td className="py-3 text-right text-zinc-600 dark:text-zinc-400">{formatCurrency(financials.ownerADistribution)}</td>
-                    <td className="py-3 text-right text-zinc-600 dark:text-zinc-400">{formatCurrency(actualProfit.ownerA)}</td>
+                    <td className="py-3 pl-4 text-text-secondary">Owner A ({rules.profitDistribution.ownerAEquityPercent}%)</td>
+                    <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.ownerADistribution)}</td>
+                    <td className="py-3 text-right text-text-secondary">{formatCurrency(actualProfit.ownerA)}</td>
                     <td className={`py-3 text-right text-sm ${varianceColor(variance(financials.ownerADistribution, actualProfit.ownerA), true)}`}>
                       {formatVariance(variance(financials.ownerADistribution, actualProfit.ownerA))}
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-3 pl-4 text-zinc-600 dark:text-zinc-400">Owner B ({rules.profitDistribution.ownerBEquityPercent}%)</td>
-                    <td className="py-3 text-right text-zinc-600 dark:text-zinc-400">{formatCurrency(financials.ownerBDistribution)}</td>
-                    <td className="py-3 text-right text-zinc-600 dark:text-zinc-400">{formatCurrency(actualProfit.ownerB)}</td>
+                    <td className="py-3 pl-4 text-text-secondary">Owner B ({rules.profitDistribution.ownerBEquityPercent}%)</td>
+                    <td className="py-3 text-right text-text-secondary">{formatCurrency(financials.ownerBDistribution)}</td>
+                    <td className="py-3 text-right text-text-secondary">{formatCurrency(actualProfit.ownerB)}</td>
                     <td className={`py-3 text-right text-sm ${varianceColor(variance(financials.ownerBDistribution, actualProfit.ownerB), true)}`}>
                       {formatVariance(variance(financials.ownerBDistribution, actualProfit.ownerB))}
                     </td>
@@ -1009,8 +1009,8 @@ function ReconcileContent() {
         )}
 
         {/* Notes Section */}
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900 print:border print:border-zinc-300 print:shadow-none">
-          <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+        <div className="rounded-lg border border-border bg-card p-6   print:border print:border-border print:shadow-none">
+          <h2 className="mb-4 text-xl font-semibold text-text-primary">
             Reconciliation Notes
           </h2>
           <textarea
@@ -1019,13 +1019,13 @@ function ReconcileContent() {
             disabled={isFinalized}
             rows={3}
             placeholder="Add notes about this reconciliation..."
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 print:hidden"
+            className="w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary print:hidden"
           />
           {reconciliation.notes && (
-            <p className="hidden whitespace-pre-wrap text-sm text-zinc-700 print:block">{reconciliation.notes}</p>
+            <p className="hidden whitespace-pre-wrap text-sm text-text-secondary print:block">{reconciliation.notes}</p>
           )}
           {!reconciliation.notes && (
-            <p className="hidden text-sm text-zinc-400 print:block">No notes</p>
+            <p className="hidden text-sm text-text-muted print:block">No notes</p>
           )}
         </div>
 
@@ -1033,7 +1033,7 @@ function ReconcileContent() {
         <div className="flex items-center justify-between print:hidden">
           <Link
             href="/bookings"
-            className="text-sm text-zinc-600 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+            className="text-sm text-text-muted hover:text-text-secondary"
           >
             ← Back to Bookings
           </Link>
@@ -1049,7 +1049,7 @@ function ReconcileContent() {
               className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
                 hasChanges
                   ? 'bg-blue-600 hover:bg-blue-700'
-                  : 'cursor-not-allowed bg-zinc-400'
+                  : 'cursor-not-allowed bg-border'
               }`}
             >
               Save Draft

@@ -147,10 +147,10 @@ export default function CalculatorPage() {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-3xl font-bold text-text-primary">
             Event Profitability Calculator
           </h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-text-secondary">
             Calculate revenue, costs, labor, and profit for catering events
           </p>
         </div>
@@ -159,15 +159,15 @@ export default function CalculatorPage() {
         <div className="grid gap-8 lg:grid-cols-3">
           {/* Input Panel */}
           <div className="lg:col-span-1">
-            <div className="sticky top-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="sticky top-8 rounded-lg border border-border bg-card p-6 dark:border-border ">
+              <h2 className="mb-6 text-xl font-semibold text-text-primary">
                 Event Details
               </h2>
 
               <div className="space-y-6">
                 {/* Event Type */}
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Event Type
                   </label>
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -175,8 +175,8 @@ export default function CalculatorPage() {
                       onClick={() => handleEventTypeChange('private-dinner')}
                       className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                         eventType === 'private-dinner'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                          ? 'bg-accent text-white'
+                          : 'bg-card-elevated text-text-secondary hover:bg-card'
                       }`}
                     >
                       Private Dinner
@@ -185,8 +185,8 @@ export default function CalculatorPage() {
                       onClick={() => handleEventTypeChange('buffet')}
                       className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                         eventType === 'buffet'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                          ? 'bg-accent text-white'
+                          : 'bg-card-elevated text-text-secondary hover:bg-card'
                       }`}
                     >
                       Buffet
@@ -196,7 +196,7 @@ export default function CalculatorPage() {
 
                 {/* Guest Count */}
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Adults
                   </label>
                   <input
@@ -204,12 +204,12 @@ export default function CalculatorPage() {
                     min="1"
                     value={adults}
                     onChange={(e) => handleGuestChange(Math.max(1, parseInt(e.target.value) || 1), children)}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Children (under 13)
                   </label>
                   <input
@@ -217,37 +217,37 @@ export default function CalculatorPage() {
                     min="0"
                     value={children}
                     onChange={(e) => handleGuestChange(adults, Math.max(0, parseInt(e.target.value) || 0))}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 text-xs text-text-muted">
                     {rules.pricing.childDiscountPercent}% discount applied
                   </p>
                 </div>
 
                 {/* Premium Add-on */}
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Premium Add-on (per guest)
                   </label>
                   <div className="relative mt-1">
-                    <span className="absolute left-3 top-2 text-zinc-500">$</span>
+                    <span className="absolute left-3 top-2 text-text-muted">$</span>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={premiumAddOn}
                       onChange={(e) => setPremiumAddOn(Math.max(0, parseFloat(e.target.value) || 0))}
-                      className="w-full rounded-md border border-zinc-300 py-2 pl-7 pr-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="w-full rounded-md border border-border bg-card-elevated py-2 pl-7 pr-3 text-text-primary"
                     />
                   </div>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 text-xs text-text-muted">
                     Suggested: ${rules.pricing.premiumAddOnMin} - ${rules.pricing.premiumAddOnMax}
                   </p>
                 </div>
 
                 {/* Distance */}
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Distance (miles)
                   </label>
                   <input
@@ -255,9 +255,9 @@ export default function CalculatorPage() {
                     min="0"
                     value={distanceMiles}
                     onChange={(e) => setDistanceMiles(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="mt-1 text-xs text-text-muted">
                     First {rules.distance.freeDistanceMiles} miles free
                   </p>
                 </div>
@@ -268,56 +268,56 @@ export default function CalculatorPage() {
           {/* Results Panel */}
           <div className="space-y-6 lg:col-span-2">
             {/* Revenue Section */}
-            <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+              <h2 className="mb-6 text-xl font-semibold text-text-primary">
                 Revenue Breakdown
               </h2>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400">Guest Count</p>
-                    <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                    <p className="text-sm text-text-secondary">Guest Count</p>
+                    <p className="text-lg font-semibold text-text-primary">
                       {financials.guestCount} ({financials.adultCount}A + {financials.childCount}C)
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400">Base Price</p>
-                    <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                    <p className="text-sm text-text-secondary">Base Price</p>
+                    <p className="text-lg font-semibold text-text-primary">
                       {formatCurrency(financials.basePrice)}/guest
                     </p>
                   </div>
                 </div>
 
-                <div className="space-y-2 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+                <div className="space-y-2 border-t border-border pt-4 dark:border-border">
                   <div className="flex justify-between text-sm">
-                    <span className="text-zinc-600 dark:text-zinc-400">Subtotal</span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                    <span className="text-text-secondary">Subtotal</span>
+                    <span className="font-medium text-text-primary">
                       {formatCurrency(financials.subtotal)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-zinc-600 dark:text-zinc-400">
+                    <span className="text-text-secondary">
                       Gratuity ({financials.gratuityPercent}%)
                     </span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                    <span className="font-medium text-text-primary">
                       {formatCurrency(financials.gratuity)}
                     </span>
                   </div>
                   {financials.distanceFee > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-600 dark:text-zinc-400">Distance Fee</span>
-                      <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Distance Fee</span>
+                      <span className="font-medium text-text-primary">
                         {formatCurrency(financials.distanceFee)}
                       </span>
                     </div>
                   )}
                 </div>
 
-                <div className="flex justify-between border-t-2 border-zinc-300 pt-4 dark:border-zinc-600">
-                  <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                <div className="flex justify-between border-t-2 border-border pt-4 dark:border-border">
+                  <span className="text-lg font-semibold text-text-primary">
                     Total Charged
                   </span>
-                  <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="text-2xl font-bold text-success">
                     {formatCurrency(financials.totalCharged)}
                   </span>
                 </div>
@@ -325,23 +325,23 @@ export default function CalculatorPage() {
             </div>
 
             {/* Labor Section with Override Controls */}
-            <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
               <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                <h2 className="text-xl font-semibold text-text-primary">
                   Labor & Staffing
                 </h2>
                 <label className="flex items-center gap-2">
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  <span className="text-sm text-text-secondary">
                     {useOverrides ? 'Custom Pay' : 'Global Defaults'}
                   </span>
                   <button
                     onClick={() => handleToggleOverrides(!useOverrides)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      useOverrides ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600'
+                      useOverrides ? 'bg-accent' : 'bg-border'
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      className={`inline-block h-4 w-4 transform rounded-full bg-card transition-transform ${
                         useOverrides ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
@@ -349,16 +349,16 @@ export default function CalculatorPage() {
                 </label>
               </div>
 
-              <div className="mb-4 rounded-lg bg-zinc-50 p-4 dark:bg-zinc-800/50">
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              <div className="mb-4 rounded-lg bg-card-elevated p-4">
+                <p className="text-sm text-text-secondary">
                   Required Staff: {financials.staffingPlan.totalStaffCount}
                 </p>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+                <p className="mt-1 text-xs text-text-muted">
                   {financials.staffingPlan.chefRoles.length} chef(s)
                   {financials.staffingPlan.assistantNeeded && ' + 1 assistant'}
                 </p>
                 {useOverrides && (
-                  <p className="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                  <p className="mt-2 text-xs font-medium text-accent">
                     Event-level overrides active — adjust pay below
                   </p>
                 )}
@@ -366,14 +366,14 @@ export default function CalculatorPage() {
 
               {/* Override Editor */}
               {useOverrides && overrides.length > 0 && (
-                <div className="mb-6 rounded-lg border-2 border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
+                <div className="mb-6 rounded-lg border-2 border-border bg-accent-soft-bg p-4 ">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">
+                    <h3 className="text-sm font-semibold text-text-primary">
                       Staff Pay Simulator
                     </h3>
                     <button
                       onClick={() => setOverrides(buildDefaultOverrides())}
-                      className="text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                      className="text-xs text-accent hover:text-accent-hover"
                     >
                       Reset to Defaults
                     </button>
@@ -381,13 +381,13 @@ export default function CalculatorPage() {
 
                   {/* Gratuity split validation */}
                   {Math.abs(totalGratuitySplit - 100) > 0.1 && (
-                    <div className="mb-4 rounded-md bg-orange-100 px-3 py-2 text-xs font-medium text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
+                    <div className="mb-4 rounded-md bg-warning/20 px-3 py-2 text-xs font-medium text-warning">
                       Gratuity split totals {totalGratuitySplit.toFixed(1)}% (should be 100%)
                     </div>
                   )}
 
                   {/* Column headers */}
-                  <div className="mb-2 grid grid-cols-[1fr_80px_80px_80px] gap-3 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                  <div className="mb-2 grid grid-cols-[1fr_80px_80px_80px] gap-3 text-xs font-semibold text-text-muted">
                     <span>Role</span>
                     <span>Base %</span>
                     <span>Grat. %</span>
@@ -400,7 +400,7 @@ export default function CalculatorPage() {
                         key={`${override.role}-${idx}`}
                         className="grid grid-cols-[1fr_80px_80px_80px] items-center gap-3"
                       >
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <span className="text-sm font-medium text-text-primary">
                           {ROLE_LABELS[override.role] || override.role}
                         </span>
                         <input
@@ -412,7 +412,7 @@ export default function CalculatorPage() {
                           onChange={(e) =>
                             updateOverride(idx, 'basePayPercent', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-center text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                          className="w-full rounded-md border border-border px-2 py-1.5 text-center text-sm text-text-primary border-border bg-card-elevated"
                         />
                         <input
                           type="number"
@@ -423,7 +423,7 @@ export default function CalculatorPage() {
                           onChange={(e) =>
                             updateOverride(idx, 'gratuitySplitPercent', parseFloat(e.target.value) || 0)
                           }
-                          className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-center text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                          className="w-full rounded-md border border-border px-2 py-1.5 text-center text-sm text-text-primary border-border bg-card-elevated"
                         />
                         <input
                           type="number"
@@ -434,7 +434,7 @@ export default function CalculatorPage() {
                             const val = parseFloat(e.target.value) || 0;
                             updateOverride(idx, 'cap', val === 0 ? null : val);
                           }}
-                          className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-center text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                          className="w-full rounded-md border border-border px-2 py-1.5 text-center text-sm text-text-primary border-border bg-card-elevated"
                           title="0 = no cap"
                         />
                       </div>
@@ -442,26 +442,26 @@ export default function CalculatorPage() {
                   </div>
 
                   {/* Totals row */}
-                  <div className="mt-3 grid grid-cols-[1fr_80px_80px_80px] items-center gap-3 border-t border-indigo-200 pt-2 dark:border-indigo-800">
-                    <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                  <div className="mt-3 grid grid-cols-[1fr_80px_80px_80px] items-center gap-3 border-t border-border pt-2">
+                    <span className="text-xs font-semibold text-text-secondary">
                       Totals
                     </span>
-                    <span className="text-center text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                    <span className="text-center text-xs font-semibold text-text-secondary">
                       {overrides.reduce((s, o) => s + o.basePayPercent, 0).toFixed(1)}%
                     </span>
                     <span
                       className={`text-center text-xs font-semibold ${
                         Math.abs(totalGratuitySplit - 100) > 0.1
-                          ? 'text-orange-600 dark:text-orange-400'
-                          : 'text-emerald-600 dark:text-emerald-400'
+                          ? 'text-warning'
+                          : 'text-success'
                       }`}
                     >
                       {totalGratuitySplit.toFixed(1)}%
                     </span>
-                    <span className="text-center text-xs text-zinc-400">—</span>
+                    <span className="text-center text-xs text-text-muted">—</span>
                   </div>
 
-                  <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-500">
+                  <p className="mt-3 text-xs text-text-muted">
                     Base % = percentage of subtotal ({formatCurrency(financials.subtotal)}). Grat. % = share of gratuity pool ({formatCurrency(financials.gratuity)}). Cap 0 = no cap. Total revenue: {formatCurrency(financials.subtotal + financials.gratuity)}.
                   </p>
                 </div>
@@ -474,26 +474,26 @@ export default function CalculatorPage() {
                     key={idx}
                     className={`rounded-lg border p-4 ${
                       useOverrides
-                        ? 'border-indigo-200 bg-indigo-50/30 dark:border-indigo-900 dark:bg-indigo-950/10'
-                        : 'border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50'
+                        ? 'border-border bg-accent-soft-bg'
+                        : 'border-border bg-card-elevated'
                     }`}
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                        <span className="font-medium text-text-primary">
                           {ROLE_LABELS[comp.role] || comp.role}
                         </span>
                         {useOverrides && (
-                          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          <span className="rounded-full bg-accent-soft-bg px-2 py-0.5 text-[10px] font-semibold text-accent">
                             CUSTOM
                           </span>
                         )}
                       </div>
-                      <span className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                      <span className="text-lg font-bold text-text-primary">
                         {formatCurrency(comp.finalPay)}
                       </span>
                     </div>
-                    <div className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                    <div className="space-y-1 text-xs text-text-secondary">
                       <div className="flex justify-between">
                         <span>
                           Base Pay ({useOverrides && overrides[idx] ? overrides[idx].basePayPercent : '—'}% of revenue):
@@ -506,11 +506,11 @@ export default function CalculatorPage() {
                         </span>
                         <span>{formatCurrency(comp.gratuityShare)}</span>
                       </div>
-                      <div className="flex justify-between border-t border-zinc-200 pt-1 mt-1 dark:border-zinc-700">
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                      <div className="flex justify-between border-t border-border pt-1 mt-1 dark:border-border">
+                        <span className="font-medium text-text-secondary">
                           % of Total Revenue:
                         </span>
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                        <span className="font-medium text-text-secondary">
                           {((financials.subtotal + financials.gratuity) > 0
                             ? (comp.finalPay / (financials.subtotal + financials.gratuity)) * 100
                             : 0
@@ -518,7 +518,7 @@ export default function CalculatorPage() {
                         </span>
                       </div>
                       {comp.wasCapped && (
-                        <p className="mt-2 text-orange-600 dark:text-orange-400">
+                        <p className="mt-2 text-warning">
                           Capped at {formatCurrency(comp.cap!)} (excess: {formatCurrency(comp.excessToProfit)} to profit)
                         </p>
                       )}
@@ -527,48 +527,48 @@ export default function CalculatorPage() {
                 ))}
               </div>
 
-              <div className="mt-4 flex justify-between border-t border-zinc-300 pt-4 dark:border-zinc-600">
-                <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+              <div className="mt-4 flex justify-between border-t border-border pt-4 dark:border-border">
+                <span className="font-semibold text-text-primary">
                   Total Labor Cost
                 </span>
-                <span className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                <span className="text-lg font-bold text-warning">
                   {formatCurrency(financials.totalLaborPaid)}
                 </span>
               </div>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mt-2 text-sm text-text-secondary">
                 {financials.laborAsPercentOfRevenue.toFixed(1)}% of total revenue ({formatCurrency(financials.subtotal + financials.gratuity)})
               </p>
             </div>
 
             {/* Costs Section */}
-            <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="mb-6 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+              <h2 className="mb-6 text-xl font-semibold text-text-primary">
                 Operating Costs
               </h2>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-zinc-600 dark:text-zinc-400">
+                  <span className="text-text-secondary">
                     Food Cost ({financials.foodCostPercent}%)
                   </span>
-                  <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                  <span className="font-medium text-text-primary">
                     {formatCurrency(financials.foodCost)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-zinc-600 dark:text-zinc-400">Supplies</span>
-                  <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                  <span className="text-text-secondary">Supplies</span>
+                  <span className="font-medium text-text-primary">
                     {formatCurrency(financials.suppliesCost)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-zinc-600 dark:text-zinc-400">Transportation</span>
-                  <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                  <span className="text-text-secondary">Transportation</span>
+                  <span className="font-medium text-text-primary">
                     {formatCurrency(financials.transportationCost)}
                   </span>
                 </div>
-                <div className="flex justify-between border-t border-zinc-300 pt-2 dark:border-zinc-600">
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">Total Costs</span>
-                  <span className="text-lg font-bold text-red-600 dark:text-red-400">
+                <div className="flex justify-between border-t border-border pt-2 dark:border-border">
+                  <span className="font-semibold text-text-primary">Total Costs</span>
+                  <span className="text-lg font-bold text-danger">
                     {formatCurrency(financials.totalCosts)}
                   </span>
                 </div>
@@ -576,17 +576,17 @@ export default function CalculatorPage() {
             </div>
 
             {/* Profit Section */}
-            <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/20">
-              <h2 className="mb-6 text-xl font-semibold text-emerald-900 dark:text-emerald-50">
+            <div className="rounded-lg border-2 border-border bg-card p-6">
+              <h2 className="mb-6 text-xl font-semibold text-text-primary">
                 Profit Distribution
               </h2>
 
-              <div className="mb-6 rounded-lg bg-white p-4 dark:bg-emerald-950/30">
+              <div className="mb-6 rounded-lg bg-card-elevated p-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  <span className="text-lg font-semibold text-text-primary">
                     Gross Profit
                   </span>
-                  <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="text-3xl font-bold text-success">
                     {formatCurrency(financials.grossProfit)}
                   </span>
                 </div>
@@ -594,32 +594,32 @@ export default function CalculatorPage() {
 
               <div className="space-y-4">
                 <div className="flex justify-between">
-                  <span className="text-zinc-700 dark:text-zinc-300">
+                  <span className="text-text-secondary">
                     Business Retained ({financials.retainedPercent}%)
                   </span>
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                  <span className="font-semibold text-text-primary">
                     {formatCurrency(financials.retainedAmount)}
                   </span>
                 </div>
 
-                <div className="border-t border-emerald-200 pt-4 dark:border-emerald-800">
-                  <p className="mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <div className="border-t border-border pt-4">
+                  <p className="mb-2 text-sm font-medium text-text-secondary">
                     Owner Distribution ({financials.distributionPercent}%)
                   </p>
                   <div className="ml-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-600 dark:text-zinc-400">
+                      <span className="text-text-secondary">
                         Owner A ({rules.profitDistribution.ownerAEquityPercent}%)
                       </span>
-                      <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <span className="font-medium text-text-primary">
                         {formatCurrency(financials.ownerADistribution)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-600 dark:text-zinc-400">
+                      <span className="text-text-secondary">
                         Owner B ({rules.profitDistribution.ownerBEquityPercent}%)
                       </span>
-                      <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <span className="font-medium text-text-primary">
                         {formatCurrency(financials.ownerBDistribution)}
                       </span>
                     </div>
@@ -630,11 +630,11 @@ export default function CalculatorPage() {
 
             {/* Warnings */}
             {financials.warnings.length > 0 && (
-              <div className="rounded-lg border-2 border-orange-200 bg-orange-50 p-6 dark:border-orange-900 dark:bg-orange-950/20">
-                <h2 className="mb-4 text-lg font-semibold text-orange-900 dark:text-orange-50">
+              <div className="rounded-lg border-2 border-border bg-card p-6">
+                <h2 className="mb-4 text-lg font-semibold text-text-primary">
                   Warnings
                 </h2>
-                <ul className="list-inside list-disc space-y-2 text-sm text-orange-800 dark:text-orange-200">
+                <ul className="list-inside list-disc space-y-2 text-sm text-text-secondary">
                   {financials.warnings.map((warning, idx) => (
                     <li key={idx}>{warning}</li>
                   ))}

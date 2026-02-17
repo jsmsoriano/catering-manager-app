@@ -1,12 +1,17 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import {
+  ChevronDownIcon,
+  ClipboardDocumentListIcon,
+  PencilSquareIcon,
+  ShoppingCartIcon,
+} from '@heroicons/react/24/outline';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
-import { generateSampleBookings } from '@/lib/sampleBookings';
 import type { Booking, BookingStatus, BookingFormData, PaymentStatus } from '@/lib/bookingTypes';
 import type { EventFinancials } from '@/lib/types';
 import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
@@ -31,8 +36,10 @@ import {
 } from '@/lib/bookingWorkflow';
 import {
   ensureShoppingListForBooking,
+  loadShoppingLists,
   removeShoppingListForBooking,
 } from '@/lib/shoppingStorage';
+import { isStaffAvailableForEvent } from '@/lib/staffAvailability';
 
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
@@ -111,6 +118,9 @@ export default function BookingsPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
   const [customerPayments, setCustomerPayments] = useState<CustomerPaymentRecord[]>([]);
+  const [shoppingLists, setShoppingLists] = useState<ReturnType<typeof loadShoppingLists>>([]);
+  const [actionsOpenForBookingId, setActionsOpenForBookingId] = useState<string | null>(null);
+  const actionsDropdownRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState<BookingFormData>({
     eventType: 'private-dinner',
@@ -218,6 +228,39 @@ export default function BookingsPage() {
     };
   }, []);
 
+  // Load shopping lists (for "has shopping list" indicators and dropdown labels)
+  useEffect(() => {
+    const load = () => setShoppingLists(loadShoppingLists());
+    load();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'shoppingLists') load();
+    };
+    const onCustom = () => load();
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('shoppingListsUpdated', onCustom);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('shoppingListsUpdated', onCustom);
+    };
+  }, []);
+
+  const bookingIdsWithShoppingList = useMemo(
+    () => new Set(shoppingLists.map((list) => list.bookingId)),
+    [shoppingLists]
+  );
+
+  const closeActionsDropdown = useCallback(() => setActionsOpenForBookingId(null), []);
+
+  useEffect(() => {
+    if (actionsOpenForBookingId === null) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const el = actionsDropdownRef.current;
+      if (el && !el.contains(event.target as Node)) closeActionsDropdown();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [actionsOpenForBookingId, closeActionsDropdown]);
+
   const staffById = useMemo(() => {
     const map = new Map<string, StaffRecord>();
     staffRecords.forEach((staff) => map.set(staff.id, staff));
@@ -268,22 +311,6 @@ export default function BookingsPage() {
     window.dispatchEvent(new Event('bookingsUpdated'));
   };
 
-  const handleLoadSampleBookings = () => {
-    const shouldProceed = confirm(
-      'Load sample schedule?\n\nThis will replace current bookings with a structured sample set:\n- 5 bookings per week\n- 1 weekend lunch\n- 1 weekend dinner\n- 3 weekday dinners'
-    );
-    if (!shouldProceed) return;
-
-    const sampleBookings = generateSampleBookings(rules);
-    saveBookings(sampleBookings);
-    setFilterStatus('all');
-    setSearchQuery('');
-    setShowModal(false);
-    resetForm();
-
-    alert(`Loaded ${sampleBookings.length} sample bookings for testing.`);
-  };
-
   const filteredBookings = useMemo(() => {
     let result = bookings;
 
@@ -331,11 +358,9 @@ export default function BookingsPage() {
     const pending = bookings.filter((b) => getBookingServiceStatus(b) === 'pending').length;
     const confirmed = bookings.filter((b) => getBookingServiceStatus(b) === 'confirmed').length;
     const completed = bookings.filter((b) => getBookingServiceStatus(b) === 'completed').length;
-    const totalRevenue = bookings
-      .filter((b) => getBookingServiceStatus(b) !== 'cancelled')
-      .reduce((sum, b) => sum + b.total, 0);
+    const cancelled = bookings.filter((b) => getBookingServiceStatus(b) === 'cancelled').length;
 
-    return { pending, confirmed, completed, totalRevenue };
+    return { pending, confirmed, completed, cancelled };
   }, [bookings]);
 
   useEffect(() => {
@@ -667,11 +692,11 @@ export default function BookingsPage() {
   };
 
   const paymentStatusColors: Record<PaymentStatus, string> = {
-    unpaid: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
-    'deposit-due': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    'deposit-paid': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    'balance-due': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-    'paid-in-full': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    unpaid: 'bg-card-elevated text-text-secondary',
+    'deposit-due': 'bg-warning/20 text-warning',
+    'deposit-paid': 'bg-info/20 text-info',
+    'balance-due': 'bg-accent-soft-bg text-accent',
+    'paid-in-full': 'bg-success/20 text-success',
     refunded: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
   };
 
@@ -778,13 +803,22 @@ export default function BookingsPage() {
     [formData.staffAssignments]
   );
 
-  // Get available staff for a given ChefRole
+  // Get available staff for a given ChefRole: must match role, be available for event date/time, and not double-booked
   const getAvailableStaff = (chefRole: string): StaffRecord[] => {
     const requiredStaffRole = CHEF_ROLE_TO_STAFF_ROLE[chefRole as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
     if (!requiredStaffRole) return [];
-    return staffRecords.filter(
-      (s) => s.status === 'active' && (s.primaryRole === requiredStaffRole || s.secondaryRoles.includes(requiredStaffRole))
-    );
+    const eventDate = formData.eventDate;
+    const eventTime = formData.eventTime ?? '18:00';
+    const excludeBookingId = selectedBooking?.id;
+
+    return staffRecords.filter((s) => {
+      if (s.status !== 'active') return false;
+      if (s.primaryRole !== requiredStaffRole && !s.secondaryRoles.includes(requiredStaffRole)) return false;
+      if (eventDate && !isStaffAvailableForEvent(s, eventDate, eventTime)) return false;
+      const conflicts = findStaffConflicts(eventDate, eventTime, [s.id], excludeBookingId);
+      if (conflicts.length > 0) return false;
+      return true;
+    });
   };
 
   // Find the assignment for a staffing plan position (handles duplicate roles)
@@ -863,9 +897,9 @@ export default function BookingsPage() {
 
   const statusColors: Record<BookingStatus, string> = {
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-    confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
-    cancelled: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400',
+    confirmed: 'bg-info/20 text-info',
+    completed: 'bg-success/20 text-success',
+    cancelled: 'bg-card-elevated text-text-muted',
   };
 
   const selectedBookingPayments = useMemo(() => {
@@ -880,67 +914,61 @@ export default function BookingsPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-3xl font-bold text-text-primary">
             Bookings Management
           </h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-text-secondary">
             Manage event bookings and customer information
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={handleLoadSampleBookings}
-            className="rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
-          >
-            Load Sample Schedule
-          </button>
-          <button
             onClick={() => {
               resetForm();
               setShowModal(true);
             }}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
+            className="rounded-md bg-accent px-4 py-2 text-white hover:bg-accent-hover"
           >
             + New Booking
           </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards: Pending, Confirmed, Completed, Cancelled */}
       <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6 dark:border-yellow-900 dark:bg-yellow-950/20">
-          <h3 className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Pending
           </h3>
-          <p className="mt-2 text-3xl font-bold text-yellow-600 dark:text-yellow-400">
+          <p className="mt-2 text-3xl font-bold text-text-primary">
             {stats.pending}
           </p>
         </div>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/20">
-          <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200">
+        <div className="rounded-lg border border-border bg-card p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Confirmed
           </h3>
-          <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+          <p className="mt-2 text-3xl font-bold text-accent">
             {stats.confirmed}
           </p>
         </div>
 
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/20">
-          <h3 className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+        <div className="rounded-lg border border-border bg-success/20 p-6">
+          <h3 className="text-sm font-medium text-text-primary">
             Completed
           </h3>
-          <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+          <p className="mt-2 text-3xl font-bold text-success">
             {stats.completed}
           </p>
         </div>
 
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-6 dark:border-indigo-900 dark:bg-indigo-950/20">
-          <h3 className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
-            Total Revenue
+        <div className="rounded-lg border border-border bg-danger/20 p-6">
+          <h3 className="text-sm font-medium text-text-primary">
+            Cancelled
           </h3>
-          <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-            {formatCurrency(stats.totalRevenue)}
+          <p className="mt-2 text-3xl font-bold text-danger">
+            {stats.cancelled}
           </p>
         </div>
       </div>
@@ -953,8 +981,8 @@ export default function BookingsPage() {
             onClick={() => setViewMode('table')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               viewMode === 'table'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             📋 Table
@@ -963,8 +991,8 @@ export default function BookingsPage() {
             onClick={() => setViewMode('calendar')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               viewMode === 'calendar'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             📅 Calendar
@@ -977,8 +1005,8 @@ export default function BookingsPage() {
             onClick={() => setFilterStatus('all')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             All
@@ -987,8 +1015,8 @@ export default function BookingsPage() {
             onClick={() => setFilterStatus('pending')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'pending'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             Pending
@@ -997,8 +1025,8 @@ export default function BookingsPage() {
             onClick={() => setFilterStatus('confirmed')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'confirmed'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             Confirmed
@@ -1007,8 +1035,8 @@ export default function BookingsPage() {
             onClick={() => setFilterStatus('completed')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterStatus === 'completed'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             Completed
@@ -1020,27 +1048,27 @@ export default function BookingsPage() {
           placeholder="Search by customer or location..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          className="flex-1 rounded-md border border-border px-4 py-2 text-sm text-text-primary bg-card-elevated text-text-primary"
         />
       </div>
 
       {/* Calendar View */}
       {viewMode === 'calendar' ? (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-lg border border-border bg-card p-6 ">
           {/* Calendar Header */}
           <div className="mb-6 flex items-center justify-between">
             <button
               onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
-              className="rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="rounded-md px-3 py-2 text-text-secondary hover:bg-card-elevated "
             >
               ← Previous
             </button>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
+            <h2 className="text-xl font-bold text-text-primary">
               {format(calendarMonth, 'MMMM yyyy')}
             </h2>
             <button
               onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
-              className="rounded-md px-3 py-2 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              className="rounded-md px-3 py-2 text-text-secondary hover:bg-card-elevated "
             >
               Next →
             </button>
@@ -1052,7 +1080,7 @@ export default function BookingsPage() {
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
               <div
                 key={day}
-                className="py-2 text-center text-sm font-semibold text-zinc-700 dark:text-zinc-300"
+                className="py-2 text-center text-sm font-semibold text-text-secondary"
               >
                 {day}
               </div>
@@ -1072,20 +1100,54 @@ export default function BookingsPage() {
                   isSameDay(new Date(booking.eventDate), day)
                 );
 
+                const openModalForDay = () => {
+                  if (dayBookings.length > 0) {
+                    const booking = dayBookings[0];
+                    setSelectedBooking(booking);
+                    setIsEditing(true);
+                    setFormData({
+                      eventType: booking.eventType,
+                      eventDate: booking.eventDate,
+                      eventTime: booking.eventTime,
+                      customerName: booking.customerName,
+                      customerEmail: booking.customerEmail,
+                      customerPhone: booking.customerPhone,
+                      adults: booking.adults,
+                      children: booking.children,
+                      location: booking.location,
+                      distanceMiles: booking.distanceMiles,
+                      premiumAddOn: booking.premiumAddOn,
+                      notes: booking.notes,
+                      staffAssignments: booking.staffAssignments,
+                      staffingProfileId: booking.staffingProfileId,
+                    });
+                    setShowModal(true);
+                  } else {
+                    resetForm();
+                    setFormData((prev) => ({ ...prev, eventDate: format(day, 'yyyy-MM-dd') }));
+                    setShowModal(true);
+                  }
+                };
+
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`min-h-[100px] rounded-lg border p-2 ${
+                    role="button"
+                    tabIndex={0}
+                    onClick={openModalForDay}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModalForDay(); } }}
+                    className={`min-h-[100px] cursor-pointer rounded-lg border p-2 ${
                       isCurrentMonth
-                        ? 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800'
-                        : 'border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50'
+                        ? 'border-border bg-card-elevated'
+                        : 'border-border bg-card-elevated/50'
                     }`}
+                    title={dayBookings.length > 0 ? 'Click to edit a booking' : 'Click to add booking'}
                   >
                     <div
                       className={`mb-1 text-sm ${
                         isCurrentMonth
-                          ? 'font-medium text-zinc-900 dark:text-zinc-100'
-                          : 'text-zinc-400 dark:text-zinc-600'
+                          ? 'font-medium text-text-primary'
+                          : 'text-text-muted'
                       }`}
                     >
                       {format(day, 'd')}
@@ -1094,7 +1156,9 @@ export default function BookingsPage() {
                       {dayBookings.map((booking) => (
                         <button
                           key={booking.id}
-                          onClick={() => {
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedBooking(booking);
                             setIsEditing(true);
                             setFormData({
@@ -1130,32 +1194,32 @@ export default function BookingsPage() {
             })()}
           </div>
 
-          {/* Calendar Legend */}
-          <div className="mt-6 flex flex-wrap gap-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          {/* Calendar Legend: order and colors match summary tiles */}
+          <div className="mt-6 flex flex-wrap gap-4 border-t border-border pt-4">
             <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded bg-yellow-100 dark:bg-yellow-900/30"></div>
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">Pending</span>
+              <div className="h-4 w-4 rounded border border-border bg-card"></div>
+              <span className="text-sm text-text-secondary">Pending</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded bg-blue-100 dark:bg-blue-900/30"></div>
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">Confirmed</span>
+              <div className="h-4 w-4 rounded border border-border bg-card"></div>
+              <span className="text-sm text-text-secondary">Confirmed</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded bg-emerald-100 dark:bg-emerald-900/30"></div>
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">Completed</span>
+              <div className="h-4 w-4 rounded bg-success/20"></div>
+              <span className="text-sm text-text-secondary">Completed</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded bg-zinc-100 dark:bg-zinc-800"></div>
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">Cancelled</span>
+              <div className="h-4 w-4 rounded bg-danger/20"></div>
+              <span className="text-sm text-text-secondary">Cancelled</span>
             </div>
           </div>
         </div>
       ) : (
         /* Bookings Table */
-        <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-lg border border-border bg-card ">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+            <thead className="border-b border-border bg-card-elevated">
               <tr>
                 {([
                   ['eventDate', 'Event Date'],
@@ -1168,28 +1232,28 @@ export default function BookingsPage() {
                   <th
                     key={field}
                     onClick={() => handleSort(field)}
-                    className="cursor-pointer select-none px-4 py-3 text-left text-sm font-semibold text-zinc-900 hover:bg-zinc-100 dark:text-zinc-50 dark:hover:bg-zinc-700"
+                    className="cursor-pointer select-none px-4 py-3 text-left text-sm font-semibold text-text-primary hover:bg-card-elevated"
                   >
                     {label} {sortField === field && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-left text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-text-primary">
                   Payment
                 </th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-center text-sm font-semibold text-text-primary">
                   Reconcile
                 </th>
-                <th className="px-4 py-3 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <th className="px-4 py-3 text-right text-sm font-semibold text-text-primary">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-border ">
               {filteredBookings.length === 0 ? (
                 <tr>
                   <td
                     colSpan={9}
-                    className="px-4 py-12 text-center text-zinc-500 dark:text-zinc-400"
+                    className="px-4 py-12 text-center text-text-muted"
                   >
                     {searchQuery || filterStatus !== 'all'
                       ? 'No bookings match your filters'
@@ -1197,37 +1261,39 @@ export default function BookingsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredBookings.map((booking) => (
+                filteredBookings.map((booking, rowIndex) => {
+                  const isLastRow = rowIndex === filteredBookings.length - 1;
+                  return (
                   <tr
                     key={booking.id}
-                    className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                    className="hover:bg-card-elevated /50"
                   >
-                    <td className="px-4 py-4 text-sm text-zinc-900 dark:text-zinc-100">
+                    <td className="px-4 py-4 text-sm text-text-primary">
                       {format(new Date(booking.eventDate), 'MMM dd, yyyy')}
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="text-xs text-text-muted">
                         {booking.eventTime}
                       </div>
                     </td>
                     <td className="px-4 py-4 text-sm">
-                      <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                      <div className="font-medium text-text-primary">
                         {booking.customerName}
                       </div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="text-xs text-text-muted">
                         {booking.customerEmail}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-4 text-sm text-text-secondary">
                       {booking.eventType === 'private-dinner' ? 'Private' : 'Buffet'}
                     </td>
-                    <td className="px-4 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                    <td className="px-4 py-4 text-sm text-text-secondary">
                       {booking.adults + booking.children}
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="text-xs text-text-muted">
                         ({booking.adults}A + {booking.children}C)
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    <td className="px-4 py-4 text-sm font-medium text-text-primary">
                       {formatCurrency(booking.total)}
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="text-xs text-text-muted">
                         {booking.menuPricingSnapshot ? 'menu pricing' : 'rules pricing'}
                       </div>
                     </td>
@@ -1256,7 +1322,7 @@ export default function BookingsPage() {
                         >
                           {paymentStatusLabels[booking.paymentStatus ?? 'unpaid']}
                         </span>
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                        <div className="text-xs text-text-muted">
                           Paid {formatCurrency(booking.amountPaid ?? 0)} / Due{' '}
                           {formatCurrency(
                             booking.balanceDueAmount ?? Math.max(0, booking.total - (booking.amountPaid ?? 0))
@@ -1267,7 +1333,7 @@ export default function BookingsPage() {
                             <button
                               type="button"
                               onClick={() => handleRecordPayment(booking)}
-                              className="w-fit text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                              className="w-fit text-xs font-medium text-accent hover:text-accent-hover  "
                             >
                               + Record Payment
                             </button>
@@ -1280,68 +1346,127 @@ export default function BookingsPage() {
                           href={`/bookings/reconcile?bookingId=${booking.id}`}
                           className={`inline-flex items-center gap-1 font-medium ${
                             booking.reconciliationId
-                              ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
-                              : 'text-amber-600 hover:text-amber-700 dark:text-amber-400'
+                              ? 'text-success'
+                              : 'text-warning'
                           }`}
                         >
                           {booking.reconciliationId ? '✓ Reconciled' : '⚖ Reconcile'}
                         </Link>
                       ) : (
-                        <span className="text-zinc-400 dark:text-zinc-600">—</span>
+                        <span className="text-text-muted">—</span>
                       )}
                     </td>
                     <td className="px-4 py-4 text-right text-sm">
-                      <div className="flex justify-end gap-3">
-                        {booking.eventType === 'private-dinner' && (
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Icons when menu or shopping list exists */}
+                        {booking.eventType === 'private-dinner' && booking.menuId && (
                           <Link
                             href={`/bookings/menu?bookingId=${booking.id}`}
-                            className={`${
-                              booking.menuId
-                                ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300'
-                                : 'text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300'
-                            }`}
-                            title={booking.menuId ? 'Edit menu' : 'Create menu'}
+                            className="text-success hover:text-success/80"
+                            title="Event menu configured"
                           >
-                            {booking.menuId ? '📋 Menu' : '➕ Menu'}
+                            <ClipboardDocumentListIcon className="h-5 w-5" />
                           </Link>
                         )}
-                        <Link
-                          href={`/bookings/shopping?bookingId=${booking.id}`}
-                          className="text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
-                          title="Event shopping list"
+                        {bookingIdsWithShoppingList.has(booking.id) && (
+                          <Link
+                            href={`/bookings/shopping?bookingId=${booking.id}`}
+                            className="text-accent hover:text-accent-hover"
+                            title="Shopping list exists"
+                          >
+                            <ShoppingCartIcon className="h-5 w-5" />
+                          </Link>
+                        )}
+                        {/* Actions dropdown */}
+                        <div
+                          ref={actionsOpenForBookingId === booking.id ? actionsDropdownRef : undefined}
+                          className="relative inline-block"
                         >
-                          🛒 Shop
-                        </Link>
-                        <button
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setIsEditing(true);
-                            setFormData({
-                              eventType: booking.eventType,
-                              eventDate: booking.eventDate,
-                              eventTime: booking.eventTime,
-                              customerName: booking.customerName,
-                              customerEmail: booking.customerEmail,
-                              customerPhone: booking.customerPhone,
-                              adults: booking.adults,
-                              children: booking.children,
-                              location: booking.location,
-                              distanceMiles: booking.distanceMiles,
-                              premiumAddOn: booking.premiumAddOn,
-                              notes: booking.notes,
-                              staffAssignments: booking.staffAssignments,
-                              staffingProfileId: booking.staffingProfileId,
-                            });
-                            setShowModal(true);
-                          }}
-                          className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                        >
-                          Edit
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActionsOpenForBookingId((id) =>
+                                id === booking.id ? null : booking.id
+                              )
+                            }
+                            className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1.5 text-sm font-medium text-text-primary hover:bg-card-elevated"
+                            aria-expanded={actionsOpenForBookingId === booking.id}
+                            aria-haspopup="true"
+                          >
+                            Actions
+                            <ChevronDownIcon
+                              className={`h-4 w-4 transition-transform ${
+                                actionsOpenForBookingId === booking.id ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </button>
+                          {actionsOpenForBookingId === booking.id && (
+                            <div
+                              className={`absolute right-0 z-20 min-w-[12rem] rounded-md border border-border bg-card py-1 shadow-lg ${
+                                isLastRow ? 'bottom-full mb-1' : 'mt-1'
+                              }`}
+                              role="menu"
+                            >
+                              {booking.eventType === 'private-dinner' && (
+                                <Link
+                                  href={`/bookings/menu?bookingId=${booking.id}`}
+                                  onClick={closeActionsDropdown}
+                                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-card-elevated"
+                                  role="menuitem"
+                                >
+                                  <ClipboardDocumentListIcon className="h-4 w-4 shrink-0" />
+                                  {booking.menuId ? 'Edit Menu' : 'Add Menu'}
+                                </Link>
+                              )}
+                              <Link
+                                href={`/bookings/shopping?bookingId=${booking.id}`}
+                                onClick={closeActionsDropdown}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-card-elevated"
+                                role="menuitem"
+                              >
+                                <ShoppingCartIcon className="h-4 w-4 shrink-0" />
+                                {bookingIdsWithShoppingList.has(booking.id)
+                                  ? 'Update Shopping List'
+                                  : 'Add Shopping List'}
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  closeActionsDropdown();
+                                  setSelectedBooking(booking);
+                                  setIsEditing(true);
+                                  setFormData({
+                                    eventType: booking.eventType,
+                                    eventDate: booking.eventDate,
+                                    eventTime: booking.eventTime,
+                                    customerName: booking.customerName,
+                                    customerEmail: booking.customerEmail,
+                                    customerPhone: booking.customerPhone,
+                                    adults: booking.adults,
+                                    children: booking.children,
+                                    location: booking.location,
+                                    distanceMiles: booking.distanceMiles,
+                                    premiumAddOn: booking.premiumAddOn,
+                                    notes: booking.notes,
+                                    staffAssignments: booking.staffAssignments,
+                                    staffingProfileId: booking.staffingProfileId,
+                                  });
+                                  setShowModal(true);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                                role="menuitem"
+                              >
+                                <PencilSquareIcon className="h-4 w-4 shrink-0" />
+                                Edit Booking
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1352,9 +1477,9 @@ export default function BookingsPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-6 ">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+              <h2 className="text-2xl font-bold text-text-primary">
                 {isEditing ? 'Edit Booking' : 'New Booking'}
               </h2>
               <button
@@ -1362,7 +1487,7 @@ export default function BookingsPage() {
                   setShowModal(false);
                   resetForm();
                 }}
-                className="text-zinc-500 hover:text-zinc-700"
+                className="text-text-muted hover:text-text-primary"
               >
                 ✕
               </button>
@@ -1371,15 +1496,15 @@ export default function BookingsPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Customer Info */}
               <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                <h3 className="mb-4 font-semibold text-text-primary">
                   Customer Information
                 </h3>
-                <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mb-3 text-xs text-text-muted">
                   Enter the primary contact details used for confirmations, payment follow-up, and event updates.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Customer Name *
                     </label>
                     <input
@@ -1389,11 +1514,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, customerName: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Email *
                     </label>
                     <input
@@ -1403,11 +1528,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, customerEmail: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Phone *
                     </label>
                     <input
@@ -1417,7 +1542,7 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, customerPhone: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                 </div>
@@ -1425,15 +1550,15 @@ export default function BookingsPage() {
 
               {/* Event Details */}
               <div>
-                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                <h3 className="mb-4 font-semibold text-text-primary">
                   Event Details
                 </h3>
-                <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mb-3 text-xs text-text-muted">
                   Set date, guest count, and location details accurately since pricing, staffing, and prep planning depend on this section.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Event Type *
                     </label>
                     <select
@@ -1444,14 +1569,14 @@ export default function BookingsPage() {
                           eventType: e.target.value as 'private-dinner' | 'buffet',
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     >
                       <option value="private-dinner">Private Dinner</option>
                       <option value="buffet">Buffet</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Event Date *
                     </label>
                     <input
@@ -1461,11 +1586,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, eventDate: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Event Time *
                     </label>
                     <input
@@ -1475,11 +1600,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, eventTime: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Location *
                     </label>
                     <input
@@ -1489,11 +1614,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, location: e.target.value })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Adults *
                     </label>
                     <input
@@ -1504,11 +1629,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, adults: parseInt(e.target.value) || 1 })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Children
                     </label>
                     <input
@@ -1518,11 +1643,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, children: parseInt(e.target.value) || 0 })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Distance (miles)
                     </label>
                     <input
@@ -1532,11 +1657,11 @@ export default function BookingsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, distanceMiles: parseInt(e.target.value) || 0 })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Premium Add-on ($/guest)
                     </label>
                     <input
@@ -1550,7 +1675,7 @@ export default function BookingsPage() {
                           premiumAddOn: parseFloat(e.target.value) || 0,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
                 </div>
@@ -1559,10 +1684,10 @@ export default function BookingsPage() {
               {/* Staffing Profile Selector */}
               {(rules.staffing.profiles || []).length > 0 && (
                 <div>
-                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                  <h3 className="mb-4 font-semibold text-text-primary">
                     Staffing Profile
                   </h3>
-                  <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="mb-3 text-xs text-text-muted">
                     Choose a preset staffing setup for this event size, or leave Auto to apply your default business rules.
                   </p>
                   <select
@@ -1574,7 +1699,7 @@ export default function BookingsPage() {
                         staffAssignments: undefined, // Clear assignments when profile changes
                       });
                     }}
-                    className="w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                   >
                     <option value="">Auto (best match)</option>
                     {(rules.staffing.profiles || []).map((p) => (
@@ -1584,12 +1709,12 @@ export default function BookingsPage() {
                     ))}
                   </select>
                   {currentFinancials?.staffingPlan.matchedProfileName && (
-                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    <p className="mt-1 text-sm text-text-muted">
                       Using profile: <span className="font-medium">{currentFinancials.staffingPlan.matchedProfileName}</span>
                     </p>
                   )}
                   {!currentFinancials?.staffingPlan.matchedProfileId && (
-                    <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    <p className="mt-1 text-sm text-text-muted">
                       Using default staffing rules
                     </p>
                   )}
@@ -1599,10 +1724,10 @@ export default function BookingsPage() {
               {/* Staff Assignments */}
               {currentFinancials && currentFinancials.staffingPlan.staff.length > 0 && (
                 <div>
-                  <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                  <h3 className="mb-4 font-semibold text-text-primary">
                     Staff Assignments
                   </h3>
-                  <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                  <p className="mb-3 text-xs text-text-muted">
                     Assign each role before completion to avoid conflicts and ensure labor payouts are recorded correctly.
                   </p>
                   <div className="space-y-3">
@@ -1614,14 +1739,14 @@ export default function BookingsPage() {
                       return (
                         <div
                           key={`${position.role}-${idx}`}
-                          className="flex items-center gap-4 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
+                          className="flex items-center gap-4 rounded-lg border border-border bg-card-elevated px-4 py-3"
                         >
                           <div className="min-w-[140px]">
-                            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                            <div className="text-sm font-medium text-text-primary">
                               {CHEF_ROLE_LABELS[position.role] || position.role}
                             </div>
                             {laborComp && (
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              <div className="text-xs text-text-muted">
                                 Est. {formatCurrency(laborComp.finalPay)}
                               </div>
                             )}
@@ -1629,7 +1754,7 @@ export default function BookingsPage() {
                           <select
                             value={assignment?.staffId || ''}
                             onChange={(e) => updateStaffAssignment(idx, e.target.value)}
-                            className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                            className="flex-1 rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated text-text-primary"
                           >
                             <option value="">Unassigned</option>
                             {available.map((staff) => (
@@ -1698,17 +1823,17 @@ export default function BookingsPage() {
                       <button
                         type="button"
                         onClick={() => handleRecordPayment(selectedBooking)}
-                        className="mt-3 rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-zinc-800"
+                        className="mt-3 rounded-md border border-border bg-card-elevated px-3 py-1.5 text-sm font-medium text-accent hover:bg-card"
                       >
                         Record Payment
                       </button>
                     )}
-                  <div className="mt-4 rounded-md border border-indigo-200 bg-white p-3 dark:border-indigo-800 dark:bg-zinc-900">
+                  <div className="mt-4 rounded-md border border-border bg-card-elevated p-3">
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
                       Payment Log
                     </h4>
                     {selectedBookingPayments.length === 0 ? (
-                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      <p className="mt-2 text-xs text-text-muted">
                         No customer payments recorded for this booking yet.
                       </p>
                     ) : (
@@ -1716,7 +1841,7 @@ export default function BookingsPage() {
                         {selectedBookingPayments.slice(0, 6).map((payment) => (
                           <div
                             key={payment.id}
-                            className="flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300"
+                            className="flex items-center justify-between text-xs text-text-secondary"
                           >
                             <span>
                               {payment.paymentDate} • {payment.type}
@@ -1733,30 +1858,30 @@ export default function BookingsPage() {
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label className="block text-sm font-medium text-text-secondary">
                   Notes
                 </label>
-                <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="mb-2 text-xs text-text-muted">
                   Add internal context for your team, such as dietary restrictions, access instructions, or special setup details.
                 </p>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                   placeholder="Special requests, dietary restrictions, etc."
                 />
               </div>
 
               {/* Menu Link */}
               {isEditing && selectedBooking && formData.eventType === 'private-dinner' && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+                <div className="rounded-lg border border-amber-200 bg-warning/20 p-4 dark:border-amber-900 dark:bg-amber-950/20">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="font-semibold text-amber-900 dark:text-amber-200">
                         Guest Menu
                       </h3>
-                      <p className="text-sm text-amber-700 dark:text-amber-400">
+                      <p className="text-sm text-warning dark:text-amber-400">
                         {selectedBooking.menuId
                           ? 'Menu selections have been configured for this event.'
                           : 'No menu configured yet. Set up guest-by-guest protein and side selections.'}
@@ -1796,13 +1921,13 @@ export default function BookingsPage() {
                       setShowModal(false);
                       resetForm();
                     }}
-                    className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
+                    className="rounded-md bg-accent px-4 py-2 text-white hover:bg-accent-hover"
                   >
                     {isEditing ? 'Update Booking' : 'Create Booking'}
                   </button>

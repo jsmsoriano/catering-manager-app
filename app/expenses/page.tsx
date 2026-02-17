@@ -21,6 +21,7 @@ import {
   getBookingServiceStatus,
   normalizeBookingWorkflowFields,
 } from '@/lib/bookingWorkflow';
+import { loadShoppingListForBooking } from '@/lib/shoppingStorage';
 
 const EXPENSES_KEY = 'expenses';
 const BOOKINGS_KEY = 'bookings';
@@ -112,7 +113,7 @@ const categoryColors: Record<ExpenseCategory, string> = {
   supplies: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300',
   equipment: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
   labor: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
-  other: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-300',
+  other: 'bg-card-elevated text-text-primary',
 };
 
 const inventoryCategoryLabels: Record<InventoryCategory, string> = {
@@ -646,6 +647,11 @@ export default function ExpensesPage() {
     });
 
     const linkedToEvents = expenses.filter((expense) => expense.bookingId).length;
+    const eventLinkedExpenses = expenses.filter((expense) => expense.bookingId);
+    const eventIds = new Set(eventLinkedExpenses.map((e) => e.bookingId));
+    const eventLinkedTotal = eventLinkedExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const eventCount = eventIds.size;
+    const averagePerEvent = eventCount > 0 ? eventLinkedTotal / eventCount : 0;
 
     return {
       total,
@@ -653,6 +659,7 @@ export default function ExpensesPage() {
       linkedToEvents,
       generalExpenses: expenses.length - linkedToEvents,
       count: expenses.length,
+      averagePerEvent,
     };
   }, [expenses]);
 
@@ -873,28 +880,12 @@ export default function ExpensesPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-bold text-text-primary">
           Expense Tracking & Inventory Management
         </h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-text-secondary">
           Track spend, control stock levels, and connect costs to real events.
         </p>
-      </div>
-
-      <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50/70 p-4 text-sm dark:border-indigo-900 dark:bg-indigo-950/20">
-        <p className="font-semibold text-indigo-900 dark:text-indigo-200">Recommended workflow</p>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-indigo-800 dark:text-indigo-300">
-          <li>Load sample bookings from the Bookings page for realistic test volume.</li>
-          <li>Review Purchasing Planner daily for T-2 events and shortfalls.</li>
-          <li>Record purchase receipts in Expense Tracking (event-linked when possible).</li>
-          <li>Post stock movements in Inventory Management to keep on-hand counts accurate.</li>
-        </ol>
-        <Link
-          href="/bookings"
-          className="mt-3 inline-block rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
-        >
-          Go to Bookings
-        </Link>
       </div>
 
       <div className="mb-8 flex flex-wrap gap-2">
@@ -903,7 +894,7 @@ export default function ExpensesPage() {
           className={`rounded-md px-4 py-2 text-sm font-medium ${
             activeSection === 'expenses'
               ? 'bg-blue-600 text-white'
-              : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              : 'bg-card-elevated text-text-secondary hover:bg-card'
           }`}
         >
           Expense Tracking
@@ -913,7 +904,7 @@ export default function ExpensesPage() {
           className={`rounded-md px-4 py-2 text-sm font-medium ${
             activeSection === 'inventory'
               ? 'bg-emerald-600 text-white'
-              : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              : 'bg-card-elevated text-text-secondary hover:bg-card'
           }`}
         >
           Inventory Management
@@ -923,7 +914,7 @@ export default function ExpensesPage() {
           className={`rounded-md px-4 py-2 text-sm font-medium ${
             activeSection === 'purchasing'
               ? 'bg-purple-600 text-white'
-              : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              : 'bg-card-elevated text-text-secondary hover:bg-card'
           }`}
         >
           Purchasing Planner (T-2)
@@ -947,68 +938,68 @@ export default function ExpensesPage() {
           </div>
 
           <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/20">
-              <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200">Total Expenses</h3>
-              <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+            <div className="rounded-lg border border-border bg-card p-6">
+              <h3 className="text-sm font-medium text-text-primary">Total Expenses</h3>
+              <p className="mt-2 text-3xl font-bold text-text-primary">
                 {formatCurrency(expenseSummary.total)}
               </p>
-              <p className="mt-1 text-xs text-blue-700 dark:text-blue-300">
+              <p className="mt-1 text-xs text-text-secondary">
                 {expenseSummary.count} total records
               </p>
             </div>
-            <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-900 dark:bg-red-950/20">
-              <h3 className="text-sm font-medium text-red-900 dark:text-red-200">Food Costs</h3>
-              <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
+            <div className="rounded-lg border border-border bg-card p-6">
+              <h3 className="text-sm font-medium text-text-primary">Food Costs</h3>
+              <p className="mt-2 text-3xl font-bold text-text-primary">
                 {formatCurrency(expenseSummary.byCategory.food)}
               </p>
-              <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+              <p className="mt-1 text-xs text-text-secondary">
                 {expenseSummary.total > 0
                   ? ((expenseSummary.byCategory.food / expenseSummary.total) * 100).toFixed(0)
                   : 0}
                 % of total
               </p>
             </div>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/20">
-              <h3 className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+            <div className="rounded-lg border border-border bg-card p-6">
+              <h3 className="text-sm font-medium text-text-primary">
                 Event-Linked
               </h3>
-              <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+              <p className="mt-2 text-3xl font-bold text-text-primary">
                 {expenseSummary.linkedToEvents}
               </p>
-              <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+              <p className="mt-1 text-xs text-text-secondary">
                 {expenseSummary.generalExpenses} general expenses
               </p>
             </div>
-            <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 dark:border-purple-900 dark:bg-purple-950/20">
-              <h3 className="text-sm font-medium text-purple-900 dark:text-purple-200">
-                Avg per Expense
+            <div className="rounded-lg border border-border bg-card p-6">
+              <h3 className="text-sm font-medium text-text-primary">
+                Average expense per event
               </h3>
-              <p className="mt-2 text-3xl font-bold text-purple-600 dark:text-purple-400">
-                {formatCurrency(expenseSummary.count > 0 ? expenseSummary.total / expenseSummary.count : 0)}
+              <p className="mt-2 text-3xl font-bold text-text-primary">
+                {formatCurrency(expenseSummary.averagePerEvent)}
               </p>
-              <p className="mt-1 text-xs text-purple-700 dark:text-purple-300">Across all categories</p>
+              <p className="mt-1 text-xs text-text-secondary">Event-linked expenses only</p>
             </div>
           </div>
 
           {showExpenseForm && (
-            <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="mb-8 rounded-lg border border-border bg-card p-6 dark:border-border ">
+              <h2 className="mb-4 text-xl font-semibold text-text-primary">
                 {editingExpenseId ? 'Edit Expense' : 'Add New Expense'}
               </h2>
               <form onSubmit={handleExpenseSubmit} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Date *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Date *</label>
                     <input
                       type="date"
                       value={expenseFormData.date}
                       onChange={(e) => setExpenseFormData({ ...expenseFormData, date: e.target.value })}
                       required
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Category *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Category *</label>
                     <select
                       value={expenseFormData.category}
                       onChange={(e) =>
@@ -1017,7 +1008,7 @@ export default function ExpensesPage() {
                           category: e.target.value as ExpenseCategory,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       {Object.entries(categoryLabels).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -1027,9 +1018,9 @@ export default function ExpensesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Amount *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Amount *</label>
                     <div className="relative mt-1">
-                      <span className="absolute left-3 top-2 text-zinc-500">$</span>
+                      <span className="absolute left-3 top-2 text-text-muted">$</span>
                       <input
                         type="number"
                         step="0.01"
@@ -1041,25 +1032,36 @@ export default function ExpensesPage() {
                             amount: e.target.value,
                           })
                         }
-                        className="w-full rounded-md border border-zinc-300 py-2 pl-7 pr-3 dark:border-zinc-700 dark:bg-zinc-800"
+                        className="w-full rounded-md border border-border bg-card-elevated py-2 pl-7 pr-3 text-text-primary"
                         placeholder="0.00"
                         required
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Link to Event (Optional)
                     </label>
                     <select
                       value={expenseFormData.bookingId}
-                      onChange={(e) =>
-                        setExpenseFormData({
-                          ...expenseFormData,
-                          bookingId: e.target.value,
-                        })
-                      }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      onChange={(e) => {
+                        const bookingId = e.target.value;
+                        let next = { ...expenseFormData, bookingId };
+                        if (bookingId) {
+                          const list = loadShoppingListForBooking(bookingId);
+                          if (list?.items?.length) {
+                            const shoppingTotal = list.items.reduce(
+                              (sum, item) =>
+                                sum +
+                                (item.actualQty ?? item.plannedQty) * (item.actualUnitCost ?? 0),
+                              0
+                            );
+                            if (shoppingTotal > 0) next = { ...next, amount: shoppingTotal.toFixed(2) };
+                          }
+                        }
+                        setExpenseFormData(next);
+                      }}
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       <option value="">General Business Expense</option>
                       {bookings
@@ -1079,7 +1081,7 @@ export default function ExpensesPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Description *
                   </label>
                   <input
@@ -1092,12 +1094,12 @@ export default function ExpensesPage() {
                       })
                     }
                     placeholder="e.g., Grocery run, gas, or event supplies"
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Notes (Optional)
                   </label>
                   <textarea
@@ -1110,7 +1112,7 @@ export default function ExpensesPage() {
                       })
                     }
                     placeholder="Additional context, receipt notes, etc."
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
                 </div>
                 <div className="flex gap-3">
@@ -1126,7 +1128,7 @@ export default function ExpensesPage() {
                       setShowExpenseForm(false);
                       resetExpenseForm();
                     }}
-                    className="rounded-md bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-600"
+                    className="rounded-md border border-border bg-card-elevated px-4 py-2 text-sm font-medium text-text-secondary hover:bg-card"
                   >
                     Cancel
                   </button>
@@ -1135,36 +1137,36 @@ export default function ExpensesPage() {
             </div>
           )}
 
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">All Expenses</h2>
+          <div className="rounded-lg border border-border bg-card dark:border-border ">
+            <div className="border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-text-primary">All Expenses</h2>
             </div>
             {sortedExpenses.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                  <thead className="border-b border-border bg-card-elevated">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Date
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Category
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Description
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Linked Event
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Amount
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-border">
                     {sortedExpenses.map((expense) => {
                       const linkedBooking = expense.bookingId
                         ? bookings.find((booking) => booking.id === expense.bookingId)
@@ -1173,9 +1175,9 @@ export default function ExpensesPage() {
                       return (
                         <tr
                           key={expense.id}
-                          className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                          className="hover:bg-card-elevated"
                         >
-                          <td className="whitespace-nowrap px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                          <td className="whitespace-nowrap px-6 py-4 text-sm text-text-primary">
                             {format(parseLocalDate(expense.date), 'MMM d, yyyy')}
                           </td>
                           <td className="px-6 py-4">
@@ -1187,18 +1189,18 @@ export default function ExpensesPage() {
                               {categoryLabels[expense.category]}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                          <td className="px-6 py-4 text-sm text-text-primary">
                             <div className="font-medium">{expense.description}</div>
                             {expense.notes && (
-                              <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                              <div className="mt-1 text-xs text-text-secondary">
                                 {expense.notes}
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">
+                          <td className="px-6 py-4 text-sm text-text-secondary">
                             {linkedBooking ? (
                               <>
-                                <div className="font-medium text-zinc-900 dark:text-zinc-50">
+                                <div className="font-medium text-text-primary">
                                   {linkedBooking.customerName}
                                 </div>
                                 <div className="text-xs">
@@ -1206,10 +1208,10 @@ export default function ExpensesPage() {
                                 </div>
                               </>
                             ) : (
-                              <span className="text-zinc-400">General</span>
+                              <span className="text-text-muted">General</span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                          <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-semibold text-text-primary">
                             {formatCurrency(expense.amount)}
                           </td>
                           <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
@@ -1234,8 +1236,8 @@ export default function ExpensesPage() {
               </div>
             ) : (
               <div className="px-6 py-12 text-center">
-                <p className="text-zinc-600 dark:text-zinc-400">No expenses recorded yet.</p>
-                <p className="mt-2 text-sm text-zinc-500">
+                <p className="text-text-secondary">No expenses recorded yet.</p>
+                <p className="mt-2 text-sm text-text-muted">
                   Click Add Expense to start tracking costs.
                 </p>
               </div>
@@ -1243,8 +1245,8 @@ export default function ExpensesPage() {
           </div>
 
           {expenses.length > 0 && (
-            <div className="mt-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="mt-8 rounded-lg border border-border bg-card p-6 dark:border-border ">
+              <h3 className="mb-4 text-lg font-semibold text-text-primary">
                 Expenses by Category
               </h3>
               <div className="space-y-3">
@@ -1254,14 +1256,14 @@ export default function ExpensesPage() {
                   .map(([category, amount]) => (
                     <div key={category}>
                       <div className="mb-2 flex justify-between text-sm">
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                        <span className="font-medium text-text-secondary">
                           {categoryLabels[category as ExpenseCategory]}
                         </span>
-                        <span className="text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-primary">
                           {formatCurrency(amount)} ({((amount / expenseSummary.total) * 100).toFixed(1)}%)
                         </span>
                       </div>
-                      <div className="h-3 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                      <div className="h-3 overflow-hidden rounded-full bg-border">
                         <div
                           className="h-full bg-blue-500"
                           style={{ width: `${(amount / expenseSummary.total) * 100}%` }}
@@ -1333,38 +1335,38 @@ export default function ExpensesPage() {
             </div>
           </div>
 
-          <div className="mb-8 rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          <div className="mb-8 rounded-lg border border-border bg-card dark:border-border ">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-text-primary">
                 Events in purchasing window
               </h2>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="text-xs text-text-muted">
                 Sorted by purchase-by date (event date - 2 days)
               </span>
             </div>
             {procurementEvents.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                  <thead className="border-b border-border bg-card-elevated">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Event
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Service Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Purchase By
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Guests
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Event In
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-border">
                     {procurementEvents.map((event) => {
                       const purchaseStatusClass =
                         event.daysUntilPurchase < 0
@@ -1373,25 +1375,25 @@ export default function ExpensesPage() {
                             ? 'text-amber-700 dark:text-amber-400'
                             : 'text-emerald-700 dark:text-emerald-400';
                       return (
-                        <tr key={event.booking.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                          <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                        <tr key={event.booking.id} className="hover:bg-card-elevated">
+                          <td className="px-6 py-4 text-sm text-text-primary">
                             <Link
                               href={`/bookings?bookingId=${event.booking.id}`}
-                              className="font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                              className="font-medium text-accent hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                             >
                               {event.booking.customerName}
                             </Link>
-                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                            <div className="text-xs text-text-muted">
                               {format(parseLocalDate(event.booking.eventDate), 'MMM d, yyyy')} •{' '}
                               {event.booking.eventTime}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-sm text-text-secondary">
                             {getBookingServiceStatus(event.booking)}
                           </td>
                           <td className={`px-6 py-4 text-sm font-medium ${purchaseStatusClass}`}>
                             {format(parseLocalDate(event.purchaseByDate), 'MMM d, yyyy')}
-                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                            <div className="text-xs text-text-muted">
                               {event.daysUntilPurchase < 0
                                 ? `${Math.abs(event.daysUntilPurchase)} day(s) overdue`
                                 : event.daysUntilPurchase === 0
@@ -1399,10 +1401,10 @@ export default function ExpensesPage() {
                                   : `in ${event.daysUntilPurchase} day(s)`}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-right text-sm text-text-secondary">
                             {event.booking.adults + event.booking.children}
                           </td>
-                          <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-right text-sm text-text-secondary">
                             {event.daysUntilEvent === 0
                               ? 'Today'
                               : `${event.daysUntilEvent} day(s)`}
@@ -1415,17 +1417,17 @@ export default function ExpensesPage() {
               </div>
             ) : (
               <div className="px-6 py-12 text-center">
-                <p className="text-zinc-600 dark:text-zinc-400">
+                <p className="text-text-secondary">
                   No confirmed events in the purchasing window.
                 </p>
-                <p className="mt-2 text-sm text-zinc-500">Confirm bookings to activate T-2 planning.</p>
+                <p className="mt-2 text-sm text-text-muted">Confirm bookings to activate T-2 planning.</p>
               </div>
             )}
           </div>
 
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          <div className="rounded-lg border border-border bg-card dark:border-border ">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-text-primary">
                 T-2 shortfall summary (due events)
               </h2>
               <button
@@ -1437,47 +1439,47 @@ export default function ExpensesPage() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                <thead className="border-b border-border bg-card-elevated">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                       Category
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                       Required
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                       On Hand
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                       Shortfall
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                       Avg Cost
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                       Est. Spend
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <tbody className="divide-y divide-border">
                   {duePurchaseNeeds.map((need) => (
-                    <tr key={`${need.category}-${need.unit}`} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-                      <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                    <tr key={`${need.category}-${need.unit}`} className="hover:bg-card-elevated">
+                      <td className="px-6 py-4 text-sm text-text-primary">
                         {inventoryCategoryLabels[need.category]}
                       </td>
-                      <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                      <td className="px-6 py-4 text-right text-sm text-text-secondary">
                         {need.requiredQty.toFixed(2)} {need.unit}
                       </td>
-                      <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                      <td className="px-6 py-4 text-right text-sm text-text-secondary">
                         {need.onHandQty.toFixed(2)} {need.unit}
                       </td>
-                      <td className="px-6 py-4 text-right text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                      <td className="px-6 py-4 text-right text-sm font-medium text-text-primary">
                         {need.shortfallQty.toFixed(2)} {need.unit}
                       </td>
-                      <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                      <td className="px-6 py-4 text-right text-sm text-text-secondary">
                         {formatCurrency(need.avgUnitCost)}
                       </td>
-                      <td className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                      <td className="px-6 py-4 text-right text-sm font-semibold text-text-primary">
                         {formatCurrency(need.estimatedSpend)}
                       </td>
                     </tr>
@@ -1558,14 +1560,14 @@ export default function ExpensesPage() {
           </div>
 
           {showInventoryForm && (
-            <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="mb-8 rounded-lg border border-border bg-card p-6 dark:border-border ">
+              <h2 className="mb-4 text-xl font-semibold text-text-primary">
                 {editingInventoryId ? 'Edit Inventory Item' : 'Add Inventory Item'}
               </h2>
               <form onSubmit={handleInventoryItemSubmit} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="lg:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Item Name *
                     </label>
                     <input
@@ -1577,12 +1579,12 @@ export default function ExpensesPage() {
                           name: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Category *
                     </label>
                     <select
@@ -1593,7 +1595,7 @@ export default function ExpensesPage() {
                           category: e.target.value as InventoryCategory,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       {Object.entries(inventoryCategoryLabels).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -1603,7 +1605,7 @@ export default function ExpensesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Unit *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Unit *</label>
                     <select
                       value={inventoryItemFormData.unit}
                       onChange={(e) =>
@@ -1612,7 +1614,7 @@ export default function ExpensesPage() {
                           unit: e.target.value as InventoryItem['unit'],
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       {['lb', 'kg', 'oz', 'g', 'ea', 'case', 'bottle', 'tray'].map((unit) => (
                         <option key={unit} value={unit}>
@@ -1622,7 +1624,7 @@ export default function ExpensesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Current Stock *
                     </label>
                     <input
@@ -1636,12 +1638,12 @@ export default function ExpensesPage() {
                           currentStock: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Par Level *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Par Level *</label>
                     <input
                       type="number"
                       min="0"
@@ -1653,12 +1655,12 @@ export default function ExpensesPage() {
                           parLevel: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Reorder Point *
                     </label>
                     <input
@@ -1672,12 +1674,12 @@ export default function ExpensesPage() {
                           reorderPoint: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Avg Unit Cost *
                     </label>
                     <input
@@ -1691,12 +1693,12 @@ export default function ExpensesPage() {
                           avgUnitCost: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       required
                     />
                   </div>
                   <div className="lg:col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Vendor</label>
+                    <label className="block text-sm font-medium text-text-secondary">Vendor</label>
                     <input
                       type="text"
                       value={inventoryItemFormData.vendor}
@@ -1706,13 +1708,13 @@ export default function ExpensesPage() {
                           vendor: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       placeholder="Preferred supplier (optional)"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Notes</label>
+                  <label className="block text-sm font-medium text-text-secondary">Notes</label>
                   <textarea
                     rows={2}
                     value={inventoryItemFormData.notes}
@@ -1722,7 +1724,7 @@ export default function ExpensesPage() {
                         notes: e.target.value,
                       })
                     }
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     placeholder="Storage location, rotation notes, etc."
                   />
                 </div>
@@ -1739,7 +1741,7 @@ export default function ExpensesPage() {
                       setShowInventoryForm(false);
                       resetInventoryItemForm();
                     }}
-                    className="rounded-md bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-600"
+                    className="rounded-md border border-border bg-card-elevated px-4 py-2 text-sm font-medium text-text-secondary hover:bg-card"
                   >
                     Cancel
                   </button>
@@ -1749,14 +1751,14 @@ export default function ExpensesPage() {
           )}
 
           {showMovementForm && (
-            <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="mb-8 rounded-lg border border-border bg-card p-6 dark:border-border ">
+              <h2 className="mb-4 text-xl font-semibold text-text-primary">
                 Record Inventory Movement
               </h2>
               <form onSubmit={handleMovementSubmit} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Date *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Date *</label>
                     <input
                       type="date"
                       value={movementFormData.date}
@@ -1766,12 +1768,12 @@ export default function ExpensesPage() {
                           date: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Item *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Item *</label>
                     <select
                       value={movementFormData.itemId}
                       onChange={(e) =>
@@ -1780,7 +1782,7 @@ export default function ExpensesPage() {
                           itemId: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       required
                     >
                       <option value="">Select item</option>
@@ -1792,7 +1794,7 @@ export default function ExpensesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Type *</label>
+                    <label className="block text-sm font-medium text-text-secondary">Type *</label>
                     <select
                       value={movementFormData.type}
                       onChange={(e) =>
@@ -1801,7 +1803,7 @@ export default function ExpensesPage() {
                           type: e.target.value as InventoryMovementType,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       <option value="restock">Restock (+)</option>
                       <option value="usage">Usage (-)</option>
@@ -1809,7 +1811,7 @@ export default function ExpensesPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Quantity *
                     </label>
                     <input
@@ -1822,7 +1824,7 @@ export default function ExpensesPage() {
                           quantity: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       placeholder={
                         movementFormData.type === 'adjustment'
                           ? 'Can be negative for corrections'
@@ -1832,7 +1834,7 @@ export default function ExpensesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Unit Cost (restock)
                     </label>
                     <input
@@ -1846,12 +1848,12 @@ export default function ExpensesPage() {
                           unitCost: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                       placeholder="Optional"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <label className="block text-sm font-medium text-text-secondary">
                       Related Event
                     </label>
                     <select
@@ -1862,7 +1864,7 @@ export default function ExpensesPage() {
                           bookingId: e.target.value,
                         })
                       }
-                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     >
                       <option value="">General stock movement</option>
                       {bookings
@@ -1882,7 +1884,7 @@ export default function ExpensesPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Notes
                   </label>
                   <textarea
@@ -1894,7 +1896,7 @@ export default function ExpensesPage() {
                         notes: e.target.value,
                       })
                     }
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                     placeholder="Reason for movement, wastage, transfer, etc."
                   />
                 </div>
@@ -1911,7 +1913,7 @@ export default function ExpensesPage() {
                       setShowMovementForm(false);
                       resetMovementForm();
                     }}
-                    className="rounded-md bg-zinc-200 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-600"
+                    className="rounded-md border border-border bg-card-elevated px-4 py-2 text-sm font-medium text-text-secondary hover:bg-card"
                   >
                     Cancel
                   </button>
@@ -1936,44 +1938,44 @@ export default function ExpensesPage() {
             </div>
           )}
 
-          <div className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          <div className="rounded-lg border border-border bg-card dark:border-border ">
+            <div className="border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-text-primary">
                 Inventory Catalog
               </h2>
             </div>
             {sortedInventoryItems.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                  <thead className="border-b border-border bg-card-elevated">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Item
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Category
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         On Hand
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Reorder / Par
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Unit Cost
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Stock Value
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wide text-text-muted">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-border">
                     {sortedInventoryItems.map((item) => {
                       const status = getInventoryStatus(item);
                       const statusClass =
@@ -1986,29 +1988,29 @@ export default function ExpensesPage() {
                       return (
                         <tr
                           key={item.id}
-                          className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                          className="hover:bg-card-elevated"
                         >
-                          <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                          <td className="px-6 py-4 text-sm text-text-primary">
                             <div className="font-medium">{item.name}</div>
                             {item.vendor && (
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              <div className="text-xs text-text-muted">
                                 Vendor: {item.vendor}
                               </div>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-sm text-text-secondary">
                             {inventoryCategoryLabels[item.category]}
                           </td>
-                          <td className="px-6 py-4 text-right text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                          <td className="px-6 py-4 text-right text-sm font-medium text-text-primary">
                             {item.currentStock} {item.unit}
                           </td>
-                          <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-right text-sm text-text-secondary">
                             {item.reorderPoint} / {item.parLevel} {item.unit}
                           </td>
-                          <td className="px-6 py-4 text-right text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-right text-sm text-text-secondary">
                             {formatCurrency(item.avgUnitCost)}
                           </td>
-                          <td className="px-6 py-4 text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                          <td className="px-6 py-4 text-right text-sm font-semibold text-text-primary">
                             {formatCurrency(item.currentStock * item.avgUnitCost)}
                           </td>
                           <td className="px-6 py-4 text-center">
@@ -2038,46 +2040,46 @@ export default function ExpensesPage() {
               </div>
             ) : (
               <div className="px-6 py-12 text-center">
-                <p className="text-zinc-600 dark:text-zinc-400">No inventory items yet.</p>
-                <p className="mt-2 text-sm text-zinc-500">
+                <p className="text-text-secondary">No inventory items yet.</p>
+                <p className="mt-2 text-sm text-text-muted">
                   Add your first item or use Load Sample Inventory to test flows.
                 </p>
               </div>
             )}
           </div>
 
-          <div className="mt-8 rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          <div className="mt-8 rounded-lg border border-border bg-card dark:border-border ">
+            <div className="border-b border-border px-6 py-4 dark:border-border">
+              <h2 className="text-lg font-semibold text-text-primary">
                 Inventory Movement Log
               </h2>
             </div>
             {recentInventoryTransactions.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/50">
+                  <thead className="border-b border-border bg-card-elevated">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Date
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Item
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wide text-text-muted">
                         Qty
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Linked Event
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
                         Notes
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                  <tbody className="divide-y divide-border">
                     {recentInventoryTransactions.map((transaction) => {
                       const item = inventoryItems.find((entry) => entry.id === transaction.itemId);
                       const booking = transaction.bookingId
@@ -2091,15 +2093,15 @@ export default function ExpensesPage() {
                       return (
                         <tr
                           key={transaction.id}
-                          className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                          className="hover:bg-card-elevated"
                         >
-                          <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                          <td className="px-6 py-4 text-sm text-text-primary">
                             {format(parseLocalDate(transaction.date), 'MMM d, yyyy')}
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-900 dark:text-zinc-50">
+                          <td className="px-6 py-4 text-sm text-text-primary">
                             {item?.name || 'Unknown item'}
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-sm text-text-secondary">
                             {movementTypeLabels[transaction.type]}
                           </td>
                           <td className={`px-6 py-4 text-right text-sm font-semibold ${quantityClass}`}>
@@ -2107,10 +2109,10 @@ export default function ExpensesPage() {
                             {transaction.quantity}
                             {item ? ` ${item.unit}` : ''}
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-700 dark:text-zinc-300">
+                          <td className="px-6 py-4 text-sm text-text-secondary">
                             {booking ? booking.customerName : 'General'}
                           </td>
-                          <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">
+                          <td className="px-6 py-4 text-sm text-text-secondary">
                             {transaction.notes || '—'}
                           </td>
                         </tr>
@@ -2120,7 +2122,7 @@ export default function ExpensesPage() {
                 </table>
               </div>
             ) : (
-              <div className="px-6 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
+              <div className="px-6 py-12 text-center text-sm text-text-muted">
                 No inventory movements recorded yet.
               </div>
             )}

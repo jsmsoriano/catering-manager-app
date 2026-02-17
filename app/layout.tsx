@@ -1,6 +1,7 @@
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
+import { AuthProvider } from "@/components/AuthProvider";
+import LayoutSwitcher from "@/components/LayoutSwitcher";
 
 export const metadata = {
   title: "Hibachi A Go Go - Catering Operations",
@@ -17,14 +18,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-[#f5f5f7] dark:bg-slate-950">
+      <body className="min-h-screen bg-background">
         <Providers>
-          <div className="flex h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto bg-[#f5f5f7] dark:bg-slate-950">
-              {children}
-            </main>
-          </div>
+          <AuthProvider>
+            <LayoutSwitcher>{children}</LayoutSwitcher>
+          </AuthProvider>
         </Providers>
       </body>
     </html>

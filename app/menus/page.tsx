@@ -14,11 +14,11 @@ const categoryLabels: Record<MenuCategory, string> = {
 };
 
 const categoryColors: Record<MenuCategory, string> = {
-  protein: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
-  side: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300',
-  appetizer: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
-  dessert: 'bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300',
-  beverage: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
+  protein: 'bg-red-100 text-red-800',
+  side: 'bg-yellow-100 text-yellow-800',
+  appetizer: 'bg-green-100 text-green-800',
+  dessert: 'bg-pink-100 text-pink-800',
+  beverage: 'bg-blue-100 text-blue-800',
 };
 
 export default function MenusPage() {
@@ -192,10 +192,10 @@ export default function MenusPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-3xl font-bold text-text-primary">
             Menu Management
           </h1>
-          <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+          <p className="mt-2 text-text-secondary">
             Manage menu items, pricing, and availability
           </p>
         </div>
@@ -216,7 +216,7 @@ export default function MenusPage() {
           <h3 className="text-sm font-medium text-indigo-900 dark:text-indigo-200">
             Total Items
           </h3>
-          <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+          <p className="mt-2 text-3xl font-bold text-accent dark:text-indigo-400">
             {stats.total}
           </p>
         </div>
@@ -265,8 +265,8 @@ export default function MenusPage() {
             onClick={() => setFilterCategory('all')}
             className={`rounded-md px-4 py-2 text-sm font-medium ${
               filterCategory === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                ? 'bg-accent text-white'
+                : 'bg-card-elevated text-text-secondary hover:bg-card'
             }`}
           >
             All
@@ -277,8 +277,8 @@ export default function MenusPage() {
               onClick={() => setFilterCategory(category)}
               className={`rounded-md px-4 py-2 text-sm font-medium ${
                 filterCategory === category
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                  ? 'bg-accent text-white'
+                  : 'bg-card-elevated text-text-secondary hover:bg-card'
               }`}
             >
               {categoryLabels[category]}
@@ -291,15 +291,15 @@ export default function MenusPage() {
           placeholder="Search menu items..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 rounded-md border border-zinc-300 px-4 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          className="flex-1 rounded-md border border-border bg-card-elevated px-4 py-2 text-sm text-text-primary"
         />
       </div>
 
       {/* Menu Items Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {filteredItems.length === 0 ? (
-          <div className="col-span-full rounded-lg border border-zinc-200 bg-white p-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
-            <p className="text-zinc-500 dark:text-zinc-400">
+          <div className="col-span-full rounded-lg border border-border bg-card p-12 text-center  ">
+            <p className="text-text-muted">
               {searchQuery || filterCategory !== 'all'
                 ? 'No menu items match your filters'
                 : 'No menu items yet. Click "+ New Menu Item" to get started!'}
@@ -309,11 +309,11 @@ export default function MenusPage() {
           filteredItems.map((item) => (
             <div
               key={item.id}
-              className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-lg border border-border bg-card p-6  "
             >
               <div className="mb-4 flex items-start justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                  <h3 className="text-lg font-semibold text-text-primary">
                     {item.name}
                   </h3>
                   <span className={`mt-1 inline-block rounded-full px-2 py-1 text-xs font-semibold ${categoryColors[item.category]}`}>
@@ -325,21 +325,21 @@ export default function MenusPage() {
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
                     item.isAvailable
                       ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
-                      : 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400'
+                      : 'bg-card-elevated text-text-secondary'
                   }`}
                 >
                   {item.isAvailable ? 'Available' : 'Unavailable'}
                 </button>
               </div>
 
-              <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
+              <p className="mb-4 text-sm text-text-secondary">
                 {item.description}
               </p>
 
               <div className="mb-1 text-lg font-bold text-emerald-600 dark:text-emerald-400">
                 {formatCurrency(item.pricePerServing)} price / serving
               </div>
-              <div className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="mb-4 text-xs text-text-muted">
                 {formatCurrency(item.costPerServing)} cost / serving
               </div>
 
@@ -371,7 +371,7 @@ export default function MenusPage() {
 
               <button
                 onClick={() => handleEdit(item)}
-                className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+                className="w-full rounded-md bg-accent px-4 py-2 text-sm text-white hover:bg-indigo-700"
               >
                 Edit
               </button>
@@ -383,14 +383,14 @@ export default function MenusPage() {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-card p-6  ">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+              <h2 className="text-2xl font-bold text-text-primary">
                 {editingItem ? 'Edit Menu Item' : 'New Menu Item'}
               </h2>
               <button
                 onClick={resetForm}
-                className="text-zinc-500 hover:text-zinc-700"
+                className="text-text-muted hover:text-text-secondary"
               >
                 ✕
               </button>
@@ -399,7 +399,7 @@ export default function MenusPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Name *
                   </label>
                   <input
@@ -407,12 +407,12 @@ export default function MenusPage() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Category *
                   </label>
                   <select
@@ -420,7 +420,7 @@ export default function MenusPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, category: e.target.value as MenuCategory })
                     }
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   >
                     {(Object.keys(categoryLabels) as MenuCategory[]).map((category) => (
                       <option key={category} value={category}>
@@ -431,11 +431,11 @@ export default function MenusPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Price per Serving *
                   </label>
                   <div className="relative mt-1">
-                    <span className="absolute left-3 top-2 text-zinc-500">$</span>
+                    <span className="absolute left-3 top-2 text-text-muted">$</span>
                     <input
                       type="number"
                       step="0.01"
@@ -445,17 +445,17 @@ export default function MenusPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, pricePerServing: e.target.value })
                       }
-                      className="w-full rounded-md border border-zinc-300 py-2 pl-7 pr-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="w-full rounded-md border border-border bg-card-elevated py-2 pl-7 pr-3 text-text-primary"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Cost per Serving *
                   </label>
                   <div className="relative mt-1">
-                    <span className="absolute left-3 top-2 text-zinc-500">$</span>
+                    <span className="absolute left-3 top-2 text-text-muted">$</span>
                     <input
                       type="number"
                       step="0.01"
@@ -465,13 +465,13 @@ export default function MenusPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, costPerServing: e.target.value })
                       }
-                      className="w-full rounded-md border border-zinc-300 py-2 pl-7 pr-3 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      className="w-full rounded-md border border-border bg-card-elevated py-2 pl-7 pr-3 text-text-primary"
                     />
                   </div>
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Description
                   </label>
                   <textarea
@@ -480,12 +480,12 @@ export default function MenusPage() {
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={3}
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Dietary Tags (comma-separated)
                   </label>
                   <input
@@ -495,12 +495,12 @@ export default function MenusPage() {
                       setFormData({ ...formData, dietaryTags: e.target.value })
                     }
                     placeholder="vegetarian, vegan, gluten-free"
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <label className="block text-sm font-medium text-text-secondary">
                     Allergens (comma-separated)
                   </label>
                   <input
@@ -510,7 +510,7 @@ export default function MenusPage() {
                       setFormData({ ...formData, allergens: e.target.value })
                     }
                     placeholder="shellfish, nuts, dairy"
-                    className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
                   />
                 </div>
 
@@ -522,9 +522,9 @@ export default function MenusPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, isAvailable: e.target.checked })
                       }
-                      className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                      className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500"
                     />
-                    <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <span className="text-sm font-medium text-text-secondary">
                       Available for selection
                     </span>
                   </label>
@@ -547,7 +547,7 @@ export default function MenusPage() {
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="rounded-md border border-zinc-300 px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
                   >
                     Cancel
                   </button>

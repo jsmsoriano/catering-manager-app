@@ -226,10 +226,10 @@ export default function BusinessSummaryPage() {
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header - Hide on print */}
       <div className="mb-8 print:hidden">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+        <h1 className="text-3xl font-bold text-text-primary">
           Business Financial Summary
         </h1>
-        <p className="mt-2 text-zinc-600 dark:text-zinc-400">
+        <p className="mt-2 text-text-secondary">
           Comprehensive analysis of business performance and financial health
         </p>
       </div>
@@ -237,25 +237,25 @@ export default function BusinessSummaryPage() {
       {/* Filters - Hide on print */}
       <div className="mb-8 flex flex-wrap gap-4 print:hidden">
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             Start Date
           </label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <label className="block text-sm font-medium text-text-secondary">
             End Date
           </label>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="mt-1 rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+            className="mt-1 rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
           />
         </div>
         <div className="flex items-end gap-2">
@@ -265,13 +265,13 @@ export default function BusinessSummaryPage() {
               setStartDate(format(startOfMonth(today), 'yyyy-MM-dd'));
               setEndDate(format(endOfMonth(today), 'yyyy-MM-dd'));
             }}
-            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
           >
             This Month
           </button>
           <button
             onClick={handlePrint}
-            className="rounded-md bg-zinc-600 px-4 py-2 text-white hover:bg-zinc-700"
+            className="rounded-md bg-card-elevated px-4 py-2 text-text-primary hover:bg-card"
           >
             🖨️ Print Report
           </button>
@@ -279,9 +279,9 @@ export default function BusinessSummaryPage() {
       </div>
 
       {/* Report Content - Print friendly */}
-      <div className="space-y-8 rounded-lg border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900 print:border-0 print:shadow-none">
+      <div className="space-y-8 rounded-lg border border-border bg-card p-8 dark:border-border  print:border-0 print:shadow-none">
         {/* Print Header */}
-        <div className="hidden border-b border-zinc-300 pb-6 print:block">
+        <div className="hidden border-b border-border pb-6 print:block">
           <div className="mb-4 flex justify-center">
             <Image
               src="/hibachisun.png"
@@ -292,10 +292,10 @@ export default function BusinessSummaryPage() {
               priority
             />
           </div>
-          <h2 className="text-center text-xl font-semibold text-zinc-700">
+          <h2 className="text-center text-xl font-semibold text-text-primary">
             Business Financial Summary
           </h2>
-          <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-zinc-600">
+          <div className="mt-4 grid grid-cols-2 gap-4 text-sm text-text-secondary">
             <div>
               <strong>Report Period:</strong> {format(parseLocalDate(startDate), 'MMM d, yyyy')} - {format(parseLocalDate(endDate), 'MMM d, yyyy')}
             </div>
@@ -315,7 +315,7 @@ export default function BusinessSummaryPage() {
           <>
             {/* Key Performance Indicators */}
             <div>
-              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <h3 className="mb-4 text-xl font-semibold text-text-primary">
                 Key Performance Indicators
               </h3>
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -375,26 +375,26 @@ export default function BusinessSummaryPage() {
             {/* Financial Breakdown */}
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Revenue & Profit */}
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-                <h4 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              <div className="rounded-lg border border-border bg-card-elevated p-6">
+                <h4 className="mb-4 text-lg font-semibold text-text-primary">
                   Revenue & Profit
                 </h4>
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-zinc-700 dark:text-zinc-300">Total Revenue</span>
-                    <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                    <span className="text-text-secondary">Total Revenue</span>
+                    <span className="font-semibold text-text-primary">
                       {formatCurrency(businessData.totalRevenue)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-zinc-700 dark:text-zinc-300">Total Costs</span>
+                    <span className="text-text-secondary">Total Costs</span>
                     <span className="font-semibold text-red-600 dark:text-red-400">
                       -{formatCurrency(businessData.totalCost)}
                     </span>
                   </div>
-                  <div className="border-t border-zinc-300 pt-2 dark:border-zinc-600">
+                  <div className="border-t border-border pt-2 border-border">
                     <div className="flex justify-between">
-                      <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <span className="font-medium text-text-primary">
                         Gross Profit
                       </span>
                       <span className="font-bold text-emerald-600 dark:text-emerald-400">
@@ -402,28 +402,28 @@ export default function BusinessSummaryPage() {
                       </span>
                     </div>
                     <div className="mt-1 flex justify-between text-xs">
-                      <span className="text-zinc-600 dark:text-zinc-400">Profit Margin</span>
+                      <span className="text-text-secondary">Profit Margin</span>
                       <span className="font-medium text-emerald-600 dark:text-emerald-400">
                         {businessData.profitMargin.toFixed(1)}%
                       </span>
                     </div>
                   </div>
-                  <div className="space-y-2 border-t border-zinc-300 pt-2 text-xs dark:border-zinc-600">
+                  <div className="space-y-2 border-t border-border pt-2 text-xs border-border">
                     <div className="flex justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Avg Revenue/Event</span>
-                      <span className="text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Avg Revenue/Event</span>
+                      <span className="text-text-primary">
                         {formatCurrency(businessData.avgRevenuePerEvent)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Avg Profit/Event</span>
-                      <span className="text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Avg Profit/Event</span>
+                      <span className="text-text-primary">
                         {formatCurrency(businessData.avgProfitPerEvent)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-zinc-600 dark:text-zinc-400">Avg Guests/Event</span>
-                      <span className="text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Avg Guests/Event</span>
+                      <span className="text-text-primary">
                         {businessData.avgGuestsPerEvent.toFixed(1)}
                       </span>
                     </div>
@@ -432,19 +432,19 @@ export default function BusinessSummaryPage() {
               </div>
 
               {/* Cost Breakdown */}
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-                <h4 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              <div className="rounded-lg border border-border bg-card-elevated p-6">
+                <h4 className="mb-4 text-lg font-semibold text-text-primary">
                   Cost Breakdown
                 </h4>
                 <div className="space-y-3">
                   <div>
                     <div className="mb-1 flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">Food Cost</span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Food Cost</span>
+                      <span className="font-semibold text-text-primary">
                         {formatCurrency(businessData.totalFoodCost)}
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-2 overflow-hidden rounded-full bg-border">
                       <div
                         className="h-full bg-red-500"
                         style={{
@@ -456,7 +456,7 @@ export default function BusinessSummaryPage() {
                         }}
                       />
                     </div>
-                    <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="mt-1 text-xs text-text-secondary">
                       {businessData.totalCost > 0
                         ? ((businessData.totalFoodCost / businessData.totalCost) * 100).toFixed(1)
                         : 0}
@@ -466,12 +466,12 @@ export default function BusinessSummaryPage() {
 
                   <div>
                     <div className="mb-1 flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">Labor Cost</span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Labor Cost</span>
+                      <span className="font-semibold text-text-primary">
                         {formatCurrency(businessData.totalLaborCost)}
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-2 overflow-hidden rounded-full bg-border">
                       <div
                         className="h-full bg-orange-500"
                         style={{
@@ -483,7 +483,7 @@ export default function BusinessSummaryPage() {
                         }}
                       />
                     </div>
-                    <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="mt-1 text-xs text-text-secondary">
                       {businessData.totalCost > 0
                         ? ((businessData.totalLaborCost / businessData.totalCost) * 100).toFixed(1)
                         : 0}
@@ -493,12 +493,12 @@ export default function BusinessSummaryPage() {
 
                   <div>
                     <div className="mb-1 flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">Supplies Cost</span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Supplies Cost</span>
+                      <span className="font-semibold text-text-primary">
                         {formatCurrency(businessData.totalSuppliesCost)}
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-2 overflow-hidden rounded-full bg-border">
                       <div
                         className="h-full bg-yellow-500"
                         style={{
@@ -510,7 +510,7 @@ export default function BusinessSummaryPage() {
                         }}
                       />
                     </div>
-                    <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="mt-1 text-xs text-text-secondary">
                       {businessData.totalCost > 0
                         ? ((businessData.totalSuppliesCost / businessData.totalCost) * 100).toFixed(
                             1
@@ -522,12 +522,12 @@ export default function BusinessSummaryPage() {
 
                   <div>
                     <div className="mb-1 flex justify-between text-sm">
-                      <span className="text-zinc-700 dark:text-zinc-300">Distance Cost</span>
-                      <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                      <span className="text-text-secondary">Distance Cost</span>
+                      <span className="font-semibold text-text-primary">
                         {formatCurrency(businessData.totalDistanceCost)}
                       </span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                    <div className="h-2 overflow-hidden rounded-full bg-border">
                       <div
                         className="h-full bg-blue-500"
                         style={{
@@ -539,7 +539,7 @@ export default function BusinessSummaryPage() {
                         }}
                       />
                     </div>
-                    <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                    <p className="mt-1 text-xs text-text-secondary">
                       {businessData.totalCost > 0
                         ? ((businessData.totalDistanceCost / businessData.totalCost) * 100).toFixed(
                             1
@@ -554,13 +554,13 @@ export default function BusinessSummaryPage() {
 
             {/* Event Type Performance */}
             <div>
-              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <h3 className="mb-4 text-xl font-semibold text-text-primary">
                 Event Type Performance
               </h3>
               <div className="grid gap-6 md:grid-cols-2">
                 {/* Private Dinner */}
-                <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-                  <h4 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                <div className="rounded-lg border border-border bg-card p-6  ">
+                  <h4 className="mb-4 text-lg font-semibold text-text-primary">
                     Private Dinner
                   </h4>
                   <div className="space-y-3">
@@ -574,25 +574,25 @@ export default function BusinessSummaryPage() {
                     </div>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-zinc-700 dark:text-zinc-300">Events</span>
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Events</span>
+                        <span className="font-semibold text-text-primary">
                           {businessData.privateDinner.count}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-zinc-700 dark:text-zinc-300">Avg Revenue</span>
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Avg Revenue</span>
+                        <span className="font-semibold text-text-primary">
                           {formatCurrency(businessData.privateDinner.avgRevenue)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-zinc-700 dark:text-zinc-300">Total Cost</span>
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Total Cost</span>
+                        <span className="font-semibold text-text-primary">
                           {formatCurrency(businessData.privateDinner.cost)}
                         </span>
                       </div>
-                      <div className="flex justify-between border-t border-zinc-200 pt-2 dark:border-zinc-700">
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <div className="flex justify-between border-t border-border pt-2 ">
+                        <span className="font-medium text-text-primary">
                           Profit
                         </span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400">
@@ -600,7 +600,7 @@ export default function BusinessSummaryPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-zinc-600 dark:text-zinc-400">Profit Margin</span>
+                        <span className="text-text-secondary">Profit Margin</span>
                         <span className="font-medium text-emerald-600 dark:text-emerald-400">
                           {businessData.privateDinner.margin.toFixed(1)}%
                         </span>
@@ -610,8 +610,8 @@ export default function BusinessSummaryPage() {
                 </div>
 
                 {/* Buffet Catering */}
-                <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-                  <h4 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                <div className="rounded-lg border border-border bg-card p-6  ">
+                  <h4 className="mb-4 text-lg font-semibold text-text-primary">
                     Buffet Catering
                   </h4>
                   <div className="space-y-3">
@@ -625,25 +625,25 @@ export default function BusinessSummaryPage() {
                     </div>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-zinc-700 dark:text-zinc-300">Events</span>
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Events</span>
+                        <span className="font-semibold text-text-primary">
                           {businessData.buffet.count}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-zinc-700 dark:text-zinc-300">Avg Revenue</span>
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Avg Revenue</span>
+                        <span className="font-semibold text-text-primary">
                           {formatCurrency(businessData.buffet.avgRevenue)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-zinc-700 dark:text-zinc-300">Total Cost</span>
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Total Cost</span>
+                        <span className="font-semibold text-text-primary">
                           {formatCurrency(businessData.buffet.cost)}
                         </span>
                       </div>
-                      <div className="flex justify-between border-t border-zinc-200 pt-2 dark:border-zinc-700">
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      <div className="flex justify-between border-t border-border pt-2 ">
+                        <span className="font-medium text-text-primary">
                           Profit
                         </span>
                         <span className="font-bold text-emerald-600 dark:text-emerald-400">
@@ -651,7 +651,7 @@ export default function BusinessSummaryPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-zinc-600 dark:text-zinc-400">Profit Margin</span>
+                        <span className="text-text-secondary">Profit Margin</span>
                         <span className="font-medium text-emerald-600 dark:text-emerald-400">
                           {businessData.buffet.margin.toFixed(1)}%
                         </span>
@@ -663,15 +663,15 @@ export default function BusinessSummaryPage() {
 
               {/* Event Type Comparison */}
               {businessData.privateDinner.count > 0 && businessData.buffet.count > 0 && (
-                <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-                  <h4 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                <div className="mt-6 rounded-lg border border-border bg-card-elevated p-6">
+                  <h4 className="mb-4 text-sm font-semibold text-text-primary">
                     Event Type Distribution
                   </h4>
                   <div className="space-y-3">
                     <div>
                       <div className="mb-2 flex justify-between text-sm">
-                        <span className="text-zinc-700 dark:text-zinc-300">Private Dinner</span>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Private Dinner</span>
+                        <span className="font-medium text-text-primary">
                           {(
                             (businessData.privateDinner.count / businessData.eventCount) *
                             100
@@ -679,7 +679,7 @@ export default function BusinessSummaryPage() {
                           % ({businessData.privateDinner.count} events)
                         </span>
                       </div>
-                      <div className="h-4 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                      <div className="h-4 overflow-hidden rounded-full bg-border">
                         <div
                           className="h-full bg-gradient-to-r from-blue-500 to-blue-600"
                           style={{
@@ -692,15 +692,15 @@ export default function BusinessSummaryPage() {
                     </div>
                     <div>
                       <div className="mb-2 flex justify-between text-sm">
-                        <span className="text-zinc-700 dark:text-zinc-300">Buffet Catering</span>
-                        <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                        <span className="text-text-secondary">Buffet Catering</span>
+                        <span className="font-medium text-text-primary">
                           {((businessData.buffet.count / businessData.eventCount) * 100).toFixed(
                             1
                           )}
                           % ({businessData.buffet.count} events)
                         </span>
                       </div>
-                      <div className="h-4 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                      <div className="h-4 overflow-hidden rounded-full bg-border">
                         <div
                           className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600"
                           style={{
@@ -715,56 +715,56 @@ export default function BusinessSummaryPage() {
             </div>
 
             {/* Booking Status Overview */}
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="rounded-lg border border-border bg-card-elevated p-6">
+              <h3 className="mb-4 text-xl font-semibold text-text-primary">
                 Booking Status Overview
               </h3>
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Pending</p>
+                  <p className="text-sm font-medium text-text-secondary">Pending</p>
                   <p className="mt-2 text-3xl font-bold text-yellow-600 dark:text-yellow-400">
                     {statusBreakdown.statusCounts.pending}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Confirmed</p>
+                  <p className="text-sm font-medium text-text-secondary">Confirmed</p>
                   <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
                     {statusBreakdown.statusCounts.confirmed}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Completed</p>
+                  <p className="text-sm font-medium text-text-secondary">Completed</p>
                   <p className="mt-2 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                     {statusBreakdown.statusCounts.completed}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Cancelled</p>
+                  <p className="text-sm font-medium text-text-secondary">Cancelled</p>
                   <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
                     {statusBreakdown.statusCounts.cancelled}
                   </p>
                 </div>
               </div>
-              <div className="mt-6 grid gap-4 border-t border-zinc-300 pt-4 dark:border-zinc-600 sm:grid-cols-2">
+              <div className="mt-6 grid gap-4 border-t border-border pt-4 border-border sm:grid-cols-2">
                 <div>
-                  <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <p className="text-xs font-medium text-text-secondary">
                     Completion Rate
                   </p>
                   <p className="mt-1 text-lg font-bold text-emerald-600 dark:text-emerald-400">
                     {statusBreakdown.conversionRate}%
                   </p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-text-muted">
                     {statusBreakdown.statusCounts.completed} of {statusBreakdown.total} bookings
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  <p className="text-xs font-medium text-text-secondary">
                     Cancellation Rate
                   </p>
                   <p className="mt-1 text-lg font-bold text-red-600 dark:text-red-400">
                     {statusBreakdown.cancellationRate}%
                   </p>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-text-muted">
                     {statusBreakdown.statusCounts.cancelled} of {statusBreakdown.total} bookings
                   </p>
                 </div>
@@ -772,29 +772,29 @@ export default function BusinessSummaryPage() {
             </div>
 
             {/* Profit Distribution */}
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-              <h3 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="rounded-lg border border-border bg-card-elevated p-6">
+              <h3 className="mb-4 text-xl font-semibold text-text-primary">
                 Profit Distribution Summary
               </h3>
               <div className="space-y-4">
                 <div className="flex justify-between">
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                  <span className="text-sm text-text-secondary">
                     Gross Profit (After All Costs)
                   </span>
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                  <span className="font-semibold text-text-primary">
                     {formatCurrency(businessData.grossProfit)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                  <span className="text-sm text-text-secondary">
                     Distributed to Owners ({rules.profitDistribution.ownerDistributionPercent}%)
                   </span>
                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                     {formatCurrency(businessData.totalOwnerDistribution)}
                   </span>
                 </div>
-                <div className="flex justify-between border-t border-zinc-300 pt-2 dark:border-zinc-600">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <div className="flex justify-between border-t border-border pt-2 border-border">
+                  <span className="text-sm font-medium text-text-secondary">
                     Business Retained ({rules.profitDistribution.businessRetainedPercent}%)
                   </span>
                   <span className="font-bold text-blue-600 dark:text-blue-400">
@@ -805,13 +805,13 @@ export default function BusinessSummaryPage() {
             </div>
 
             {/* Key Insights */}
-            <div className="mt-8 rounded-lg border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800">
-              <h3 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            <div className="mt-8 rounded-lg border border-border bg-card-elevated p-6">
+              <h3 className="mb-4 text-lg font-semibold text-text-primary">
                 Key Business Insights
               </h3>
-              <div className="space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
+              <div className="space-y-3 text-sm text-text-secondary">
                 <div>
-                  <strong className="text-zinc-900 dark:text-zinc-50">Profitability:</strong>
+                  <strong className="text-text-primary">Profitability:</strong>
                   <p>
                     The business achieved a {businessData.profitMargin.toFixed(1)}% gross profit
                     margin, generating {formatCurrency(businessData.grossProfit)} in profit from{' '}
@@ -819,7 +819,7 @@ export default function BusinessSummaryPage() {
                   </p>
                 </div>
                 <div>
-                  <strong className="text-zinc-900 dark:text-zinc-50">Event Performance:</strong>
+                  <strong className="text-text-primary">Event Performance:</strong>
                   <p>
                     {businessData.privateDinner.count > 0 && businessData.buffet.count > 0 ? (
                       <>
@@ -845,7 +845,7 @@ export default function BusinessSummaryPage() {
                   </p>
                 </div>
                 <div>
-                  <strong className="text-zinc-900 dark:text-zinc-50">Cost Structure:</strong>
+                  <strong className="text-text-primary">Cost Structure:</strong>
                   <p>
                     Food costs represent{' '}
                     {businessData.totalCost > 0
@@ -860,7 +860,7 @@ export default function BusinessSummaryPage() {
                 </div>
                 {statusBreakdown.total > 0 && (
                   <div>
-                    <strong className="text-zinc-900 dark:text-zinc-50">Booking Metrics:</strong>
+                    <strong className="text-text-primary">Booking Metrics:</strong>
                     <p>
                       {statusBreakdown.conversionRate}% of bookings were completed, with a{' '}
                       {statusBreakdown.cancellationRate}% cancellation rate.
@@ -871,18 +871,18 @@ export default function BusinessSummaryPage() {
             </div>
           </>
         ) : (
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-700 dark:bg-zinc-800">
-            <p className="text-zinc-600 dark:text-zinc-400">
+          <div className="rounded-lg border border-border bg-card-elevated p-12 text-center">
+            <p className="text-text-secondary">
               No events found for {format(parseLocalDate(startDate), 'MMM d, yyyy')} - {format(parseLocalDate(endDate), 'MMM d, yyyy')}
             </p>
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-text-muted">
               Create bookings in the Bookings page to see business summary data here.
             </p>
           </div>
         )}
 
         {/* Footer */}
-        <div className="mt-8 border-t border-zinc-200 pt-6 text-center text-xs text-zinc-500 dark:border-zinc-700">
+        <div className="mt-8 border-t border-border pt-6 text-center text-xs text-text-muted ">
           <p>
             This report is generated based on current Business Rules settings. Historical events may
             have used different rates.
