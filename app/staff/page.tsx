@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type {
   StaffMember,
   StaffFormData,
@@ -42,10 +42,22 @@ function getInitials(name: string): string {
   return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
 }
 
+function loadInitialStaff(): StaffMember[] {
+  if (typeof window === 'undefined') return [];
+  const saved = localStorage.getItem('staff');
+  if (!saved) return [];
+  try {
+    const parsed = JSON.parse(saved) as StaffMember[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function StaffPage() {
-  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>(loadInitialStaff);
   const [showModal, setShowModal] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
+  const [showSetup, setShowSetup] = useState(() => loadInitialStaff().length === 0);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | StaffStatus>('all');
@@ -67,26 +79,6 @@ export default function StaffPage() {
     notes: '',
     hireDate: new Date().toISOString().split('T')[0],
   });
-
-  // Load staff from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('staff');
-    if (saved) {
-      try {
-        const loadedStaff = JSON.parse(saved);
-        setStaff(loadedStaff);
-        // Check if we need to show setup
-        if (loadedStaff.length === 0) {
-          setShowSetup(true);
-        }
-      } catch (e) {
-        console.error('Failed to load staff:', e);
-        setShowSetup(true);
-      }
-    } else {
-      setShowSetup(true);
-    }
-  }, []);
 
   // Save staff to localStorage
   const saveStaff = (newStaff: StaffMember[]) => {
