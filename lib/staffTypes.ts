@@ -25,6 +25,13 @@ export interface WeeklyAvailability {
   sunday: boolean;
 }
 
+export interface AvailabilityHours {
+  startTime: string;
+  endTime: string;
+}
+
+export type WeeklyAvailabilityHours = Record<DayOfWeek, AvailabilityHours>;
+
 // Main staff member interface
 export interface StaffMember {
   id: string;                          // Unique identifier
@@ -45,6 +52,7 @@ export interface StaffMember {
 
   // Availability
   weeklyAvailability: WeeklyAvailability; // General weekly availability
+  weeklyAvailabilityHours?: WeeklyAvailabilityHours; // Preferred hours by weekday
   unavailableDates: string[];          // Specific dates unavailable (ISO date strings)
 
   // Optional fields
@@ -70,6 +78,7 @@ export interface StaffFormData {
   isOwner: boolean;
   ownerRole?: 'owner-a' | 'owner-b';
   weeklyAvailability: WeeklyAvailability;
+  weeklyAvailabilityHours?: WeeklyAvailabilityHours;
   hourlyRate: string;
   notes: string;
   hireDate: string;
@@ -121,6 +130,16 @@ export const DEFAULT_WEEKLY_AVAILABILITY: WeeklyAvailability = {
   friday: true,
   saturday: true,
   sunday: true,
+};
+
+export const DEFAULT_WEEKLY_AVAILABILITY_HOURS: WeeklyAvailabilityHours = {
+  monday: { startTime: '10:00', endTime: '20:00' },
+  tuesday: { startTime: '10:00', endTime: '20:00' },
+  wednesday: { startTime: '10:00', endTime: '20:00' },
+  thursday: { startTime: '10:00', endTime: '20:00' },
+  friday: { startTime: '10:00', endTime: '20:00' },
+  saturday: { startTime: '10:00', endTime: '20:00' },
+  sunday: { startTime: '10:00', endTime: '20:00' },
 };
 
 // ChefRole → StaffRole mapping (for filtering staff dropdowns by calculated role)

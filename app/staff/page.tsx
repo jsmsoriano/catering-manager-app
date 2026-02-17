@@ -1,18 +1,22 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import type {
   StaffMember,
   StaffFormData,
   StaffRole,
   StaffStatus,
   DayOfWeek,
+  WeeklyAvailabilityHours,
 } from '@/lib/staffTypes';
 import {
   ROLE_LABELS,
   STATUS_LABELS,
   DAY_LABELS,
   DEFAULT_WEEKLY_AVAILABILITY,
+  DEFAULT_WEEKLY_AVAILABILITY_HOURS,
 } from '@/lib/staffTypes';
 
 const roleColors: Record<StaffRole, string> = {
@@ -54,6 +58,22 @@ function loadInitialStaff(): StaffMember[] {
   }
 }
 
+function withDefaultAvailabilityHours(
+  value: WeeklyAvailabilityHours | undefined
+): WeeklyAvailabilityHours {
+  const base = { ...DEFAULT_WEEKLY_AVAILABILITY_HOURS };
+  if (!value) return base;
+  return {
+    monday: value.monday ?? base.monday,
+    tuesday: value.tuesday ?? base.tuesday,
+    wednesday: value.wednesday ?? base.wednesday,
+    thursday: value.thursday ?? base.thursday,
+    friday: value.friday ?? base.friday,
+    saturday: value.saturday ?? base.saturday,
+    sunday: value.sunday ?? base.sunday,
+  };
+}
+
 export default function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>(loadInitialStaff);
   const [showModal, setShowModal] = useState(false);
@@ -75,6 +95,7 @@ export default function StaffPage() {
     isOwner: false,
     ownerRole: undefined,
     weeklyAvailability: { ...DEFAULT_WEEKLY_AVAILABILITY },
+    weeklyAvailabilityHours: { ...DEFAULT_WEEKLY_AVAILABILITY_HOURS },
     hourlyRate: '',
     notes: '',
     hireDate: new Date().toISOString().split('T')[0],
@@ -193,6 +214,7 @@ export default function StaffPage() {
       isOwner: formData.isOwner,
       ownerRole: formData.isOwner ? formData.ownerRole : undefined,
       weeklyAvailability: formData.weeklyAvailability,
+      weeklyAvailabilityHours: withDefaultAvailabilityHours(formData.weeklyAvailabilityHours),
       unavailableDates: selectedStaff?.unavailableDates || [],
       hourlyRate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : undefined,
       notes: formData.notes.trim(),
@@ -237,6 +259,7 @@ export default function StaffPage() {
       isOwner: false,
       ownerRole: undefined,
       weeklyAvailability: { ...DEFAULT_WEEKLY_AVAILABILITY },
+      weeklyAvailabilityHours: { ...DEFAULT_WEEKLY_AVAILABILITY_HOURS },
       hourlyRate: '',
       notes: '',
       hireDate: new Date().toISOString().split('T')[0],
@@ -258,6 +281,7 @@ export default function StaffPage() {
       isOwner: true,
       ownerRole: 'owner-a',
       weeklyAvailability: { ...DEFAULT_WEEKLY_AVAILABILITY },
+      weeklyAvailabilityHours: { ...DEFAULT_WEEKLY_AVAILABILITY_HOURS },
       unavailableDates: [],
       hireDate: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString(),
@@ -277,6 +301,7 @@ export default function StaffPage() {
       isOwner: true,
       ownerRole: 'owner-b',
       weeklyAvailability: { ...DEFAULT_WEEKLY_AVAILABILITY },
+      weeklyAvailabilityHours: { ...DEFAULT_WEEKLY_AVAILABILITY_HOURS },
       unavailableDates: [],
       hireDate: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString(),
@@ -348,15 +373,23 @@ export default function StaffPage() {
             Manage your team members and their availability
           </p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
-        >
-          + Add Staff
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/staff/profile"
+            className="rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+          >
+            My Profile
+          </Link>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
+          >
+            + Add Staff
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -511,9 +544,12 @@ export default function StaffPage() {
                     <td className="px-4 py-4 text-sm">
                       <div className="flex items-center gap-3">
                         {member.profilePhoto ? (
-                          <img
+                          <Image
                             src={member.profilePhoto}
                             alt={`${member.name} profile`}
+                            width={40}
+                            height={40}
+                            unoptimized
                             className="h-10 w-10 rounded-full object-cover"
                           />
                         ) : (
@@ -601,6 +637,9 @@ export default function StaffPage() {
                               isOwner: member.isOwner,
                               ownerRole: member.ownerRole,
                               weeklyAvailability: { ...member.weeklyAvailability },
+                              weeklyAvailabilityHours: withDefaultAvailabilityHours(
+                                member.weeklyAvailabilityHours
+                              ),
                               hourlyRate: member.hourlyRate ? member.hourlyRate.toString() : '',
                               notes: member.notes || '',
                               hireDate: member.hireDate,
@@ -710,9 +749,12 @@ export default function StaffPage() {
                     </label>
                     <div className="mt-2 flex items-center gap-4">
                       {formData.profilePhoto ? (
-                        <img
+                        <Image
                           src={formData.profilePhoto}
                           alt="Profile preview"
+                          width={64}
+                          height={64}
+                          unoptimized
                           className="h-16 w-16 rounded-full object-cover ring-1 ring-zinc-300 dark:ring-zinc-700"
                         />
                       ) : (
