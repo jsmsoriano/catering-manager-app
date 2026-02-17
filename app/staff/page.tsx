@@ -6,7 +6,6 @@ import type {
   StaffFormData,
   StaffRole,
   StaffStatus,
-  WeeklyAvailability,
   DayOfWeek,
 } from '@/lib/staffTypes';
 import {
@@ -31,6 +30,18 @@ const statusColors: Record<StaffStatus, string> = {
   'on-leave': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
 };
 
+const MAX_PROFILE_PHOTO_BYTES = 1024 * 1024 * 2; // 2 MB
+
+function getInitials(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  if (parts.length === 0) return '?';
+  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
+}
+
 export default function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -44,6 +55,8 @@ export default function StaffPage() {
     name: '',
     email: '',
     phone: '',
+    profilePhoto: '',
+    profileSummary: '',
     primaryRole: 'lead-chef',
     secondaryRoles: [],
     status: 'active',
@@ -83,6 +96,25 @@ export default function StaffPage() {
     // Notify other components that staff has been updated
     console.log('👥 Staff: Dispatching staffUpdated event');
     window.dispatchEvent(new Event('staffUpdated'));
+  };
+
+  const handleProfilePhotoUpload = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file.');
+      return;
+    }
+    if (file.size > MAX_PROFILE_PHOTO_BYTES) {
+      alert('Profile photo must be 2 MB or smaller.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      setFormData((prev) => ({ ...prev, profilePhoto: result }));
+    };
+    reader.readAsDataURL(file);
   };
 
   // Filtered and searched staff
@@ -157,10 +189,12 @@ export default function StaffPage() {
     }
 
     const staffMember: StaffMember = {
-      id: selectedStaff?.id || `staff-${Date.now()}`,
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
+      id: selectedStaff?.id || crypto.randomUUID(),
+      name: formData.name.trim(),
+      email: formData.email.trim(),
+      phone: formData.phone.trim(),
+      profilePhoto: formData.profilePhoto || undefined,
+      profileSummary: formData.profileSummary.trim() || undefined,
       primaryRole: formData.primaryRole,
       secondaryRoles: formData.secondaryRoles,
       status: formData.status,
@@ -169,7 +203,7 @@ export default function StaffPage() {
       weeklyAvailability: formData.weeklyAvailability,
       unavailableDates: selectedStaff?.unavailableDates || [],
       hourlyRate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : undefined,
-      notes: formData.notes,
+      notes: formData.notes.trim(),
       hireDate: formData.hireDate,
       createdAt: selectedStaff?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -203,6 +237,8 @@ export default function StaffPage() {
       name: '',
       email: '',
       phone: '',
+      profilePhoto: '',
+      profileSummary: '',
       primaryRole: 'lead-chef',
       secondaryRoles: [],
       status: 'active',
@@ -218,10 +254,12 @@ export default function StaffPage() {
   // Handle setup - create owner records
   const handleCreateOwners = () => {
     const ownerA: StaffMember = {
-      id: 'owner-a-' + Date.now(),
+      id: crypto.randomUUID(),
       name: 'Owner A',
       email: 'ownera@example.com',
       phone: '555-0001',
+      profilePhoto: undefined,
+      profileSummary: '',
       primaryRole: 'lead-chef',
       secondaryRoles: ['full-chef'],
       status: 'active',
@@ -235,10 +273,12 @@ export default function StaffPage() {
     };
 
     const ownerB: StaffMember = {
-      id: 'owner-b-' + Date.now() + 1,
+      id: crypto.randomUUID(),
       name: 'Owner B',
       email: 'ownerb@example.com',
       phone: '555-0002',
+      profilePhoto: undefined,
+      profileSummary: '',
       primaryRole: 'assistant',
       secondaryRoles: ['buffet-chef'],
       status: 'active',
@@ -286,7 +326,7 @@ export default function StaffPage() {
               Welcome to Staff Management
             </h2>
             <p className="mb-6 text-zinc-600 dark:text-zinc-400">
-              Let's get started by creating your owner profiles. You can edit their details after creation.
+              Let us get started by creating your owner profiles. You can edit their details after creation.
             </p>
             <div className="flex gap-2">
               <button
@@ -477,14 +517,34 @@ export default function StaffPage() {
                     className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                   >
                     <td className="px-4 py-4 text-sm">
-                      <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                        {member.name}
-                      </div>
-                      {member.isOwner && (
-                        <div className="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
-                          {member.ownerRole === 'owner-a' ? 'Owner A' : 'Owner B'}
+                      <div className="flex items-center gap-3">
+                        {member.profilePhoto ? (
+                          <img
+                            src={member.profilePhoto}
+                            alt={`${member.name} profile`}
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                            {getInitials(member.name)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                            {member.name}
+                          </div>
+                          {member.isOwner && (
+                            <div className="mt-1 text-xs text-indigo-600 dark:text-indigo-400">
+                              {member.ownerRole === 'owner-a' ? 'Owner A' : 'Owner B'}
+                            </div>
+                          )}
+                          {member.profileSummary && (
+                            <div className="mt-1 max-w-xs truncate text-xs text-zinc-500 dark:text-zinc-400">
+                              {member.profileSummary}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </td>
                     <td className="px-4 py-4 text-sm">
                       <span
@@ -541,6 +601,8 @@ export default function StaffPage() {
                               name: member.name,
                               email: member.email,
                               phone: member.phone,
+                              profilePhoto: member.profilePhoto || '',
+                              profileSummary: member.profileSummary || '',
                               primaryRole: member.primaryRole,
                               secondaryRoles: member.secondaryRoles,
                               status: member.status,
@@ -639,6 +701,70 @@ export default function StaffPage() {
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                       required
                       className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile */}
+              <div>
+                <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
+                  Profile
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Profile Photo
+                    </label>
+                    <div className="mt-2 flex items-center gap-4">
+                      {formData.profilePhoto ? (
+                        <img
+                          src={formData.profilePhoto}
+                          alt="Profile preview"
+                          className="h-16 w-16 rounded-full object-cover ring-1 ring-zinc-300 dark:ring-zinc-700"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-800">
+                          {getInitials(formData.name)}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="cursor-pointer rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                          Upload Photo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleProfilePhotoUpload(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                        {formData.profilePhoto && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, profilePhoto: '' })}
+                            className="rounded-md border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-950/30"
+                          >
+                            Remove
+                          </button>
+                        )}
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          JPG, PNG, or WEBP up to 2 MB.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Profile Summary
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formData.profileSummary}
+                      onChange={(e) =>
+                        setFormData({ ...formData, profileSummary: e.target.value })
+                      }
+                      className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                      placeholder="Short intro, specialties, certifications, or preferred station."
                     />
                   </div>
                 </div>

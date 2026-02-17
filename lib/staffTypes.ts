@@ -31,6 +31,8 @@ export interface StaffMember {
   name: string;                        // Full name
   email: string;                       // Email address
   phone: string;                       // Phone number
+  profilePhoto?: string;               // Optional profile photo (data URL)
+  profileSummary?: string;             // Optional profile bio/summary
 
   // Employment Details
   primaryRole: StaffRole;              // Primary role/specialty
@@ -60,6 +62,8 @@ export interface StaffFormData {
   name: string;
   email: string;
   phone: string;
+  profilePhoto: string;
+  profileSummary: string;
   primaryRole: StaffRole;
   secondaryRoles: StaffRole[];
   status: StaffStatus;
