@@ -9,6 +9,7 @@ Welcome to the Catering App documentation.
 - **[REQUIREMENTS.md](REQUIREMENTS.md)** - Business requirements, pricing model, and calculation examples
 - **[API.md](API.md)** - API reference for pricing functions and types
 - **[PRICING_VERSIONS.md](PRICING_VERSIONS.md)** - Historical pricing changes and version tracking
+- **[SUPABASE_SETUP.md](SUPABASE_SETUP.md)** - Supabase environment, auth flow, and migration setup
 
 ### Root Level
 
@@ -23,6 +24,7 @@ Welcome to the Catering App documentation.
 - [API Reference](API.md) - Function documentation
 - [Type Definitions](../lib/types.ts) - TypeScript interfaces
 - [Pricing Logic](../lib/moneyRules.ts) - Core calculation code
+- [Supabase Setup](SUPABASE_SETUP.md) - Auth/session and database baseline
 
 ### For Business/Product
 - [Business Requirements](REQUIREMENTS.md) - Detailed pricing rules
