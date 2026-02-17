@@ -1374,6 +1374,9 @@ export default function BookingsPage() {
                 <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
                   Customer Information
                 </h3>
+                <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                  Enter the primary contact details used for confirmations, payment follow-up, and event updates.
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -1425,6 +1428,9 @@ export default function BookingsPage() {
                 <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
                   Event Details
                 </h3>
+                <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                  Set date, guest count, and location details accurately since pricing, staffing, and prep planning depend on this section.
+                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -1556,6 +1562,9 @@ export default function BookingsPage() {
                   <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
                     Staffing Profile
                   </h3>
+                  <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                    Choose a preset staffing setup for this event size, or leave Auto to apply your default business rules.
+                  </p>
                   <select
                     value={formData.staffingProfileId || ''}
                     onChange={(e) => {
@@ -1593,6 +1602,9 @@ export default function BookingsPage() {
                   <h3 className="mb-4 font-semibold text-zinc-900 dark:text-zinc-50">
                     Staff Assignments
                   </h3>
+                  <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                    Assign each role before completion to avoid conflicts and ensure labor payouts are recorded correctly.
+                  </p>
                   <div className="space-y-3">
                     {currentFinancials.staffingPlan.staff.map((position, idx) => {
                       const available = getAvailableStaff(position.role);
@@ -1655,7 +1667,7 @@ export default function BookingsPage() {
                     Billing Workflow
                   </h3>
                   <p className="mt-1 text-sm text-indigo-700 dark:text-indigo-300">
-                    Service status and payment status are tracked separately in Phase 1.
+                    Service status tracks event operations, while payment status tracks deposit collection and remaining balance.
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span
@@ -1724,6 +1736,9 @@ export default function BookingsPage() {
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Notes
                 </label>
+                <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  Add internal context for your team, such as dietary restrictions, access instructions, or special setup details.
+                </p>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}

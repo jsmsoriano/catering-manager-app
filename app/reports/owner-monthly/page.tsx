@@ -463,6 +463,7 @@ export default function OwnerMonthlyReportPage() {
               <tr className="border-b border-zinc-200 dark:border-zinc-800">
                 <th className="px-4 py-3 font-semibold">Period</th>
                 <th className="px-4 py-3 text-right font-semibold">Events Completed</th>
+                  <th className="px-4 py-3 text-right font-semibold">Total Profit (Earned / Recorded)</th>
                 <th className="px-4 py-3 text-right font-semibold">Chef (Earned / Recorded)</th>
                 <th className="px-4 py-3 text-right font-semibold">Owner A (Earned / Recorded)</th>
                 <th className="px-4 py-3 text-right font-semibold">Owner B (Earned / Recorded)</th>
@@ -475,6 +476,9 @@ export default function OwnerMonthlyReportPage() {
                   {format(parseLocalDate(`${selectedMonth}-01`), 'MMMM yyyy')}
                 </td>
                 <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">{summary.eventCount}</td>
+                <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                  {formatCurrency(summary.totalProfitEarned)} / {formatCurrency(summary.totalProfitRecorded)}
+                </td>
                 <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                   {formatCurrency(summary.chefEarned)} / {formatCurrency(summary.chefRecorded)}
                 </td>
@@ -513,8 +517,10 @@ export default function OwnerMonthlyReportPage() {
               <thead className="bg-zinc-50 dark:bg-zinc-800/50">
                 <tr className="border-b border-zinc-200 dark:border-zinc-800">
                   <th className="px-4 py-3 font-semibold">Event</th>
+                  <th className="px-4 py-3 text-right font-semibold">Guests</th>
                   <th className="px-4 py-3 text-center font-semibold">Event Status</th>
                   <th className="px-4 py-3 text-center font-semibold">Distribution</th>
+                  <th className="px-4 py-3 text-right font-semibold">Total Profit</th>
                   <th className="px-4 py-3 text-right font-semibold">Chef Payouts</th>
                   <th className="px-4 py-3 text-right font-semibold">Owner A</th>
                   <th className="px-4 py-3 text-right font-semibold">Owner B</th>
@@ -538,6 +544,9 @@ export default function OwnerMonthlyReportPage() {
                         guests
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                      {row.guests}
+                    </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE[row.bookingStatus]}`}>
                         {row.bookingStatus}
@@ -551,6 +560,14 @@ export default function OwnerMonthlyReportPage() {
                       >
                         {DISTRIBUTION_STATUS_LABEL[row.distributionStatus]}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
+                      {formatCurrency(row.appliedTotalProfit)}
+                      {Math.abs(row.appliedTotalProfit - row.autoTotalProfit) > 0.009 && (
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          auto {formatCurrency(row.autoTotalProfit)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-700 dark:text-zinc-300">
                       {formatCurrency(row.appliedChefPayouts)}
