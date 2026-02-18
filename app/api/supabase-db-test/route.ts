@@ -32,6 +32,12 @@ export async function GET() {
 
   try {
     const supabase = await createClient();
+    if (!supabase) {
+      return Response.json(
+        { ok: false, error: 'Supabase client not available' },
+        { status: 503 }
+      );
+    }
     const results: Record<string, { exists: boolean; error?: string }> = {};
 
     for (const table of TABLES_TO_CHECK) {
