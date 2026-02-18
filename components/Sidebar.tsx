@@ -40,6 +40,7 @@ const navigation = [
     icon: DocumentChartBarIcon,
     children: [
       { name: 'Dashboard', href: '/reports' },
+      { name: 'Event Summary', href: '/reports/event-summary' },
       { name: 'Business Summary', href: '/reports/business-summary' },
       { name: 'Owner Profit Distribution', href: '/reports/owner-monthly' },
       { name: 'Staff Payouts', href: '/reports/comparative' },

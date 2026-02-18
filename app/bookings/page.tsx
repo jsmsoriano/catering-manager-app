@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
+  BanknotesIcon,
   ChevronDownIcon,
   ClipboardDocumentListIcon,
+  DocumentTextIcon,
   PencilSquareIcon,
   ShoppingCartIcon,
 } from '@heroicons/react/24/outline';
@@ -13,6 +16,7 @@ import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { Booking, BookingStatus, BookingFormData, PaymentStatus } from '@/lib/bookingTypes';
+import type { EventMenu, GuestMenuSelection } from '@/lib/menuTypes';
 import type { EventFinancials } from '@/lib/types';
 import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
 import { CHEF_ROLE_TO_STAFF_ROLE, ROLE_LABELS as STAFF_ROLE_LABELS } from '@/lib/staffTypes';
@@ -39,8 +43,6 @@ import {
   loadShoppingLists,
   removeShoppingListForBooking,
 } from '@/lib/shoppingStorage';
-import { isStaffAvailableForEvent } from '@/lib/staffAvailability';
-
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
   overflow: 'Overflow Chef',
@@ -53,6 +55,77 @@ interface StaffConflict {
   staffId: string;
   staffName: string;
   conflictingBooking: Booking;
+}
+
+const PROTEIN_LABELS: Record<string, string> = {
+  chicken: 'Chicken',
+  steak: 'Steak',
+  shrimp: 'Shrimp',
+  scallops: 'Scallops',
+};
+
+function MenuSummaryContent({ selections }: { selections: GuestMenuSelection[] }) {
+  const proteinCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    selections.forEach((s) => {
+      [s.protein1, s.protein2].forEach((p) => {
+        counts[p] = (counts[p] ?? 0) + 1;
+      });
+    });
+    return counts;
+  }, [selections]);
+  const sides = useMemo(() => {
+    let friedRice = 0, noodles = 0, salad = 0, veggies = 0;
+    selections.forEach((s) => {
+      if (s.wantsFriedRice) friedRice++;
+      if (s.wantsNoodles) noodles++;
+      if (s.wantsSalad) salad++;
+      if (s.wantsVeggies) veggies++;
+    });
+    return { friedRice, noodles, salad, veggies };
+  }, [selections]);
+  const withRequests = selections.filter((s) => (s.specialRequests ?? '').trim());
+  const withAllergies = selections.filter((s) => (s.allergies ?? '').trim());
+
+  return (
+    <div className="space-y-3 text-sm">
+      <div>
+        <span className="font-medium text-text-secondary">Proteins: </span>
+        <span className="text-text-primary">
+          {Object.entries(proteinCounts)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([p, n]) => `${PROTEIN_LABELS[p] ?? p} (${n})`)
+            .join(', ')}
+        </span>
+      </div>
+      <div>
+        <span className="font-medium text-text-secondary">Sides: </span>
+        <span className="text-text-primary">
+          Fried rice {sides.friedRice}/{selections.length}, Noodles {sides.noodles}/{selections.length}, Salad {sides.salad}/{selections.length}, Veggies {sides.veggies}/{selections.length}
+        </span>
+      </div>
+      {withRequests.length > 0 && (
+        <div>
+          <span className="font-medium text-text-secondary">Special requests: </span>
+          <ul className="mt-1 list-inside list-disc text-text-primary">
+            {withRequests.map((s, i) => (
+              <li key={s.id || i}>{s.specialRequests?.trim()}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {withAllergies.length > 0 && (
+        <div>
+          <span className="font-medium text-text-secondary">Allergies: </span>
+          <ul className="mt-1 list-inside list-disc text-text-primary">
+            {withAllergies.map((s, i) => (
+              <li key={s.id || i}>{s.allergies?.trim()}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getUniqueAssignedStaffIds(assignments?: StaffAssignment[]): string[] {
@@ -104,6 +177,7 @@ function getAssignmentForPosition(
 }
 
 export default function BookingsPage() {
+  const router = useRouter();
   const openedBookingFromQueryRef = useRef<string | null>(null);
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -120,6 +194,7 @@ export default function BookingsPage() {
   const [customerPayments, setCustomerPayments] = useState<CustomerPaymentRecord[]>([]);
   const [shoppingLists, setShoppingLists] = useState<ReturnType<typeof loadShoppingLists>>([]);
   const [actionsOpenForBookingId, setActionsOpenForBookingId] = useState<string | null>(null);
+  const [eventSummaryBooking, setEventSummaryBooking] = useState<Booking | null>(null);
   const actionsDropdownRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState<BookingFormData>({
@@ -135,6 +210,8 @@ export default function BookingsPage() {
     distanceMiles: 10,
     premiumAddOn: 0,
     notes: '',
+    discountType: undefined,
+    discountValue: undefined,
     staffingProfileId: undefined,
   });
 
@@ -389,6 +466,9 @@ export default function BookingsPage() {
       distanceMiles: booking.distanceMiles,
       premiumAddOn: booking.premiumAddOn,
       notes: booking.notes,
+      serviceStatus: getBookingServiceStatus(booking),
+      discountType: booking.discountType,
+      discountValue: booking.discountValue,
       staffAssignments: booking.staffAssignments,
       staffingProfileId: booking.staffingProfileId,
     });
@@ -447,7 +527,19 @@ export default function BookingsPage() {
       rules
     );
 
-    const existingServiceStatus = selectedBooking ? getBookingServiceStatus(selectedBooking) : 'pending';
+    // Apply discount to revenue (subtotal) only; gratuity and distance fee unchanged
+    let subtotalAfterDiscount = financials.subtotal;
+    const discountType = formData.discountType;
+    const discountValue = formData.discountValue ?? 0;
+    if (discountType === 'percent' && Number.isFinite(discountValue) && discountValue > 0) {
+      const discountAmount = Math.round(financials.subtotal * (discountValue / 100) * 100) / 100;
+      subtotalAfterDiscount = Math.max(0, financials.subtotal - discountAmount);
+    } else if (discountType === 'amount' && Number.isFinite(discountValue) && discountValue > 0) {
+      subtotalAfterDiscount = Math.max(0, financials.subtotal - discountValue);
+    }
+    const totalWithDiscount = Math.round((subtotalAfterDiscount + financials.gratuity + financials.distanceFee) * 100) / 100;
+
+    const serviceStatus = formData.serviceStatus ?? (selectedBooking ? getBookingServiceStatus(selectedBooking) : 'pending');
     const baseBooking = normalizeBookingWorkflowFields({
       id: selectedBooking?.id || `booking-${Date.now()}`,
       eventType: formData.eventType,
@@ -461,12 +553,14 @@ export default function BookingsPage() {
       location: formData.location,
       distanceMiles: formData.distanceMiles,
       premiumAddOn: formData.premiumAddOn,
-      subtotal: financials.subtotal,
+      subtotal: subtotalAfterDiscount,
       gratuity: financials.gratuity,
       distanceFee: financials.distanceFee,
-      total: financials.totalCharged,
-      status: existingServiceStatus,
-      serviceStatus: existingServiceStatus,
+      total: totalWithDiscount,
+      discountType: discountType && (discountValue > 0) ? discountType : undefined,
+      discountValue: discountType && discountValue > 0 ? discountValue : undefined,
+      status: serviceStatus,
+      serviceStatus,
       paymentStatus: selectedBooking?.paymentStatus,
       depositPercent: selectedBooking?.depositPercent,
       depositAmount: selectedBooking?.depositAmount,
@@ -486,7 +580,7 @@ export default function BookingsPage() {
       updatedAt: new Date().toISOString(),
     });
     const booking = normalizeBookingWorkflowFields(
-      existingServiceStatus === 'confirmed' || existingServiceStatus === 'completed'
+      serviceStatus === 'confirmed' || serviceStatus === 'completed'
         ? {
             ...baseBooking,
             depositAmount:
@@ -523,6 +617,9 @@ export default function BookingsPage() {
       distanceMiles: 10,
       premiumAddOn: 0,
       notes: '',
+      serviceStatus: undefined,
+      discountType: undefined,
+      discountValue: undefined,
       staffAssignments: undefined,
       staffingProfileId: undefined,
     });
@@ -680,24 +777,27 @@ export default function BookingsPage() {
           : b
       )
     );
+
+    // When marking completed, open reconcile so user can enter actual amounts
+    if (newStatus === 'completed') {
+      router.push(`/bookings/reconcile?bookingId=${booking.id}`);
+    }
   };
 
-  const paymentStatusLabels: Record<PaymentStatus, string> = {
-    unpaid: 'Unpaid',
-    'deposit-due': 'Deposit Due',
-    'deposit-paid': 'Deposit Paid',
-    'balance-due': 'Balance Due',
-    'paid-in-full': 'Paid in Full',
-    refunded: 'Refunded',
+  // Payment column: user-facing labels (Deposit Pending, Deposit Received, Paid in Full, Refunded)
+  const paymentDisplayLabel = (status: PaymentStatus | undefined): string => {
+    const s = status ?? 'unpaid';
+    if (s === 'paid-in-full') return 'Paid in Full';
+    if (s === 'refunded') return 'Refunded';
+    if (s === 'unpaid' || s === 'deposit-due') return 'Deposit Pending';
+    return 'Deposit Received'; // deposit-paid, balance-due
   };
 
-  const paymentStatusColors: Record<PaymentStatus, string> = {
-    unpaid: 'bg-card-elevated text-text-secondary',
-    'deposit-due': 'bg-warning/20 text-warning',
-    'deposit-paid': 'bg-info/20 text-info',
-    'balance-due': 'bg-accent-soft-bg text-accent',
-    'paid-in-full': 'bg-success/20 text-success',
-    refunded: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+  const paymentDisplayColors: Record<string, string> = {
+    'Deposit Pending': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    'Deposit Received': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    'Paid in Full': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+    Refunded: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
   };
 
   const handleRecordPayment = (booking: Booking) => {
@@ -803,22 +903,36 @@ export default function BookingsPage() {
     [formData.staffAssignments]
   );
 
-  // Get available staff for a given ChefRole: must match role, be available for event date/time, and not double-booked
-  const getAvailableStaff = (chefRole: string): StaffRecord[] => {
+  // Get available staff for a given ChefRole: must match role (primary or secondary), and not double-booked on another event.
+  // We do not filter by calendar availability here so that lead chef and assistant can always be assigned; double-booking is still blocked.
+  // If currentlyAssignedStaffId is set, that staff is always included when they match the role and are active.
+  const getAvailableStaff = (chefRole: string, currentlyAssignedStaffId?: string): StaffRecord[] => {
     const requiredStaffRole = CHEF_ROLE_TO_STAFF_ROLE[chefRole as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
     if (!requiredStaffRole) return [];
     const eventDate = formData.eventDate;
     const eventTime = formData.eventTime ?? '18:00';
     const excludeBookingId = selectedBooking?.id;
 
-    return staffRecords.filter((s) => {
+    const roleMatches = (s: StaffRecord) =>
+      s.primaryRole === requiredStaffRole || (s.secondaryRoles ?? []).includes(requiredStaffRole);
+
+    const available = staffRecords.filter((s) => {
       if (s.status !== 'active') return false;
-      if (s.primaryRole !== requiredStaffRole && !s.secondaryRoles.includes(requiredStaffRole)) return false;
-      if (eventDate && !isStaffAvailableForEvent(s, eventDate, eventTime)) return false;
+      if (!roleMatches(s)) return false;
+      // Only exclude if already assigned to another booking at same date/time (double-book); do not filter by calendar availability
       const conflicts = findStaffConflicts(eventDate, eventTime, [s.id], excludeBookingId);
       if (conflicts.length > 0) return false;
       return true;
     });
+
+    // Per business rules: keep currently assigned staff in the list so user can retain or change the assignment
+    if (currentlyAssignedStaffId) {
+      const current = staffRecords.find((s) => s.id === currentlyAssignedStaffId);
+      if (current && current.status === 'active' && roleMatches(current) && !available.some((a) => a.id === current.id)) {
+        return [...available, current];
+      }
+    }
+    return available;
   };
 
   // Find the assignment for a staffing plan position (handles duplicate roles)
@@ -901,6 +1015,19 @@ export default function BookingsPage() {
     completed: 'bg-success/20 text-success',
     cancelled: 'bg-card-elevated text-text-muted',
   };
+
+  // Load event menu for summary when Event Summary modal is open
+  const eventSummaryMenu = useMemo((): EventMenu | null => {
+    if (!eventSummaryBooking?.menuId || typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem('eventMenus');
+      if (!raw) return null;
+      const menus: EventMenu[] = JSON.parse(raw);
+      return menus.find((m) => m.id === eventSummaryBooking.menuId) ?? null;
+    } catch {
+      return null;
+    }
+  }, [eventSummaryBooking?.id, eventSummaryBooking?.menuId]);
 
   const selectedBookingPayments = useMemo(() => {
     if (!selectedBooking) return [];
@@ -1118,6 +1245,9 @@ export default function BookingsPage() {
                       distanceMiles: booking.distanceMiles,
                       premiumAddOn: booking.premiumAddOn,
                       notes: booking.notes,
+                      serviceStatus: getBookingServiceStatus(booking),
+                      discountType: booking.discountType,
+                      discountValue: booking.discountValue,
                       staffAssignments: booking.staffAssignments,
                       staffingProfileId: booking.staffingProfileId,
                     });
@@ -1174,6 +1304,9 @@ export default function BookingsPage() {
                               distanceMiles: booking.distanceMiles,
                               premiumAddOn: booking.premiumAddOn,
                               notes: booking.notes,
+                              serviceStatus: getBookingServiceStatus(booking),
+                              discountType: booking.discountType,
+                              discountValue: booking.discountValue,
                               staffAssignments: booking.staffAssignments,
                               staffingProfileId: booking.staffingProfileId,
                             });
@@ -1215,9 +1348,9 @@ export default function BookingsPage() {
           </div>
         </div>
       ) : (
-        /* Bookings Table */
+        /* Bookings Table - min-height for ~5 rows to avoid scrollbar with few records */
         <div className="rounded-lg border border-border bg-card ">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[22rem]">
           <table className="w-full">
             <thead className="border-b border-border bg-card-elevated">
               <tr>
@@ -1314,30 +1447,20 @@ export default function BookingsPage() {
                       </select>
                     </td>
                     <td className="px-4 py-4 text-sm">
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-1">
                         <span
                           className={`inline-flex w-fit rounded-full px-2 py-1 text-xs font-semibold ${
-                            paymentStatusColors[booking.paymentStatus ?? 'unpaid']
+                            paymentDisplayColors[paymentDisplayLabel(booking.paymentStatus)]
                           }`}
                         >
-                          {paymentStatusLabels[booking.paymentStatus ?? 'unpaid']}
+                          {paymentDisplayLabel(booking.paymentStatus)}
                         </span>
-                        <div className="text-xs text-text-muted">
-                          Paid {formatCurrency(booking.amountPaid ?? 0)} / Due{' '}
+                        <span className="text-xs text-text-muted">
+                          Paid {formatCurrency(booking.amountPaid ?? 0)} · Due{' '}
                           {formatCurrency(
                             booking.balanceDueAmount ?? Math.max(0, booking.total - (booking.amountPaid ?? 0))
                           )}
-                        </div>
-                        {getBookingServiceStatus(booking) !== 'cancelled' &&
-                          (booking.paymentStatus ?? 'unpaid') !== 'paid-in-full' && (
-                            <button
-                              type="button"
-                              onClick={() => handleRecordPayment(booking)}
-                              className="w-fit text-xs font-medium text-accent hover:text-accent-hover  "
-                            >
-                              + Record Payment
-                            </button>
-                          )}
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-4 text-center text-sm">
@@ -1407,6 +1530,35 @@ export default function BookingsPage() {
                               }`}
                               role="menu"
                             >
+                              {getBookingServiceStatus(booking) === 'confirmed' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    closeActionsDropdown();
+                                    setEventSummaryBooking(booking);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                                  role="menuitem"
+                                >
+                                  <DocumentTextIcon className="h-4 w-4 shrink-0" />
+                                  Event Summary
+                                </button>
+                              )}
+                              {getBookingServiceStatus(booking) !== 'cancelled' &&
+                                (booking.paymentStatus ?? 'unpaid') !== 'paid-in-full' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      closeActionsDropdown();
+                                      handleRecordPayment(booking);
+                                    }}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                                    role="menuitem"
+                                  >
+                                    <BanknotesIcon className="h-4 w-4 shrink-0" />
+                                    Record Payment
+                                  </button>
+                                )}
                               {booking.eventType === 'private-dinner' && (
                                 <Link
                                   href={`/bookings/menu?bookingId=${booking.id}`}
@@ -1448,6 +1600,9 @@ export default function BookingsPage() {
                                     distanceMiles: booking.distanceMiles,
                                     premiumAddOn: booking.premiumAddOn,
                                     notes: booking.notes,
+                                    serviceStatus: getBookingServiceStatus(booking),
+                                    discountType: booking.discountType,
+                                    discountValue: booking.discountValue,
                                     staffAssignments: booking.staffAssignments,
                                     staffingProfileId: booking.staffingProfileId,
                                   });
@@ -1545,6 +1700,21 @@ export default function BookingsPage() {
                       className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
                   </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-text-secondary">
+                      Event address *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.location}
+                      onChange={(e) =>
+                        setFormData({ ...formData, location: e.target.value })
+                      }
+                      placeholder="Event venue or delivery address"
+                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1554,9 +1724,31 @@ export default function BookingsPage() {
                   Event Details
                 </h3>
                 <p className="mb-3 text-xs text-text-muted">
-                  Set date, guest count, and location details accurately since pricing, staffing, and prep planning depend on this section.
+                  Set date and guest count accurately since pricing, staffing, and prep planning depend on this section.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
+                  {isEditing && (
+                    <div>
+                      <label className="block text-sm font-medium text-text-secondary">
+                        Status
+                      </label>
+                      <select
+                        value={formData.serviceStatus ?? 'pending'}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            serviceStatus: e.target.value as BookingStatus,
+                          })
+                        }
+                        className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-text-secondary">
                       Event Type *
@@ -1599,20 +1791,6 @@ export default function BookingsPage() {
                       value={formData.eventTime}
                       onChange={(e) =>
                         setFormData({ ...formData, eventTime: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Location *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
                       }
                       className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated text-text-primary"
                     />
@@ -1732,8 +1910,8 @@ export default function BookingsPage() {
                   </p>
                   <div className="space-y-3">
                     {currentFinancials.staffingPlan.staff.map((position, idx) => {
-                      const available = getAvailableStaff(position.role);
                       const assignment = findAssignmentForPosition(idx);
+                      const available = getAvailableStaff(position.role, assignment?.staffId);
                       const laborComp = currentFinancials.laborCompensation[idx];
 
                       return (
@@ -1785,77 +1963,6 @@ export default function BookingsPage() {
                 </div>
               )}
 
-              {/* Billing Snapshot */}
-              {isEditing && selectedBooking && (
-                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-900 dark:bg-indigo-950/20">
-                  <h3 className="font-semibold text-indigo-900 dark:text-indigo-200">
-                    Billing Workflow
-                  </h3>
-                  <p className="mt-1 text-sm text-indigo-700 dark:text-indigo-300">
-                    Service status tracks event operations, while payment status tracks deposit collection and remaining balance.
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        statusColors[getBookingServiceStatus(selectedBooking)]
-                      }`}
-                    >
-                      Service: {getBookingServiceStatus(selectedBooking)}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        paymentStatusColors[selectedBooking.paymentStatus ?? 'unpaid']
-                      }`}
-                    >
-                      Payment: {paymentStatusLabels[selectedBooking.paymentStatus ?? 'unpaid']}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs text-indigo-800 dark:text-indigo-300">
-                    Deposit {formatCurrency(selectedBooking.depositAmount ?? 0)} • Paid{' '}
-                    {formatCurrency(selectedBooking.amountPaid ?? 0)} • Due{' '}
-                    {formatCurrency(
-                      selectedBooking.balanceDueAmount ??
-                        Math.max(0, selectedBooking.total - (selectedBooking.amountPaid ?? 0))
-                    )}
-                  </div>
-                  {(selectedBooking.paymentStatus ?? 'unpaid') !== 'paid-in-full' &&
-                    getBookingServiceStatus(selectedBooking) !== 'cancelled' && (
-                      <button
-                        type="button"
-                        onClick={() => handleRecordPayment(selectedBooking)}
-                        className="mt-3 rounded-md border border-border bg-card-elevated px-3 py-1.5 text-sm font-medium text-accent hover:bg-card"
-                      >
-                        Record Payment
-                      </button>
-                    )}
-                  <div className="mt-4 rounded-md border border-border bg-card-elevated p-3">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-indigo-800 dark:text-indigo-300">
-                      Payment Log
-                    </h4>
-                    {selectedBookingPayments.length === 0 ? (
-                      <p className="mt-2 text-xs text-text-muted">
-                        No customer payments recorded for this booking yet.
-                      </p>
-                    ) : (
-                      <div className="mt-2 space-y-2">
-                        {selectedBookingPayments.slice(0, 6).map((payment) => (
-                          <div
-                            key={payment.id}
-                            className="flex items-center justify-between text-xs text-text-secondary"
-                          >
-                            <span>
-                              {payment.paymentDate} • {payment.type}
-                              {payment.method ? ` • ${payment.method}` : ''}
-                            </span>
-                            <span className="font-semibold">{formatCurrency(payment.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Notes */}
               <div>
                 <label className="block text-sm font-medium text-text-secondary">
@@ -1873,33 +1980,60 @@ export default function BookingsPage() {
                 />
               </div>
 
-              {/* Menu Link */}
-              {isEditing && selectedBooking && formData.eventType === 'private-dinner' && (
-                <div className="rounded-lg border border-amber-200 bg-warning/20 p-4 dark:border-amber-900 dark:bg-amber-950/20">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-amber-900 dark:text-amber-200">
-                        Guest Menu
-                      </h3>
-                      <p className="text-sm text-warning dark:text-amber-400">
-                        {selectedBooking.menuId
-                          ? 'Menu selections have been configured for this event.'
-                          : 'No menu configured yet. Set up guest-by-guest protein and side selections.'}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/bookings/menu?bookingId=${selectedBooking.id}`}
-                      className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-                        selectedBooking.menuId
-                          ? 'bg-emerald-600 hover:bg-emerald-700'
-                          : 'bg-amber-600 hover:bg-amber-700'
-                      }`}
+              {/* Apply discount (revenue/subtotal only, not gratuity) */}
+              <div className="rounded-lg border border-border bg-card-elevated p-4">
+                <h3 className="mb-2 font-semibold text-text-primary">
+                  Apply discount
+                </h3>
+                <p className="mb-3 text-xs text-text-muted">
+                  Discount applies to revenue (subtotal) only; gratuity and distance fee are unchanged.
+                </p>
+                <div className="flex flex-wrap items-end gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary">
+                      Type
+                    </label>
+                    <select
+                      value={formData.discountType ?? ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          discountType: (e.target.value || undefined) as 'percent' | 'amount' | undefined,
+                          discountValue: e.target.value ? (formData.discountValue ?? 0) : undefined,
+                        })
+                      }
+                      className="mt-1 rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
                     >
-                      {selectedBooking.menuId ? 'Edit Menu' : 'Create Menu'}
-                    </Link>
+                      <option value="">No discount</option>
+                      <option value="percent">Percent (%)</option>
+                      <option value="amount">Amount ($)</option>
+                    </select>
                   </div>
+                  {(formData.discountType === 'percent' || formData.discountType === 'amount') && (
+                    <div>
+                      <label className="block text-sm font-medium text-text-secondary">
+                        {formData.discountType === 'percent' ? 'Percent' : 'Amount'}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step={formData.discountType === 'percent' ? 1 : 0.01}
+                        value={formData.discountValue ?? ''}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            discountValue: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        placeholder={formData.discountType === 'percent' ? 'e.g. 10' : 'e.g. 50'}
+                        className="mt-1 w-28 rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
+                      />
+                      {formData.discountType === 'percent' && <span className="ml-1 text-sm text-text-muted">%</span>}
+                      {formData.discountType === 'amount' && <span className="ml-1 text-sm text-text-muted">$</span>}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Actions */}
               <div className="flex justify-between">
@@ -1934,6 +2068,114 @@ export default function BookingsPage() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Event Summary modal (confirmed bookings only) */}
+      {eventSummaryBooking && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setEventSummaryBooking(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="event-summary-title"
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-6 py-4">
+              <h2 id="event-summary-title" className="text-xl font-bold text-text-primary">
+                Event Summary
+              </h2>
+              <button
+                type="button"
+                onClick={() => setEventSummaryBooking(null)}
+                className="rounded p-1.5 text-text-muted hover:bg-card-elevated hover:text-text-primary"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-6 p-6">
+              {/* Event information */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
+                  Event information
+                </h3>
+                <dl className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs text-text-muted">Customer</dt>
+                    <dd className="font-medium text-text-primary">{eventSummaryBooking.customerName}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-text-muted">Date & time</dt>
+                    <dd className="text-text-primary">
+                      {format(new Date(eventSummaryBooking.eventDate + 'T12:00:00'), 'EEEE, MMM d, yyyy')} at {eventSummaryBooking.eventTime}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-text-muted">Event type</dt>
+                    <dd className="capitalize text-text-primary">
+                      {eventSummaryBooking.eventType === 'private-dinner' ? 'Private dinner' : 'Buffet'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-text-muted">Guests</dt>
+                    <dd className="text-text-primary">
+                      {eventSummaryBooking.adults} adult{eventSummaryBooking.adults !== 1 ? 's' : ''}
+                      {eventSummaryBooking.children > 0 &&
+                        `, ${eventSummaryBooking.children} child${eventSummaryBooking.children !== 1 ? 'ren' : ''}`}
+                    </dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs text-text-muted">Location</dt>
+                    <dd className="text-text-primary">{eventSummaryBooking.location || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-text-muted">Distance</dt>
+                    <dd className="text-text-primary">{eventSummaryBooking.distanceMiles} mi</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-text-muted">Total</dt>
+                    <dd className="font-semibold text-text-primary">
+                      {formatCurrency(eventSummaryBooking.total)}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
+              {/* Notes */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
+                  Notes
+                </h3>
+                <p className="whitespace-pre-wrap rounded-md border border-border bg-card-elevated px-4 py-3 text-sm text-text-primary">
+                  {eventSummaryBooking.notes?.trim() || 'No notes.'}
+                </p>
+              </section>
+
+              {/* Menu summary */}
+              <section>
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">
+                  Menu summary
+                </h3>
+                {eventSummaryMenu && eventSummaryMenu.guestSelections?.length > 0 ? (
+                  <div className="rounded-md border border-border bg-card-elevated p-4">
+                    <p className="mb-3 text-sm text-text-primary">
+                      {eventSummaryMenu.guestSelections.length} guest
+                      {eventSummaryMenu.guestSelections.length !== 1 ? 's' : ''} with menu selections
+                    </p>
+                    <MenuSummaryContent selections={eventSummaryMenu.guestSelections} />
+                  </div>
+                ) : (
+                  <p className="rounded-md border border-border bg-card-elevated px-4 py-3 text-sm text-text-muted">
+                    No menu configured for this event.
+                  </p>
+                )}
+              </section>
+            </div>
           </div>
         </div>
       )}

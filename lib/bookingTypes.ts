@@ -64,6 +64,10 @@ export interface Booking {
   menuId?: string; // Reference to EventMenu
   menuPricingSnapshot?: MenuPricingSnapshot; // Menu-derived pricing override snapshot
 
+  // Discount (applied to revenue/subtotal only, not gratuity)
+  discountType?: 'percent' | 'amount';
+  discountValue?: number;
+
   // Reconciliation
   reconciliationId?: string; // Reference to EventReconciliation
 
@@ -85,6 +89,9 @@ export interface BookingFormData {
   distanceMiles: number;
   premiumAddOn: number;
   notes: string;
+  serviceStatus?: BookingStatus;
+  discountType?: 'percent' | 'amount';
+  discountValue?: number;
   staffAssignments?: StaffAssignment[];
   staffingProfileId?: string;
 }
