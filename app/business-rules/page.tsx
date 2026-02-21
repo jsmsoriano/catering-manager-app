@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { DEFAULT_RULES, loadRules } from '@/lib/moneyRules';
-import type { MoneyRules, StaffingProfile, StaffingRoleEntry, EventType } from '@/lib/types';
+import { useTemplateConfig } from '@/lib/useTemplateConfig';
+import type { MoneyRules, StaffingProfile, StaffingRoleEntry } from '@/lib/types';
 
-export default function MoneyRulesPage() {
+export function BusinessRulesContent() {
   const [rules, setRules] = useState<MoneyRules>(DEFAULT_RULES);
+  const { config: templateConfig } = useTemplateConfig();
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showProfileForm, setShowProfileForm] = useState(false);
@@ -131,7 +134,7 @@ export default function MoneyRulesPage() {
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-text-primary">
+        <h1 className="text-2xl font-bold text-text-primary">
           Business Rules
         </h1>
         <p className="mt-2 text-text-secondary">
@@ -199,34 +202,36 @@ export default function MoneyRulesPage() {
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Private Dinner Base Price ($/person)
+                {templateConfig.eventTypes[0]?.label ?? 'Primary Event'} Base Price ($/person)
               </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                value={rules.pricing.privateDinnerBasePrice}
+                value={rules.pricing.primaryBasePrice}
                 onChange={(e) =>
-                  updateRules(['pricing', 'privateDinnerBasePrice'], parseFloat(e.target.value))
+                  updateRules(['pricing', 'primaryBasePrice'], parseFloat(e.target.value))
                 }
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
+            {templateConfig.eventTypes[1] && (
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Buffet Base Price ($/person)
+                {templateConfig.eventTypes[1].label} Base Price ($/person)
               </label>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                value={rules.pricing.buffetBasePrice}
+                value={rules.pricing.secondaryBasePrice}
                 onChange={(e) =>
-                  updateRules(['pricing', 'buffetBasePrice'], parseFloat(e.target.value))
+                  updateRules(['pricing', 'secondaryBasePrice'], parseFloat(e.target.value))
                 }
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Premium Add-on Min ($/person)
@@ -287,6 +292,22 @@ export default function MoneyRulesPage() {
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary">
+                Required Deposit (%)
+              </label>
+              <p className="mt-0.5 text-xs text-text-muted">Applied when a booking is confirmed.</p>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={rules.pricing.defaultDepositPercent}
+                onChange={(e) =>
+                  updateRules(['pricing', 'defaultDepositPercent'], parseFloat(e.target.value))
+                }
+                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+              />
+            </div>
           </div>
         </section>
 
@@ -304,32 +325,34 @@ export default function MoneyRulesPage() {
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Max Guests per Chef (Private)
+                Max Guests per Chef ({templateConfig.eventTypes[0]?.label ?? 'Primary'})
               </label>
               <input
                 type="number"
                 min="1"
-                value={rules.staffing.maxGuestsPerChefPrivate}
+                value={rules.staffing.maxGuestsPerChefPrimary}
                 onChange={(e) =>
-                  updateRules(['staffing', 'maxGuestsPerChefPrivate'], parseInt(e.target.value))
+                  updateRules(['staffing', 'maxGuestsPerChefPrimary'], parseInt(e.target.value))
                 }
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
+            {templateConfig.eventTypes[1] && (
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Max Guests per Chef (Buffet)
+                Max Guests per Chef ({templateConfig.eventTypes[1].label})
               </label>
               <input
                 type="number"
                 min="1"
-                value={rules.staffing.maxGuestsPerChefBuffet}
+                value={rules.staffing.maxGuestsPerChefSecondary}
                 onChange={(e) =>
-                  updateRules(['staffing', 'maxGuestsPerChefBuffet'], parseInt(e.target.value))
+                  updateRules(['staffing', 'maxGuestsPerChefSecondary'], parseInt(e.target.value))
                 }
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
+            )}
             <div className="sm:col-span-2">
               <label className="flex items-center">
                 <input
@@ -394,11 +417,12 @@ export default function MoneyRulesPage() {
                   </label>
                   <select
                     value={editingProfile.eventType}
-                    onChange={(e) => updateEditingProfile({ eventType: e.target.value as EventType | 'any' })}
+                    onChange={(e) => updateEditingProfile({ eventType: e.target.value })}
                     className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
                   >
-                    <option value="private-dinner">Private Dinner</option>
-                    <option value="buffet">Buffet</option>
+                    {templateConfig.eventTypes.map(et => (
+                      <option key={et.id} value={et.id}>{et.label}</option>
+                    ))}
                     <option value="any">Any</option>
                   </select>
                 </div>
@@ -513,7 +537,7 @@ export default function MoneyRulesPage() {
                   <div>
                     <h4 className="font-medium text-text-primary text-text-primary">{profile.name}</h4>
                     <p className="mt-0.5 text-sm text-text-muted ">
-                      {profile.eventType === 'private-dinner' ? 'Private Dinner' : profile.eventType === 'buffet' ? 'Buffet' : 'Any Event'}
+                      {profile.eventType === 'any' ? 'Any Event' : (templateConfig.eventTypes.find(et => et.id === profile.eventType)?.label ?? profile.eventType)}
                       {' · '}
                       {profile.minGuests}–{profile.maxGuests === 9999 ? '\u221E' : profile.maxGuests} guests
                     </p>
@@ -577,15 +601,18 @@ export default function MoneyRulesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Lead Chef Cap ($)
+                Lead Chef Cap (% of revenue+gratuity)
               </label>
+              <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
               <input
                 type="number"
                 min="0"
-                value={rules.privateLabor.leadChefCap}
-                onChange={(e) =>
-                  updateRules(['privateLabor', 'leadChefCap'], parseFloat(e.target.value))
-                }
+                max="100"
+                value={rules.privateLabor.leadChefCapPercent ?? 0}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  updateRules(['privateLabor', 'leadChefCapPercent'], val === 0 || isNaN(val) ? null : val);
+                }}
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
@@ -606,15 +633,18 @@ export default function MoneyRulesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Overflow Chef Cap ($)
+                Overflow Chef Cap (% of revenue+gratuity)
               </label>
+              <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
               <input
                 type="number"
                 min="0"
-                value={rules.privateLabor.overflowChefCap}
-                onChange={(e) =>
-                  updateRules(['privateLabor', 'overflowChefCap'], parseFloat(e.target.value))
-                }
+                max="100"
+                value={rules.privateLabor.overflowChefCapPercent ?? 0}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  updateRules(['privateLabor', 'overflowChefCapPercent'], val === 0 || isNaN(val) ? null : val);
+                }}
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
@@ -635,15 +665,18 @@ export default function MoneyRulesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Full Chef Cap ($)
+                Full Chef Cap (% of revenue+gratuity)
               </label>
+              <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
               <input
                 type="number"
                 min="0"
-                value={rules.privateLabor.fullChefCap}
-                onChange={(e) =>
-                  updateRules(['privateLabor', 'fullChefCap'], parseFloat(e.target.value))
-                }
+                max="100"
+                value={rules.privateLabor.fullChefCapPercent ?? 0}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  updateRules(['privateLabor', 'fullChefCapPercent'], val === 0 || isNaN(val) ? null : val);
+                }}
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
@@ -664,15 +697,17 @@ export default function MoneyRulesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Assistant Cap ($ or leave 0 for no cap)
+                Assistant Cap (% of revenue+gratuity)
               </label>
+              <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
               <input
                 type="number"
                 min="0"
-                value={rules.privateLabor.assistantCap || 0}
+                max="100"
+                value={rules.privateLabor.assistantCapPercent ?? 0}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
-                  updateRules(['privateLabor', 'assistantCap'], val === 0 ? null : val);
+                  updateRules(['privateLabor', 'assistantCapPercent'], val === 0 || isNaN(val) ? null : val);
                 }}
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
@@ -756,15 +791,18 @@ export default function MoneyRulesPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Chef Cap ($)
+                Chef Cap (% of revenue+gratuity)
               </label>
+              <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
               <input
                 type="number"
                 min="0"
-                value={rules.buffetLabor.chefCap}
-                onChange={(e) =>
-                  updateRules(['buffetLabor', 'chefCap'], parseFloat(e.target.value))
-                }
+                max="100"
+                value={rules.buffetLabor.chefCapPercent ?? 0}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  updateRules(['buffetLabor', 'chefCapPercent'], val === 0 || isNaN(val) ? null : val);
+                }}
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
@@ -785,34 +823,36 @@ export default function MoneyRulesPage() {
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Food Cost - Private (%)
+                Food Cost — {templateConfig.eventTypes[0]?.label ?? 'Primary'} (%)
               </label>
               <input
                 type="number"
                 min="0"
                 max="100"
-                value={rules.costs.foodCostPercentPrivate}
+                value={rules.costs.primaryFoodCostPercent}
                 onChange={(e) =>
-                  updateRules(['costs', 'foodCostPercentPrivate'], parseFloat(e.target.value))
+                  updateRules(['costs', 'primaryFoodCostPercent'], parseFloat(e.target.value))
                 }
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
+            {templateConfig.eventTypes[1] && (
             <div>
               <label className="block text-sm font-medium text-text-secondary">
-                Food Cost - Buffet (%)
+                Food Cost — {templateConfig.eventTypes[1].label} (%)
               </label>
               <input
                 type="number"
                 min="0"
                 max="100"
-                value={rules.costs.foodCostPercentBuffet}
+                value={rules.costs.secondaryFoodCostPercent}
                 onChange={(e) =>
-                  updateRules(['costs', 'foodCostPercentBuffet'], parseFloat(e.target.value))
+                  updateRules(['costs', 'secondaryFoodCostPercent'], parseFloat(e.target.value))
                 }
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
               />
             </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Supplies Cost (%)
@@ -1081,3 +1121,17 @@ export default function MoneyRulesPage() {
     </div>
   );
 }
+
+function BusinessRulesRedirectPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace('/settings?tab=rules');
+  }, [router]);
+  return (
+    <div className="flex min-h-screen items-center justify-center p-8">
+      <p className="text-text-muted">Redirecting to Settings…</p>
+    </div>
+  );
+}
+
+export default BusinessRulesRedirectPage;

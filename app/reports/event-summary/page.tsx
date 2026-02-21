@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowDownTrayIcon, DocumentTextIcon, EnvelopeIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ChevronDownIcon, DocumentTextIcon, EnvelopeIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
@@ -76,6 +76,19 @@ export default function EventSummaryReportPage() {
   const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
   const [printEventId, setPrintEventId] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [summaryDropdownId, setSummaryDropdownId] = useState<string | null>(null);
+  const summaryDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (summaryDropdownId === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (summaryDropdownRef.current && !summaryDropdownRef.current.contains(e.target as Node)) {
+        setSummaryDropdownId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [summaryDropdownId]);
 
   useEffect(() => {
     const load = () => {
@@ -571,14 +584,59 @@ ${row.staff.map((s) => `<tr><td>${s.name}</td><td>${s.roleLabel}</td><td>${forma
                   <td className="px-4 py-3 text-right text-text-primary">{row.guests}</td>
                   <td className="px-4 py-3 text-right text-text-primary">{formatCurrency(row.revenueAfterDiscount + row.gratuity)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedEventId(row.booking.id)}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600"
+                    <div
+                      ref={summaryDropdownId === row.booking.id ? summaryDropdownRef : undefined}
+                      className="relative inline-block"
                     >
-                      <DocumentTextIcon className="h-4 w-4" />
-                      Open summary
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setSummaryDropdownId((prev) => (prev === row.booking.id ? null : row.booking.id))}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600"
+                      >
+                        Summary
+                        <ChevronDownIcon className={`h-4 w-4 transition-transform ${summaryDropdownId === row.booking.id ? 'rotate-180' : ''}`} />
+                      </button>
+                      {summaryDropdownId === row.booking.id && (
+                        <div className="absolute right-0 top-full z-20 mt-1 min-w-[10rem] rounded-md border border-border bg-card py-1 shadow-lg" role="menu">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedEventId(row.booking.id);
+                              setSummaryDropdownId(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                            role="menuitem"
+                          >
+                            <DocumentTextIcon className="h-4 w-4 shrink-0" />
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleDownload(row);
+                              setSummaryDropdownId(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                            role="menuitem"
+                          >
+                            <ArrowDownTrayIcon className="h-4 w-4 shrink-0" />
+                            Download
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleEmail(row);
+                              setSummaryDropdownId(null);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                            role="menuitem"
+                          >
+                            <EnvelopeIcon className="h-4 w-4 shrink-0" />
+                            Email
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

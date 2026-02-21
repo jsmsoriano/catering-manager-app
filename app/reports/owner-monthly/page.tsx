@@ -25,17 +25,18 @@ function parseLocalDate(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
-const STATUS_BADGE: Record<BookingStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  confirmed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  completed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-  cancelled: 'bg-card-elevated text-text-primary',
+// Text-only (no pill) for consistency with Events page
+const STATUS_TEXT: Record<BookingStatus, string> = {
+  pending: 'text-amber-700 dark:text-amber-300',
+  confirmed: 'text-blue-700 dark:text-blue-300',
+  completed: 'text-emerald-700 dark:text-emerald-300',
+  cancelled: 'text-slate-600 dark:text-slate-400',
 };
 
-const DISTRIBUTION_STATUS_BADGE: Record<DistributionStatus, string> = {
-  draft: 'bg-card-elevated text-text-primary',
-  posted: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+const DISTRIBUTION_STATUS_TEXT: Record<DistributionStatus, string> = {
+  draft: 'text-text-secondary',
+  posted: 'text-indigo-700 dark:text-indigo-300',
+  paid: 'text-emerald-700 dark:text-emerald-300',
 };
 
 const DISTRIBUTION_STATUS_LABEL: Record<DistributionStatus, string> = {
@@ -49,7 +50,7 @@ interface DistributionRow {
   eventDate: string;
   eventTime: string;
   customerName: string;
-  eventType: 'private-dinner' | 'buffet';
+  eventType: string;
   bookingStatus: BookingStatus;
   distributionStatus: DistributionStatus;
   guests: number;
@@ -401,7 +402,7 @@ export default function OwnerMonthlyReportPage() {
           href="/bookings"
           className="rounded-md bg-accent px-4 py-2 text-white hover:bg-indigo-700"
         >
-          View Bookings
+          View Events
         </Link>
       </div>
 
@@ -547,17 +548,13 @@ export default function OwnerMonthlyReportPage() {
                     <td className="px-4 py-3 text-right text-text-secondary">
                       {row.guests}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE[row.bookingStatus]}`}>
+                    <td className={`border-l-2 pl-3 px-4 py-3 text-center ${row.bookingStatus === 'pending' ? 'border-l-amber-500' : row.bookingStatus === 'confirmed' ? 'border-l-blue-500' : row.bookingStatus === 'completed' ? 'border-l-emerald-500' : 'border-l-slate-400'}`}>
+                      <span className={`text-xs font-medium ${STATUS_TEXT[row.bookingStatus]}`}>
                         {row.bookingStatus}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                          DISTRIBUTION_STATUS_BADGE[row.distributionStatus]
-                        }`}
-                      >
+                    <td className={`border-l-2 pl-3 px-4 py-3 text-center ${row.distributionStatus === 'draft' ? 'border-l-transparent' : row.distributionStatus === 'posted' ? 'border-l-indigo-500' : 'border-l-emerald-500'}`}>
+                      <span className={`text-xs font-medium ${DISTRIBUTION_STATUS_TEXT[row.distributionStatus]}`}>
                         {DISTRIBUTION_STATUS_LABEL[row.distributionStatus]}
                       </span>
                     </td>

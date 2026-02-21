@@ -17,7 +17,7 @@ import {
   TableCellsIcon,
   ViewColumnsIcon,
 } from '@heroicons/react/24/outline';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { formatPhone, isValidPhone } from '@/lib/phoneUtils';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
@@ -924,18 +924,46 @@ export default function BookingsPage() {
     );
   };
 
-  // Payment column: user-facing labels (Deposit Pending, Deposit Received, Paid in Full, Refunded)
-  const paymentDisplayLabel = (status: PaymentStatus | undefined): string => {
-    const s = status ?? 'unpaid';
-    if (s === 'paid-in-full') return 'Paid in Full';
-    if (s === 'refunded') return 'Refunded';
-    if (s === 'unpaid' || s === 'deposit-due') return 'Deposit Pending';
-    return 'Deposit Received'; // deposit-paid, balance-due
+  // Payment column: user-facing labels (Deposit Pending, Deposit Received, Balance Outstanding, Paid in Full, Refunded)
+  const dayAfterEventLocal = (eventDate: string): string => {
+    const [y, m, d] = eventDate.split('-').map(Number);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return '';
+    return toLocalDateISO(addDays(new Date(y, m - 1, d), 1));
+  };
+
+  const paymentDisplayLabelForBooking = (booking: Booking): string => {
+    const nb = normalizeBookingWorkflowFields(booking);
+    const status = nb.paymentStatus ?? 'unpaid';
+    const total = nb.total ?? 0;
+    const amountPaid = nb.amountPaid ?? 0;
+    const depositAmount = nb.depositAmount ?? 0;
+    const balanceDue = nb.balanceDueAmount ?? Math.max(0, total - amountPaid);
+    const today = toLocalDateISO(new Date());
+    const dayAfter = dayAfterEventLocal(nb.eventDate ?? '');
+
+    if (status === 'paid-in-full') return 'Paid in Full';
+    if (status === 'refunded') return 'Refunded';
+    // 1+ day after event and balance not fully paid → Balance Outstanding
+    if (balanceDue > 0.009 && dayAfter && today >= dayAfter) return 'Balance Outstanding';
+    // Deposit recorded and before "day after event" → Deposit Received
+    if (amountPaid >= depositAmount - 0.009) return 'Deposit Received';
+    return 'Deposit Pending';
+  };
+
+  const isBalanceOverdue = (booking: Booking): boolean => {
+    const nb = normalizeBookingWorkflowFields(booking);
+    const balanceDue = nb.balanceDueAmount ?? Math.max(0, (nb.total ?? 0) - (nb.amountPaid ?? 0));
+    if (balanceDue <= 0.009) return false;
+    const dayAfter = dayAfterEventLocal(nb.eventDate ?? '');
+    if (!dayAfter) return false;
+    const today = toLocalDateISO(new Date());
+    return today >= dayAfter;
   };
 
   const paymentDisplayColors: Record<string, string> = {
     'Deposit Pending': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     'Deposit Received': 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
+    'Balance Outstanding': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     'Paid in Full': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
     Refunded: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
   };
@@ -1221,6 +1249,7 @@ export default function BookingsPage() {
   const paymentTextColors: Record<string, string> = {
     'Deposit Pending': 'text-amber-700 dark:text-amber-300',
     'Deposit Received': 'text-sky-700 dark:text-sky-300',
+    'Balance Outstanding': 'text-red-700 dark:text-red-300',
     'Paid in Full': 'text-emerald-700 dark:text-emerald-300',
     Refunded: 'text-rose-700 dark:text-rose-300',
   };
@@ -1234,6 +1263,7 @@ export default function BookingsPage() {
   const paymentBorderColors: Record<string, string> = {
     'Deposit Pending': 'border-l-amber-500',
     'Deposit Received': 'border-l-sky-500',
+    'Balance Outstanding': 'border-l-red-500',
     'Paid in Full': 'border-l-emerald-500',
     Refunded: 'border-l-rose-500',
   };
@@ -1639,8 +1669,11 @@ export default function BookingsPage() {
                     {cards.map((booking) => {
                       const nb = normalizeBookingWorkflowFields(booking);
                       const totalGuests = booking.adults + (booking.children ?? 0);
-                      const payLabel = paymentDisplayLabel(nb.paymentStatus);
-                      const payTextClass = paymentTextColors[payLabel] ?? 'text-text-secondary';
+                      const payLabel = paymentDisplayLabelForBooking(nb);
+                      const payTextClass =
+                        payLabel === 'Balance Outstanding' && isBalanceOverdue(nb)
+                          ? 'text-red-700 dark:text-red-300'
+                          : (paymentTextColors[payLabel] ?? 'text-text-secondary');
                       return (
                         <button
                           key={booking.id}
@@ -1769,7 +1802,7 @@ export default function BookingsPage() {
                         {booking.menuPricingSnapshot ? 'menu pricing' : 'rules pricing'}
                       </div>
                     </td>
-                    <td className={`border-l-2 pl-3 px-4 py-4 text-sm ${statusBorderColors[getBookingServiceStatus(booking)]}`}>
+                    <td className="pl-3 px-4 py-4 text-sm">
                       {isBookingLocked(booking) ? (
                         <div className="flex items-center gap-1.5">
                           <span className={`text-xs font-medium ${statusTextColors[getBookingServiceStatus(booking)]}`}>
@@ -1792,14 +1825,18 @@ export default function BookingsPage() {
                         </select>
                       )}
                     </td>
-                    <td className={`hidden border-l-2 pl-3 px-4 py-4 text-sm md:table-cell ${paymentBorderColors[paymentDisplayLabel(booking.paymentStatus)] ?? 'border-l-transparent'}`}>
+                    <td className="hidden pl-3 px-4 py-4 text-sm md:table-cell">
                       <div className="flex flex-col gap-1">
                         <span
                           className={`text-xs font-medium ${
-                            paymentTextColors[paymentDisplayLabel(booking.paymentStatus)] ?? 'text-text-secondary'
+                            (() => {
+                              const label = paymentDisplayLabelForBooking(booking);
+                              if (label === 'Balance Outstanding' && isBalanceOverdue(booking)) return 'text-red-700 dark:text-red-300';
+                              return paymentTextColors[label] ?? 'text-text-secondary';
+                            })()
                           }`}
                         >
-                          {paymentDisplayLabel(booking.paymentStatus)}
+                          {paymentDisplayLabelForBooking(booking)}
                         </span>
                         <span className="text-xs text-text-muted">
                           Paid {formatCurrency(booking.amountPaid ?? 0)} · Due{' '}
@@ -1807,18 +1844,6 @@ export default function BookingsPage() {
                             booking.balanceDueAmount ?? Math.max(0, booking.total - (booking.amountPaid ?? 0))
                           )}
                         </span>
-                        {getBookingServiceStatus(booking) !== 'cancelled' &&
-                          (booking.paymentStatus ?? 'unpaid') !== 'paid-in-full' &&
-                          (booking.paymentStatus ?? 'unpaid') !== 'refunded' && (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); openPaymentModal(booking); }}
-                              className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent hover:bg-accent/20"
-                            >
-                              <BanknotesIcon className="h-3 w-3" />
-                              Collect
-                            </button>
-                          )}
                       </div>
                     </td>
                     <td className="hidden px-4 py-4 text-sm md:table-cell">

@@ -4,8 +4,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 const LOGIN_PATH = '/login';
 const SIGNUP_PATH = '/signup';
 const AUTH_CALLBACK_PATH = '/auth/callback';
+const INQUIRY_PATH = '/inquiry';
 
-const publicPaths = [LOGIN_PATH, SIGNUP_PATH, AUTH_CALLBACK_PATH];
+const publicPaths = [LOGIN_PATH, SIGNUP_PATH, AUTH_CALLBACK_PATH, INQUIRY_PATH];
 
 function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api')) return true;

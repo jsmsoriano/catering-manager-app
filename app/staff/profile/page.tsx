@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { formatPhone, isValidPhone } from '@/lib/phoneUtils';
 import Image from 'next/image';
 import Link from 'next/link';
 import type {
@@ -448,10 +449,16 @@ export default function StaffProfilePage() {
               type="tel"
               value={formData.phone}
               onChange={(event) =>
-                setFormData((prev) => ({ ...prev, phone: event.target.value }))
+                setFormData((prev) => ({ ...prev, phone: formatPhone(event.target.value) }))
               }
-              className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary  bg-card-elevated text-text-primary"
+              placeholder="(xxx)-xxx-xxxx"
+              className={`mt-1 w-full rounded-md border px-3 py-2 text-text-primary bg-card-elevated ${
+                formData.phone && !isValidPhone(formData.phone) ? 'border-danger' : 'border-border'
+              }`}
             />
+            {formData.phone && !isValidPhone(formData.phone) && (
+              <p className="mt-1 text-xs text-danger">Format: (xxx)-xxx-xxxx</p>
+            )}
           </div>
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-text-secondary">

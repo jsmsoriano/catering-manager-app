@@ -1,32 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { DEFAULT_RULES, loadRules } from './moneyRules';
+import { useState, useEffect, useMemo } from 'react';
+import { DEFAULT_RULES, loadRules, mergeRulesOverrides } from './moneyRules';
 import type { MoneyRules } from './types';
+import { useTemplateConfig } from './useTemplateConfig';
 
 /**
- * Custom hook to load and use Money Rules from localStorage
- * Falls back to DEFAULT_RULES if no saved rules exist
+ * Custom hook to load and use Money Rules from localStorage.
+ * Merges in template defaults.moneyRulesOverrides when present (e.g. private chef assistantRequired: false).
  */
 export function useMoneyRules(): MoneyRules {
-  const [rules, setRules] = useState<MoneyRules>(DEFAULT_RULES);
+  const { config } = useTemplateConfig();
+  const [baseRules, setBaseRules] = useState<MoneyRules>(DEFAULT_RULES);
 
   useEffect(() => {
-    // Load from localStorage on mount using safe deep merge
-    setRules(loadRules());
+    setBaseRules(loadRules());
 
-    // Listen for storage events (when rules are updated in another tab/window)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'moneyRules') {
-        // Re-load using loadRules which safely strips null/NaN values
-        setRules(loadRules());
-      }
+      if (e.key === 'moneyRules') setBaseRules(loadRules());
     };
-
-    // Listen for same-tab updates
-    const handleCustomChange = () => {
-      setRules(loadRules());
-    };
+    const handleCustomChange = () => setBaseRules(loadRules());
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('moneyRulesUpdated', handleCustomChange);
@@ -36,5 +29,8 @@ export function useMoneyRules(): MoneyRules {
     };
   }, []);
 
-  return rules;
+  return useMemo(
+    () => mergeRulesOverrides(baseRules, config.defaults?.moneyRulesOverrides),
+    [baseRules, config.defaults?.moneyRulesOverrides]
+  );
 }

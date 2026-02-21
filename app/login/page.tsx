@@ -30,6 +30,20 @@ function LoginContent() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(errorParam === 'auth' ? 'Authentication failed. Please try again.' : null);
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  async function handleGoogleSignIn() {
+    const supabase = createClient();
+    if (!supabase) return;
+    setOauthLoading(true);
+    setError(null);
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+    setOauthLoading(false);
+    if (oauthError) setError(oauthError.message);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -113,6 +127,22 @@ function LoginContent() {
               className="w-full rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50"
             >
               {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-background px-2 text-text-muted">or</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={oauthLoading}
+              className="w-full rounded-md border border-border bg-card-elevated px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-card focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50"
+            >
+              {oauthLoading ? 'Redirecting…' : 'Sign in with Google'}
             </button>
             <p className="text-center text-sm text-text-muted">
               Don’t have an account?{' '}

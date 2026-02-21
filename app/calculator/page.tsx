@@ -43,7 +43,7 @@ export default function CalculatorPage() {
           : eventType === 'buffet'
           ? 100 / tempFinancials.staffingPlan.staff.length
           : rules.privateLabor.chefGratuitySplitPercent / tempFinancials.staffingPlan.chefRoles.length,
-      cap: s.cap,
+      capPercent: s.capPercent,
     }));
   }, [adults, children, eventType, distanceMiles, premiumAddOn, rules]);
 
@@ -100,7 +100,7 @@ export default function CalculatorPage() {
                 : newType === 'buffet'
                 ? 100 / tempFinancials.staffingPlan.staff.length
                 : rules.privateLabor.chefGratuitySplitPercent / tempFinancials.staffingPlan.chefRoles.length,
-            cap: s.cap,
+            capPercent: s.capPercent,
           }))
         );
       }, 0);
@@ -128,7 +128,7 @@ export default function CalculatorPage() {
                   : eventType === 'buffet'
                   ? 100 / tempFinancials.staffingPlan.staff.length
                   : rules.privateLabor.chefGratuitySplitPercent / tempFinancials.staffingPlan.chefRoles.length,
-              cap: s.cap,
+              capPercent: s.capPercent,
             }))
           );
         }
@@ -147,7 +147,7 @@ export default function CalculatorPage() {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-text-primary">
+          <h1 className="text-2xl font-bold text-text-primary">
             Event Profitability Calculator
           </h1>
           <p className="mt-2 text-text-secondary">
@@ -429,10 +429,10 @@ export default function CalculatorPage() {
                           type="number"
                           min="0"
                           step="10"
-                          value={override.cap ?? 0}
+                          value={override.capPercent ?? 0}
                           onChange={(e) => {
                             const val = parseFloat(e.target.value) || 0;
-                            updateOverride(idx, 'cap', val === 0 ? null : val);
+                            updateOverride(idx, 'capPercent', val === 0 ? null : val);
                           }}
                           className="w-full rounded-md border border-border px-2 py-1.5 text-center text-sm text-text-primary border-border bg-card-elevated"
                           title="0 = no cap"
@@ -519,7 +519,7 @@ export default function CalculatorPage() {
                       </div>
                       {comp.wasCapped && (
                         <p className="mt-2 text-warning">
-                          Capped at {formatCurrency(comp.cap!)} (excess: {formatCurrency(comp.excessToProfit)} to profit)
+                          Capped at {formatCurrency(comp.capAmount!)} (excess: {formatCurrency(comp.excessToProfit)} to profit)
                         </p>
                       )}
                     </div>

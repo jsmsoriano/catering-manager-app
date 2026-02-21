@@ -1,12 +1,14 @@
 // ============================================================================
-// HIBACHI A GO GO - TYPE DEFINITIONS
+// CATERING MANAGER - TYPE DEFINITIONS
 // ============================================================================
 
 // ----------------------------------------------------------------------------
 // Event Types & Basic Structures
 // ----------------------------------------------------------------------------
 
-export type EventType = 'private-dinner' | 'buffet';
+// Widened to string so templates can define their own event type ids.
+// Valid values at runtime are driven by BusinessTemplateConfig.eventTypes.
+export type EventType = string;
 
 export type ChefRole = 'lead' | 'overflow' | 'full' | 'buffet';
 
@@ -34,6 +36,7 @@ export interface EventInput {
   foodCostOverride?: number; // Optional food cost override (e.g., menu-based COGS)
   staffPayOverrides?: StaffPayOverride[]; // Event-level overrides for staff pay
   staffingProfileId?: string; // Override auto-matched staffing profile
+  pricingSlot?: 'primary' | 'secondary'; // Which base price to use; derived from template eventTypes if omitted
 }
 
 // Per-staff-role override for event-level pay adjustments
@@ -41,7 +44,7 @@ export interface StaffPayOverride {
   role: ChefRole | 'assistant';
   basePayPercent: number; // % of revenue (subtotal)
   gratuitySplitPercent: number; // % of gratuity pool for this person
-  cap: number | null; // $ max per event, null = no cap
+  capPercent: number | null; // % of (subtotal + gratuity) max pay, null = no cap
 }
 
 // ----------------------------------------------------------------------------
@@ -51,32 +54,33 @@ export interface StaffPayOverride {
 export interface MoneyRules {
   // Pricing Section
   pricing: {
-    privateDinnerBasePrice: number; // $ per guest
-    buffetBasePrice: number; // $ per guest
+    primaryBasePrice: number;   // $ per guest — primary event type (e.g. private dinner, plated dinner)
+    secondaryBasePrice: number; // $ per guest — secondary event type (e.g. buffet, custom spread)
     premiumAddOnMin: number; // $ per guest
     premiumAddOnMax: number; // $ per guest
     defaultGratuityPercent: number; // %
     childDiscountPercent: number; // % (e.g., 50 for 50% off)
+    defaultDepositPercent: number; // % required deposit when booking is confirmed (e.g., 30)
   };
 
   // Staffing Rules
   staffing: {
-    maxGuestsPerChefPrivate: number; // guests (default: 15)
-    maxGuestsPerChefBuffet: number; // guests (default: 25)
-    assistantRequired: boolean; // for private events
+    maxGuestsPerChefPrimary: number;   // guests for primary event type (default: 15)
+    maxGuestsPerChefSecondary: number; // guests for secondary event type (default: 25)
+    assistantRequired: boolean; // for primary events
     profiles: StaffingProfile[]; // Named staffing compositions
   };
 
   // Private Event Labor
   privateLabor: {
     leadChefBasePercent: number; // % of subtotal
-    leadChefCap: number; // $ max per event
+    leadChefCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
     overflowChefBasePercent: number; // % of subtotal (16-30 guests)
-    overflowChefCap: number; // $ max per event
+    overflowChefCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
     fullChefBasePercent: number; // % of subtotal (31+ guests)
-    fullChefCap: number; // $ max per event
+    fullChefCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
     assistantBasePercent: number; // % of subtotal
-    assistantCap: number | null; // $ max per event or null for no cap
+    assistantCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
     chefGratuitySplitPercent: number; // % of gratuity that goes to chefs (default: 55)
     assistantGratuitySplitPercent: number; // % of gratuity that goes to assistant (default: 45)
   };
@@ -84,13 +88,13 @@ export interface MoneyRules {
   // Buffet Event Labor
   buffetLabor: {
     chefBasePercent: number; // % of subtotal
-    chefCap: number; // $ max per event
+    chefCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
   };
 
   // Cost Structure
   costs: {
-    foodCostPercentPrivate: number; // % of subtotal
-    foodCostPercentBuffet: number; // % of subtotal
+    primaryFoodCostPercent: number;   // % of subtotal — primary event type
+    secondaryFoodCostPercent: number; // % of subtotal — secondary event type
     suppliesCostPercent: number; // % of subtotal
     transportationStipend: number; // $ flat per event
   };
@@ -127,7 +131,7 @@ export interface MoneyRules {
 export interface StaffMember {
   role: ChefRole | 'assistant';
   basePayPercent: number;
-  cap: number | null;
+  capPercent: number | null;
   isOwner: boolean;
   ownerRole?: OwnerRole;
 }
@@ -157,7 +161,8 @@ export interface LaborCompensation {
   basePay: number;
   gratuityShare: number;
   totalCalculated: number;
-  cap: number | null;
+  capPercent: number | null;
+  capAmount: number | null; // computed dollar cap for this event
   finalPay: number;
   wasCapped: boolean;
   excessToProfit: number;

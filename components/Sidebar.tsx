@@ -22,6 +22,7 @@ import {
   BookOpenIcon,
   InboxIcon,
   ViewColumnsIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 import ThemeToggle from './ThemeToggle';
 import { useAuth } from './AuthProvider';
@@ -44,6 +45,7 @@ const navigation = [
       { name: 'Team Calendar', href: '/staff/availability' },
     ],
   },
+  { name: 'Menu Builder', href: '/menus/builder', icon: ClipboardDocumentListIcon },
   { name: 'Calculator', href: '/calculator', icon: CalculatorIcon },
   { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon },
   { name: 'Invoices', href: '/invoices', icon: DocumentTextIcon },

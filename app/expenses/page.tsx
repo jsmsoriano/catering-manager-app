@@ -1,13 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
+import { EllipsisVerticalIcon } from '@heroicons/react/24/outline';
 import { formatCurrency } from '@/lib/moneyRules';
 import type { Booking } from '@/lib/bookingTypes';
 import type { Expense, ExpenseCategory, ExpenseFormData } from '@/lib/expenseTypes';
 import { normalizeBookingWorkflowFields } from '@/lib/bookingWorkflow';
-import { loadShoppingListForBooking } from '@/lib/shoppingStorage';
+import {
+  appendItemToShoppingList,
+  loadShoppingListForBooking,
+} from '@/lib/shoppingStorage';
+import type { ShoppingListItem, ShoppingListItemCategory } from '@/lib/shoppingTypes';
 
 const EXPENSES_KEY = 'expenses';
 const BOOKINGS_KEY = 'bookings';
@@ -65,6 +69,34 @@ const categoryColors: Record<ExpenseCategory, string> = {
   other: 'bg-card-elevated text-text-primary',
 };
 
+/** Map expense category to shopping list item category (food | supplies). */
+function expenseCategoryToShoppingCategory(category: ExpenseCategory): ShoppingListItemCategory {
+  return category === 'food' ? 'food' : 'supplies';
+}
+
+/** Create a shopping list line item from an expense and add it to the event's shopping list. */
+function addExpenseAsShoppingListItem(
+  bookingId: string,
+  expense: { description: string; category: ExpenseCategory; amount: number; notes?: string }
+): void {
+  const category = expenseCategoryToShoppingCategory(expense.category);
+  const categoryLabel = categoryLabels[expense.category];
+  const lineNote = [expense.notes?.trim(), `From expense: ${categoryLabel}`].filter(Boolean).join(' · ') || undefined;
+
+  const newItem: ShoppingListItem = {
+    id: crypto.randomUUID(),
+    name: expense.description.trim() || 'Expense line',
+    category,
+    plannedQty: 1,
+    plannedUnit: 'ea',
+    actualUnitCost: expense.amount,
+    purchased: false,
+    notes: lineNote,
+  };
+
+  appendItemToShoppingList(bookingId, newItem);
+}
+
 export default function ExpensesPage() {
   const [filterByBookingId, setFilterByBookingId] = useState<string>('');
   const [expenses, setExpenses] = useState<Expense[]>(() => loadInitialList<Expense>(EXPENSES_KEY));
@@ -73,6 +105,8 @@ export default function ExpensesPage() {
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseFormData, setExpenseFormData] = useState<ExpenseFormData>(getDefaultExpenseFormData);
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   const loadExpenses = () => {
     setExpenses(safeParseList<Expense>(localStorage.getItem(EXPENSES_KEY)));
@@ -105,6 +139,18 @@ export default function ExpensesPage() {
       window.removeEventListener('expensesUpdated', handleExpensesUpdated);
     };
   }, []);
+
+  useEffect(() => {
+    if (openActionsId === null) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setOpenActionsId(null);
+      }
+    };
+    // Use 'click' so the Delete button's click (and confirm) runs before we close the menu
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openActionsId]);
 
   const saveExpenses = (newExpenses: Expense[]) => {
     setExpenses(newExpenses);
@@ -139,6 +185,15 @@ export default function ExpensesPage() {
       saveExpenses(expenses.map((expense) => (expense.id === editingExpenseId ? nextExpense : expense)));
     } else {
       saveExpenses([...expenses, nextExpense]);
+      const linkedBookingId = (expenseFormData.bookingId || '').trim();
+      if (linkedBookingId) {
+        addExpenseAsShoppingListItem(linkedBookingId, {
+          description: nextExpense.description,
+          category: nextExpense.category,
+          amount: nextExpense.amount,
+          notes: nextExpense.notes,
+        });
+      }
     }
 
     setShowExpenseForm(false);
@@ -146,6 +201,7 @@ export default function ExpensesPage() {
   };
 
   const handleEditExpense = (expense: Expense) => {
+    setOpenActionsId(null);
     setExpenseFormData({
       date: expense.date,
       category: expense.category,
@@ -158,9 +214,13 @@ export default function ExpensesPage() {
     setShowExpenseForm(true);
   };
 
-  const handleDeleteExpense = (id: string) => {
-    if (!confirm('Delete this expense record?')) return;
-    saveExpenses(expenses.filter((expense) => expense.id !== id));
+  const handleDeleteExpense = (expense: Expense) => {
+    if (!confirm('Delete this expense record?')) {
+      setOpenActionsId(null);
+      return;
+    }
+    setOpenActionsId(null);
+    saveExpenses(expenses.filter((e) => e.id !== expense.id));
   };
 
   const expenseSummary = useMemo(() => {
@@ -214,7 +274,7 @@ export default function ExpensesPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-text-primary">
+        <h1 className="text-2xl font-bold text-text-primary">
           Expense Tracking
         </h1>
         <p className="mt-2 text-text-secondary">
@@ -378,6 +438,11 @@ export default function ExpensesPage() {
                           </option>
                         ))}
                     </select>
+                    {expenseFormData.bookingId && !editingExpenseId && (
+                      <p className="mt-1 text-xs text-text-muted">
+                        This will add a line to the event shopping list (category maps to Food or Supplies).
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -485,10 +550,11 @@ export default function ExpensesPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filteredExpenses.map((expense) => {
+                    {filteredExpenses.map((expense, rowIndex) => {
                       const linkedBooking = expense.bookingId
                         ? bookings.find((booking) => booking.id === expense.bookingId)
                         : undefined;
+                      const isLastRow = rowIndex === filteredExpenses.length - 1;
 
                       return (
                         <tr
@@ -533,18 +599,43 @@ export default function ExpensesPage() {
                             {formatCurrency(expense.amount)}
                           </td>
                           <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                            <button
-                              onClick={() => handleEditExpense(expense)}
-                              className="mr-3 text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                            <div
+                              ref={openActionsId === expense.id ? actionsMenuRef : undefined}
+                              className="relative inline-block"
                             >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteExpense(expense.id)}
-                              className="text-red-600 hover:text-red-700 dark:text-red-400"
-                            >
-                              Delete
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenActionsId((id) => (id === expense.id ? null : expense.id))
+                                }
+                                className="rounded p-1.5 text-text-muted hover:bg-card-elevated hover:text-text-primary"
+                                aria-label="Actions"
+                              >
+                                <EllipsisVerticalIcon className="h-5 w-5" />
+                              </button>
+                              {openActionsId === expense.id && (
+                                <div
+                                  className={`absolute right-0 z-10 min-w-[120px] rounded-md border border-border bg-card py-1 shadow-lg ${
+                                    isLastRow ? 'bottom-full mb-1' : 'top-full mt-1'
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditExpense(expense)}
+                                    className="flex w-full px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteExpense(expense)}
+                                    className="flex w-full px-3 py-2 text-left text-sm text-danger hover:bg-card-elevated"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

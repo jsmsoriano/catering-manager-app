@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { format, startOfMonth, endOfMonth, isWithinInterval, isToday, isTomorrow, startOfDay, endOfDay } from 'date-fns';
 import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
+import { useAuth } from '@/components/AuthProvider';
 import type { Booking } from '@/lib/bookingTypes';
 import {
   CalendarDaysIcon,
@@ -32,7 +34,20 @@ function getDefaultPeriod() {
   };
 }
 
+function getDisplayName(user: { user_metadata?: { full_name?: string; name?: string }; email?: string | null } | null): string {
+  if (!user) return 'there';
+  const meta = user.user_metadata as { full_name?: string; name?: string } | undefined;
+  return meta?.full_name ?? meta?.name ?? user.email ?? 'there';
+}
+
+function getAvatarUrl(user: { user_metadata?: { avatar_url?: string; picture?: string } } | null): string | null {
+  if (!user?.user_metadata) return null;
+  const meta = user.user_metadata as { avatar_url?: string; picture?: string };
+  return meta?.avatar_url ?? meta?.picture ?? null;
+}
+
 export default function DashboardPage() {
+  const { user } = useAuth();
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [periodStart, setPeriodStart] = useState<string>(() =>
@@ -93,8 +108,6 @@ export default function DashboardPage() {
     let totalRevenue = 0;
     let totalCosts = 0;
     let totalGrossProfit = 0;
-    let ownerADist = 0;
-    let ownerBDist = 0;
     let privateCount = 0;
     let buffetCount = 0;
     const statusCounts = { pending: 0, confirmed: 0, completed: 0 };
@@ -104,8 +117,6 @@ export default function DashboardPage() {
       totalRevenue += fin.subtotal + fin.distanceFee;
       totalCosts += fin.totalCosts + fin.totalLaborPaid;
       totalGrossProfit += fin.grossProfit;
-      ownerADist += fin.ownerADistribution;
-      ownerBDist += fin.ownerBDistribution;
 
       if (booking.eventType === 'private-dinner') privateCount++;
       else buffetCount++;
@@ -167,8 +178,6 @@ export default function DashboardPage() {
       privateCount,
       buffetCount,
       totalEvents: periodBookings.length,
-      ownerADist,
-      ownerBDist,
       upcoming,
       todayEvents,
       tomorrowEvents,
@@ -179,15 +188,32 @@ export default function DashboardPage() {
   return (
     <div className="h-full overflow-y-auto p-8">
       <div className="mx-auto max-w-7xl space-y-8">
-        {/* Header */}
+        {/* Header: profile + greeting */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-text-primary">
-              Dashboard
-            </h1>
-            <p className="mt-2 text-text-secondary">
-              {format(new Date(), 'EEEE, MMMM d, yyyy')}
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-border bg-card-elevated">
+              {getAvatarUrl(user) ? (
+                <Image
+                  src={getAvatarUrl(user)!}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="56px"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-xl font-semibold text-text-muted">
+                  {user ? (getDisplayName(user)[0]?.toUpperCase() ?? '?') : '?'}
+                </span>
+              )}
+            </div>
+            <div>
+              <p className="text-xl font-semibold text-text-primary">
+                Hi {getDisplayName(user)},
+              </p>
+              <p className="text-text-secondary">
+                Here is your business snapshot.
+              </p>
+            </div>
           </div>
           {/* Period filter */}
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
@@ -340,11 +366,11 @@ export default function DashboardPage() {
                       <td className="px-6 py-3 text-right text-sm font-medium text-text-primary">
                         {formatCurrency(event.total)}
                       </td>
-                      <td className="px-6 py-3 text-center text-sm">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                      <td className={`border-l-2 pl-4 px-6 py-3 text-center text-sm ${event.status === 'confirmed' ? 'border-l-blue-500' : 'border-l-amber-500'}`}>
+                        <span className={`text-xs font-medium ${
                           event.status === 'confirmed'
-                            ? 'bg-success/20 text-success'
-                            : 'bg-warning/20 text-warning'
+                            ? 'text-blue-700 dark:text-blue-300'
+                            : 'text-amber-700 dark:text-amber-300'
                         }`}>
                           {event.status === 'confirmed' ? 'Confirmed' : 'Pending'}
                         </span>
@@ -386,19 +412,19 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-text-secondary">Confirmed</span>
-                    <span className="inline-flex rounded-full bg-success/20 px-2 py-0.5 text-xs font-medium text-success">
+                    <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
                       {dashboard.statusCounts.confirmed}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-text-secondary">Completed</span>
-                    <span className="inline-flex rounded-full bg-info/20 px-2 py-0.5 text-xs font-medium text-info">
+                    <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
                       {dashboard.statusCounts.completed}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-text-secondary">Pending</span>
-                    <span className="inline-flex rounded-full bg-warning/20 px-2 py-0.5 text-xs font-medium text-warning">
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
                       {dashboard.statusCounts.pending}
                     </span>
                   </div>
@@ -430,16 +456,6 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-text-secondary">Gross Profit</span>
                     <span className="font-semibold text-success">{formatCurrency(dashboard.totalGrossProfit)}</span>
-                  </div>
-                  <div className="border-t border-border pt-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-text-secondary">Owner A Dist.</span>
-                      <span className="font-medium text-text-primary">{formatCurrency(dashboard.ownerADist)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-text-secondary">Owner B Dist.</span>
-                      <span className="font-medium text-text-primary">{formatCurrency(dashboard.ownerBDist)}</span>
-                    </div>
                   </div>
                 </div>
               </div>

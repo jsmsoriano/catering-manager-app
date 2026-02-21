@@ -1,41 +1,43 @@
 import type { MoneyRules, EventInput, EventFinancials, StaffingPlan, StaffMember, LaborCompensation, ChefRole, StaffPayOverride, StaffingProfile, EventType } from './types';
 
-export const STORAGE_KEY_RULES = "hibachi.moneyRules.v1";
+export const STORAGE_KEY_RULES = "catering.moneyRules.v1";
+const LEGACY_STORAGE_KEY_RULES = "hibachi.moneyRules.v1";
 
 export const DEFAULT_RULES: MoneyRules = {
   pricing: {
-    privateDinnerBasePrice: 85,
-    buffetBasePrice: 65,
+    primaryBasePrice: 85,
+    secondaryBasePrice: 65,
     premiumAddOnMin: 5,
     premiumAddOnMax: 20,
     defaultGratuityPercent: 20,
     childDiscountPercent: 50,
+    defaultDepositPercent: 30,
   },
   staffing: {
-    maxGuestsPerChefPrivate: 15,
-    maxGuestsPerChefBuffet: 25,
+    maxGuestsPerChefPrimary: 15,
+    maxGuestsPerChefSecondary: 25,
     assistantRequired: true,
     profiles: [],
   },
   privateLabor: {
     leadChefBasePercent: 15,
-    leadChefCap: 350,
+    leadChefCapPercent: null,
     overflowChefBasePercent: 12,
-    overflowChefCap: 300,
+    overflowChefCapPercent: null,
     fullChefBasePercent: 10,
-    fullChefCap: 350,
+    fullChefCapPercent: null,
     assistantBasePercent: 8,
-    assistantCap: null,
+    assistantCapPercent: null,
     chefGratuitySplitPercent: 55,
     assistantGratuitySplitPercent: 45,
   },
   buffetLabor: {
     chefBasePercent: 12,
-    chefCap: 400,
+    chefCapPercent: null,
   },
   costs: {
-    foodCostPercentPrivate: 18,
-    foodCostPercentBuffet: 20,
+    primaryFoodCostPercent: 18,
+    secondaryFoodCostPercent: 20,
     suppliesCostPercent: 7,
     transportationStipend: 50,
   },
@@ -90,13 +92,62 @@ function stripInvalid<T extends Record<string, any>>(obj: T | undefined | null):
   return clean as Partial<T>;
 }
 
+/** One-time migration of old field names to new generic names in a parsed rules object. */
+function migrateLegacyRuleFields(parsed: Record<string, any>): void {
+  // Migrate old localStorage key (hibachi-specific) to new key
+  // (handled in loadRules before this is called)
+
+  // pricing: privateDinnerBasePrice → primaryBasePrice, buffetBasePrice → secondaryBasePrice
+  if (parsed.pricing) {
+    if (parsed.pricing.privateDinnerBasePrice !== undefined && parsed.pricing.primaryBasePrice === undefined) {
+      parsed.pricing.primaryBasePrice = parsed.pricing.privateDinnerBasePrice;
+      delete parsed.pricing.privateDinnerBasePrice;
+    }
+    if (parsed.pricing.buffetBasePrice !== undefined && parsed.pricing.secondaryBasePrice === undefined) {
+      parsed.pricing.secondaryBasePrice = parsed.pricing.buffetBasePrice;
+      delete parsed.pricing.buffetBasePrice;
+    }
+  }
+  // staffing: maxGuestsPerChefPrivate → maxGuestsPerChefPrimary, etc.
+  if (parsed.staffing) {
+    if (parsed.staffing.maxGuestsPerChefPrivate !== undefined && parsed.staffing.maxGuestsPerChefPrimary === undefined) {
+      parsed.staffing.maxGuestsPerChefPrimary = parsed.staffing.maxGuestsPerChefPrivate;
+      delete parsed.staffing.maxGuestsPerChefPrivate;
+    }
+    if (parsed.staffing.maxGuestsPerChefBuffet !== undefined && parsed.staffing.maxGuestsPerChefSecondary === undefined) {
+      parsed.staffing.maxGuestsPerChefSecondary = parsed.staffing.maxGuestsPerChefBuffet;
+      delete parsed.staffing.maxGuestsPerChefBuffet;
+    }
+  }
+  // costs: foodCostPercentPrivate → primaryFoodCostPercent, etc.
+  if (parsed.costs) {
+    if (parsed.costs.foodCostPercentPrivate !== undefined && parsed.costs.primaryFoodCostPercent === undefined) {
+      parsed.costs.primaryFoodCostPercent = parsed.costs.foodCostPercentPrivate;
+      delete parsed.costs.foodCostPercentPrivate;
+    }
+    if (parsed.costs.foodCostPercentBuffet !== undefined && parsed.costs.secondaryFoodCostPercent === undefined) {
+      parsed.costs.secondaryFoodCostPercent = parsed.costs.foodCostPercentBuffet;
+      delete parsed.costs.foodCostPercentBuffet;
+    }
+  }
+}
+
 export function loadRules(): MoneyRules {
   if (typeof window === 'undefined') return DEFAULT_RULES;
+
+  // Migrate legacy storage key (hibachi-specific) → generic key
+  const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY_RULES);
+  if (legacyRaw && !localStorage.getItem('moneyRules')) {
+    localStorage.setItem('moneyRules', legacyRaw);
+    localStorage.removeItem(LEGACY_STORAGE_KEY_RULES);
+  }
 
   const saved = localStorage.getItem('moneyRules');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
+      // One-time field name migration (old hibachi-specific names → generic)
+      migrateLegacyRuleFields(parsed);
       // Deep merge one level, stripping null/NaN values so defaults are used instead
       const merged = {
         pricing: { ...DEFAULT_RULES.pricing, ...stripInvalid(parsed.pricing) },
@@ -121,9 +172,33 @@ export function loadRules(): MoneyRules {
   return DEFAULT_RULES;
 }
 
+/** Merge template overrides onto a rules object (one level deep for top-level keys). */
+export function mergeRulesOverrides(
+  rules: MoneyRules,
+  overrides: Partial<MoneyRules> | undefined
+): MoneyRules {
+  if (!overrides || typeof overrides !== 'object') return rules;
+  const o = stripInvalid(overrides) as Partial<MoneyRules>;
+  return {
+    pricing: { ...rules.pricing, ...stripInvalid(o.pricing) },
+    staffing: {
+      ...rules.staffing,
+      ...stripInvalid(o.staffing),
+      profiles: Array.isArray((o.staffing as any)?.profiles) ? (o.staffing as any).profiles : rules.staffing.profiles,
+    },
+    privateLabor: { ...rules.privateLabor, ...stripInvalid(o.privateLabor) },
+    buffetLabor: { ...rules.buffetLabor, ...stripInvalid(o.buffetLabor) },
+    costs: { ...rules.costs, ...stripInvalid(o.costs) },
+    distance: { ...rules.distance, ...stripInvalid(o.distance) },
+    profitDistribution: { ...rules.profitDistribution, ...stripInvalid(o.profitDistribution) },
+    safetyLimits: { ...rules.safetyLimits, ...stripInvalid(o.safetyLimits) },
+  };
+}
+
 export function saveRules(rules: MoneyRules): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem('moneyRules', JSON.stringify(rules));
+  window.dispatchEvent(new Event('moneyRulesUpdated'));
 }
 
 // Calculate event financials based on input and money rules
@@ -142,10 +217,12 @@ export function calculateEventFinancials(
   } = input;
   const guestCount = adults + children;
 
-  // Pricing calculations
-  const basePrice = eventType === 'private-dinner'
-    ? rules.pricing.privateDinnerBasePrice
-    : rules.pricing.buffetBasePrice;
+  // Pricing calculations — use pricingSlot from input if provided, else fall back to
+  // legacy 'private-dinner' detection so existing hibachi bookings keep correct pricing.
+  const slot = input.pricingSlot ?? (eventType === 'private-dinner' ? 'primary' : 'secondary');
+  const basePrice = slot === 'primary'
+    ? rules.pricing.primaryBasePrice
+    : rules.pricing.secondaryBasePrice;
 
   const childPrice = basePrice * (1 - rules.pricing.childDiscountPercent / 100);
   const adultTotal = adults * basePrice;
@@ -173,9 +250,9 @@ export function calculateEventFinancials(
   const totalCharged = subtotal + gratuity + distanceFee;
 
   // Cost calculations
-  const configuredFoodCostPercent = eventType === 'private-dinner'
-    ? rules.costs.foodCostPercentPrivate
-    : rules.costs.foodCostPercentBuffet;
+  const configuredFoodCostPercent = slot === 'primary'
+    ? rules.costs.primaryFoodCostPercent
+    : rules.costs.secondaryFoodCostPercent;
   const normalizedFoodCostOverride =
     typeof foodCostOverride === 'number' && Number.isFinite(foodCostOverride) && foodCostOverride >= 0
       ? foodCostOverride
@@ -319,38 +396,38 @@ function buildStaffingPlanFromProfile(
       staff.push({
         role: 'assistant',
         basePayPercent: rules.privateLabor.assistantBasePercent,
-        cap: rules.privateLabor.assistantCap,
+        capPercent: rules.privateLabor.assistantCapPercent,
         isOwner: false,
       });
     } else {
       chefRoles.push(role);
       let basePayPercent: number;
-      let cap: number | null;
+      let capPercent: number | null;
 
       if (role === 'buffet') {
         basePayPercent = rules.buffetLabor.chefBasePercent;
-        cap = rules.buffetLabor.chefCap;
+        capPercent = rules.buffetLabor.chefCapPercent;
       } else {
         switch (role) {
           case 'lead':
             basePayPercent = rules.privateLabor.leadChefBasePercent;
-            cap = rules.privateLabor.leadChefCap;
+            capPercent = rules.privateLabor.leadChefCapPercent;
             break;
           case 'overflow':
             basePayPercent = rules.privateLabor.overflowChefBasePercent;
-            cap = rules.privateLabor.overflowChefCap;
+            capPercent = rules.privateLabor.overflowChefCapPercent;
             break;
           case 'full':
             basePayPercent = rules.privateLabor.fullChefBasePercent;
-            cap = rules.privateLabor.fullChefCap;
+            capPercent = rules.privateLabor.fullChefCapPercent;
             break;
           default:
             basePayPercent = 0;
-            cap = 0;
+            capPercent = null;
         }
       }
 
-      staff.push({ role, basePayPercent, cap, isOwner: false });
+      staff.push({ role, basePayPercent, capPercent, isOwner: false });
     }
   }
 
@@ -383,9 +460,10 @@ function determineStaffing(
     return buildStaffingPlanFromProfile(matchedProfile, rules);
   }
 
-  // Fallback: hardcoded logic
-  if (eventType === 'buffet') {
-    const maxPerChef = rules.staffing.maxGuestsPerChefBuffet;
+  // Fallback: rule-based logic — secondary event type uses simpler chef-only staffing
+  // (historically 'buffet'; now driven by pricingSlot for non-hibachi templates)
+  if (eventType === 'buffet' || eventType === 'secondary') {
+    const maxPerChef = rules.staffing.maxGuestsPerChefSecondary;
     const chefsNeeded = Math.ceil(guestCount / maxPerChef);
     const chefRoles: ChefRole[] = Array(chefsNeeded).fill('buffet');
 
@@ -396,14 +474,14 @@ function determineStaffing(
       staff: chefRoles.map(role => ({
         role,
         basePayPercent: rules.buffetLabor.chefBasePercent,
-        cap: rules.buffetLabor.chefCap,
+        capPercent: rules.buffetLabor.chefCapPercent,
         isOwner: false,
       })),
     };
   }
 
-  // Private dinner staffing: lead required; overflow only when guests exceed lead threshold; full chefs when further over
-  const maxPerChef = rules.staffing.maxGuestsPerChefPrivate;
+  // Primary event type staffing: lead required; overflow when over threshold; full chefs beyond that
+  const maxPerChef = rules.staffing.maxGuestsPerChefPrimary;
   const chefRoles: ChefRole[] = [];
 
   if (guestCount <= maxPerChef) {
@@ -423,30 +501,30 @@ function determineStaffing(
   const staff: StaffMember[] = [
     ...chefRoles.map(role => {
       let basePayPercent: number;
-      let cap: number;
+      let capPercent: number | null;
 
       switch (role) {
         case 'lead':
           basePayPercent = rules.privateLabor.leadChefBasePercent;
-          cap = rules.privateLabor.leadChefCap;
+          capPercent = rules.privateLabor.leadChefCapPercent;
           break;
         case 'overflow':
           basePayPercent = rules.privateLabor.overflowChefBasePercent;
-          cap = rules.privateLabor.overflowChefCap;
+          capPercent = rules.privateLabor.overflowChefCapPercent;
           break;
         case 'full':
           basePayPercent = rules.privateLabor.fullChefBasePercent;
-          cap = rules.privateLabor.fullChefCap;
+          capPercent = rules.privateLabor.fullChefCapPercent;
           break;
         default:
           basePayPercent = 0;
-          cap = 0;
+          capPercent = null;
       }
 
       return {
         role,
         basePayPercent,
-        cap,
+        capPercent,
         isOwner: false,
       };
     }),
@@ -456,7 +534,7 @@ function determineStaffing(
     staff.push({
       role: 'assistant',
       basePayPercent: rules.privateLabor.assistantBasePercent,
-      cap: rules.privateLabor.assistantCap,
+      capPercent: rules.privateLabor.assistantCapPercent,
       isOwner: false,
     });
   }
@@ -473,16 +551,23 @@ function determineStaffing(
 function calculateLabor(
   subtotal: number,
   gratuity: number,
-  eventType: 'private-dinner' | 'buffet',
+  eventType: string,
   staffingPlan: StaffingPlan,
   rules: MoneyRules,
   overrides?: StaffPayOverride[]
 ): LaborCompensation[] {
   const compensation: LaborCompensation[] = [];
+  const totalRevenue = subtotal + gratuity;
 
   // Helper to find override for a specific role
   const getOverride = (role: ChefRole | 'assistant'): StaffPayOverride | undefined => {
     return overrides?.find(o => o.role === role);
+  };
+
+  // Cap computation: % of (subtotal + gratuity), null = no cap
+  const computeCap = (capPercent: number | null): number | null => {
+    if (!capPercent || capPercent <= 0) return null;
+    return totalRevenue * (capPercent / 100);
   };
 
   if (eventType === 'buffet') {
@@ -492,7 +577,8 @@ function calculateLabor(
     staffingPlan.staff.forEach(staff => {
       const override = getOverride(staff.role as ChefRole);
       const basePayPercent = override ? override.basePayPercent : staff.basePayPercent;
-      const cap = override ? override.cap : staff.cap;
+      const capPercent = override ? override.capPercent : staff.capPercent;
+      const capAmount = computeCap(capPercent);
 
       // For buffet with overrides, use gratuitySplitPercent; otherwise equal split
       const gratuityShare = override
@@ -501,8 +587,8 @@ function calculateLabor(
 
       const basePay = subtotal * (basePayPercent / 100);
       const totalCalculated = basePay + gratuityShare;
-      const finalPay = cap && totalCalculated > cap ? cap : totalCalculated;
-      const wasCapped = cap ? totalCalculated > cap : false;
+      const finalPay = capAmount !== null && totalCalculated > capAmount ? capAmount : totalCalculated;
+      const wasCapped = capAmount !== null && totalCalculated > capAmount;
       const excessToProfit = wasCapped ? totalCalculated - finalPay : 0;
 
       compensation.push({
@@ -510,7 +596,8 @@ function calculateLabor(
         basePay,
         gratuityShare,
         totalCalculated,
-        cap,
+        capPercent,
+        capAmount,
         finalPay,
         wasCapped,
         excessToProfit,
@@ -526,7 +613,8 @@ function calculateLabor(
     staffingPlan.staff.forEach(staff => {
       const override = getOverride(staff.role as ChefRole | 'assistant');
       const basePayPercent = override ? override.basePayPercent : staff.basePayPercent;
-      const cap = override ? override.cap : staff.cap;
+      const capPercent = override ? override.capPercent : staff.capPercent;
+      const capAmount = computeCap(capPercent);
 
       let gratuityShare = 0;
       if (override) {
@@ -541,8 +629,8 @@ function calculateLabor(
 
       const basePay = subtotal * (basePayPercent / 100);
       const totalCalculated = basePay + gratuityShare;
-      const finalPay = cap && totalCalculated > cap ? cap : totalCalculated;
-      const wasCapped = cap ? totalCalculated > cap : false;
+      const finalPay = capAmount !== null && totalCalculated > capAmount ? capAmount : totalCalculated;
+      const wasCapped = capAmount !== null && totalCalculated > capAmount;
       const excessToProfit = wasCapped ? totalCalculated - finalPay : 0;
 
       compensation.push({
@@ -550,7 +638,8 @@ function calculateLabor(
         basePay,
         gratuityShare,
         totalCalculated,
-        cap,
+        capPercent,
+        capAmount,
         finalPay,
         wasCapped,
         excessToProfit,

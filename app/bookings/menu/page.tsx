@@ -1,20 +1,31 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { Booking } from '@/lib/bookingTypes';
-import type { EventMenu, GuestMenuSelection, MenuItem, ProteinType } from '@/lib/menuTypes';
+import type {
+  EventMenu,
+  GuestMenuSelection,
+  MenuItem,
+  MenuCategoryNode,
+  CateringEventMenu,
+  CateringSelectedItem,
+  PrivateDinnerTemplate,
+} from '@/lib/menuTypes';
+import { DEFAULT_PRIVATE_DINNER_TEMPLATE } from '@/lib/menuTypes';
+import {
+  loadMenuCategories,
+  getChildren,
+  getRoots,
+  getDescendantIds,
+  getCategoryName,
+  LEGACY_CATEGORY_MAP,
+  CATERING_EVENT_MENUS_KEY,
+} from '@/lib/menuCategories';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import { formatCurrency, calculateEventFinancials } from '@/lib/moneyRules';
 import { DEFAULT_MENU_ITEMS } from '@/lib/defaultMenuItems';
 import { buildMenuPricingSnapshot, calculateMenuPricingBreakdown } from '@/lib/menuPricing';
-
-const proteinOptions: { value: ProteinType; label: string }[] = [
-  { value: 'chicken', label: 'Chicken' },
-  { value: 'steak', label: 'Steak' },
-  { value: 'shrimp', label: 'Shrimp' },
-  { value: 'scallops', label: 'Scallops' },
-];
 
 function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
@@ -37,6 +48,532 @@ function normalizeMenuItems(items: MenuItem[]): MenuItem[] {
     };
   });
 }
+
+// ─── Catering Menu Builder ────────────────────────────────────────────────────
+// Used for any event type that is NOT 'private-dinner' (e.g. buffet, corporate, etc.)
+
+function CateringMenuBuilder({
+  booking,
+  router,
+}: {
+  booking: Booking;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const rules = useMoneyRules();
+  const totalGuests = booking.adults + (booking.children ?? 0);
+
+  const [categories, setCategories] = useState<MenuCategoryNode[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedItems, setSelectedItems] = useState<CateringSelectedItem[]>([]);
+  const [notes, setNotes] = useState('');
+  const [existingMenu, setExistingMenu] = useState<CateringEventMenu | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Load data on mount
+  useEffect(() => {
+    setCategories(loadMenuCategories());
+
+    const raw = localStorage.getItem('menuItems');
+    const items: MenuItem[] = raw ? JSON.parse(raw) : DEFAULT_MENU_ITEMS;
+    // Apply legacy categoryId migration
+    const migrated = items.map((item) => ({
+      ...item,
+      categoryId: item.categoryId ?? LEGACY_CATEGORY_MAP[item.category] ?? undefined,
+    }));
+    setMenuItems(migrated);
+
+    // Load existing catering menu if booking has one
+    if (booking.cateringMenuId) {
+      const menusRaw = localStorage.getItem(CATERING_EVENT_MENUS_KEY);
+      if (menusRaw) {
+        const menus: CateringEventMenu[] = JSON.parse(menusRaw);
+        const found = menus.find((m) => m.id === booking.cateringMenuId);
+        if (found) {
+          setExistingMenu(found);
+          setSelectedItems(found.selectedItems);
+          setNotes(found.notes ?? '');
+        }
+      }
+    }
+  }, [booking.cateringMenuId]);
+
+  // Items filtered by selected category (and its descendants)
+  const filteredItems = useMemo(() => {
+    const available = menuItems.filter((i) => i.isAvailable);
+    if (!selectedCategoryId) return available;
+    const descendantIds = getDescendantIds(categories, selectedCategoryId);
+    const validIds = new Set([selectedCategoryId, ...descendantIds]);
+    return available.filter((i) => i.categoryId && validIds.has(i.categoryId));
+  }, [menuItems, categories, selectedCategoryId]);
+
+  const isItemSelected = (itemId: string) =>
+    selectedItems.some((s) => s.menuItemId === itemId);
+
+  const addItem = (item: MenuItem) => {
+    if (isItemSelected(item.id)) return;
+    setSelectedItems((prev) => [
+      ...prev,
+      {
+        menuItemId: item.id,
+        name: item.name,
+        servings: totalGuests,
+        pricePerServing: item.pricePerServing,
+        costPerServing: item.costPerServing,
+        unit: item.unit,
+      },
+    ]);
+  };
+
+  const removeItem = (menuItemId: string) =>
+    setSelectedItems((prev) => prev.filter((s) => s.menuItemId !== menuItemId));
+
+  const updateServings = (menuItemId: string, servings: number) =>
+    setSelectedItems((prev) =>
+      prev.map((s) => (s.menuItemId === menuItemId ? { ...s, servings } : s))
+    );
+
+  const totals = useMemo(() => {
+    const revenue = selectedItems.reduce(
+      (sum, item) => sum + item.servings * item.pricePerServing,
+      0
+    );
+    const cost = selectedItems.reduce(
+      (sum, item) => sum + item.servings * item.costPerServing,
+      0
+    );
+    return {
+      revenue,
+      cost,
+      profit: revenue - cost,
+      perPerson: totalGuests > 0 ? revenue / totalGuests : 0,
+    };
+  }, [selectedItems, totalGuests]);
+
+  // ── Category tree helpers ──────────────────────────────────────────────────
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const getItemCount = (catId: string): number => {
+    const descendants = getDescendantIds(categories, catId);
+    const allIds = new Set([catId, ...descendants]);
+    return menuItems.filter(
+      (i) => i.isAvailable && i.categoryId && allIds.has(i.categoryId)
+    ).length;
+  };
+
+  const renderCategoryNode = (cat: MenuCategoryNode, depth: number): React.ReactNode => {
+    const children = getChildren(categories, cat.id);
+    const hasChildren = children.length > 0;
+    const isExpanded = expandedIds.has(cat.id);
+    const isSelected = selectedCategoryId === cat.id;
+    const count = getItemCount(cat.id);
+
+    return (
+      <div key={cat.id}>
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedCategoryId(cat.id);
+            if (hasChildren) toggleExpand(cat.id);
+          }}
+          className={`flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+            isSelected
+              ? 'bg-accent/15 font-medium text-accent'
+              : 'text-text-secondary hover:bg-card-elevated hover:text-text-primary'
+          }`}
+          style={{ paddingLeft: `${8 + depth * 16}px` }}
+        >
+          {hasChildren ? (
+            <span className="shrink-0 text-text-muted">{isExpanded ? '▾' : '▸'}</span>
+          ) : (
+            <span className="w-3 shrink-0" />
+          )}
+          <span className="flex-1 truncate">{cat.name}</span>
+          {count > 0 && <span className="ml-1 text-xs text-text-muted">({count})</span>}
+        </button>
+        {hasChildren && isExpanded && (
+          <div>{children.map((child) => renderCategoryNode(child, depth + 1))}</div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+
+  const handleSave = () => {
+    if (selectedItems.length === 0) {
+      alert('Please add at least one menu item before saving.');
+      return;
+    }
+    setSaving(true);
+
+    const menuId = existingMenu?.id ?? `catering-menu-${Date.now()}`;
+    const now = new Date().toISOString();
+    const menu: CateringEventMenu = {
+      id: menuId,
+      bookingId: booking.id,
+      menuType: 'catering',
+      selectedItems,
+      notes: notes || undefined,
+      createdAt: existingMenu?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    // Save to cateringEventMenus
+    const menusRaw = localStorage.getItem(CATERING_EVENT_MENUS_KEY);
+    const menus: CateringEventMenu[] = menusRaw ? JSON.parse(menusRaw) : [];
+    const updatedMenus = existingMenu
+      ? menus.map((m) => (m.id === menuId ? menu : m))
+      : [...menus, menu];
+    localStorage.setItem(CATERING_EVENT_MENUS_KEY, JSON.stringify(updatedMenus));
+
+    // Build pricing snapshot
+    const subtotalOverride = selectedItems.reduce(
+      (sum, item) => sum + item.servings * item.pricePerServing,
+      0
+    );
+    const foodCostOverride = selectedItems.reduce(
+      (sum, item) => sum + item.servings * item.costPerServing,
+      0
+    );
+    const snapshot = { menuId, subtotalOverride, foodCostOverride, calculatedAt: now };
+
+    // Recalculate booking financials
+    const financials = calculateEventFinancials(
+      {
+        adults: booking.adults,
+        children: booking.children,
+        eventType: booking.eventType,
+        eventDate: parseLocalDate(booking.eventDate),
+        distanceMiles: booking.distanceMiles,
+        premiumAddOn: booking.premiumAddOn,
+        staffingProfileId: booking.staffingProfileId,
+        subtotalOverride,
+        foodCostOverride,
+      },
+      rules
+    );
+
+    // Update booking
+    const bookingsRaw = localStorage.getItem('bookings');
+    if (bookingsRaw) {
+      const bookings: Booking[] = JSON.parse(bookingsRaw);
+      const updatedBookings = bookings.map((b) =>
+        b.id === booking.id
+          ? {
+              ...b,
+              cateringMenuId: menuId,
+              menuPricingSnapshot: snapshot,
+              subtotal: financials.subtotal,
+              gratuity: financials.gratuity,
+              distanceFee: financials.distanceFee,
+              total: financials.totalCharged,
+              updatedAt: now,
+            }
+          : b
+      );
+      localStorage.setItem('bookings', JSON.stringify(updatedBookings));
+      window.dispatchEvent(new Event('bookingsUpdated'));
+    }
+
+    setSaving(false);
+    router.push(`/bookings?bookingId=${booking.id}`);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border bg-card px-6 py-4">
+        <div>
+          <h1 className="text-lg font-semibold text-text-primary">Catering Menu</h1>
+          <p className="mt-0.5 text-sm text-text-muted">
+            {booking.customerName} · {booking.eventDate} ·{' '}
+            {totalGuests} guest{totalGuests !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push(`/bookings?bookingId=${booking.id}`)}
+            className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-secondary hover:bg-card"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save Menu'}
+          </button>
+        </div>
+      </div>
+
+      {/* Main: category tree (left) + item list (right) */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* LEFT: Category tree */}
+        <div className="flex w-52 shrink-0 flex-col overflow-hidden border-r border-border bg-card">
+          <div className="shrink-0 border-b border-border px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              Categories
+            </p>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2">
+            {/* All Items */}
+            <button
+              type="button"
+              onClick={() => setSelectedCategoryId(null)}
+              className={`mb-1 flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors ${
+                !selectedCategoryId
+                  ? 'bg-accent/15 font-medium text-accent'
+                  : 'text-text-secondary hover:bg-card-elevated hover:text-text-primary'
+              }`}
+            >
+              <span className="w-3 shrink-0" />
+              <span className="flex-1">All Items</span>
+              <span className="text-xs text-text-muted">
+                ({menuItems.filter((i) => i.isAvailable).length})
+              </span>
+            </button>
+            {getRoots(categories).map((cat) => renderCategoryNode(cat, 0))}
+          </div>
+        </div>
+
+        {/* RIGHT: Item list */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-border px-4 py-2">
+            <p className="text-xs text-text-muted">
+              {selectedCategoryId
+                ? getCategoryName(categories, selectedCategoryId)
+                : 'All Items'}{' '}
+              · {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {filteredItems.length === 0 ? (
+              <div className="flex h-32 items-center justify-center text-sm text-text-muted">
+                No items in this category
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 border-b border-border bg-card-elevated">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-text-muted">
+                      Name
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-text-muted">
+                      Unit
+                    </th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-text-muted">
+                      Price
+                    </th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-text-muted">
+                      Cost
+                    </th>
+                    <th className="px-4 py-2 text-center text-xs font-semibold text-text-muted">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredItems.map((item) => {
+                    const added = isItemSelected(item.id);
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`hover:bg-card-elevated ${added ? 'opacity-60' : ''}`}
+                      >
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            {item.photoBase64 && (
+                              <img
+                                src={item.photoBase64}
+                                alt=""
+                                className="h-8 w-8 rounded object-cover"
+                              />
+                            )}
+                            <div>
+                              <p className="font-medium text-text-primary">{item.name}</p>
+                              {item.description && (
+                                <p className="text-xs text-text-muted">
+                                  {item.description.slice(0, 60)}
+                                  {item.description.length > 60 ? '…' : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-text-muted">
+                          {item.unit ?? '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-text-primary">
+                          {formatCurrency(item.pricePerServing)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right text-text-muted">
+                          {formatCurrency(item.costPerServing)}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => addItem(item)}
+                            disabled={added}
+                            className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                              added
+                                ? 'cursor-not-allowed bg-success/10 text-success'
+                                : 'bg-accent/10 text-accent hover:bg-accent/20'
+                            }`}
+                          >
+                            {added ? '✓ Added' : '+ Add'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom: Selected items panel */}
+      <div
+        className="shrink-0 overflow-y-auto border-t border-border bg-card"
+        style={{ maxHeight: '40vh', minHeight: selectedItems.length > 0 ? '180px' : '52px' }}
+      >
+        {selectedItems.length === 0 ? (
+          <div className="flex items-center justify-center py-3 text-sm text-text-muted">
+            No items selected — browse the catalog above and click &quot;+ Add&quot;
+          </div>
+        ) : (
+          <div>
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 border-b border-border bg-card-elevated">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-text-muted">
+                    Item
+                  </th>
+                  <th className="px-4 py-2 text-center text-xs font-semibold text-text-muted">
+                    Servings
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold text-text-muted">
+                    $/srv
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold text-text-muted">
+                    Revenue
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold text-text-muted">
+                    Food Cost
+                  </th>
+                  <th className="px-4 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {selectedItems.map((item) => (
+                  <tr key={item.menuItemId} className="hover:bg-card-elevated">
+                    <td className="px-4 py-2 font-medium text-text-primary">
+                      {item.name}
+                      {item.unit && (
+                        <span className="ml-1 text-xs text-text-muted">({item.unit})</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.servings}
+                        onChange={(e) =>
+                          updateServings(
+                            item.menuItemId,
+                            Math.max(1, parseInt(e.target.value) || 1)
+                          )
+                        }
+                        className="w-16 rounded border border-border bg-card-elevated px-2 py-1 text-center text-sm text-text-primary"
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-right text-text-muted">
+                      {formatCurrency(item.pricePerServing)}
+                    </td>
+                    <td className="px-4 py-2 text-right font-medium text-text-primary">
+                      {formatCurrency(item.servings * item.pricePerServing)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-text-muted">
+                      {formatCurrency(item.servings * item.costPerServing)}
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.menuItemId)}
+                        className="text-text-muted hover:text-danger"
+                        title="Remove item"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Totals + notes + save */}
+            <div className="flex flex-wrap items-start gap-4 border-t border-border bg-card-elevated px-4 py-3">
+              <div className="flex flex-1 flex-wrap gap-6">
+                <div>
+                  <p className="text-xs text-text-muted">Revenue</p>
+                  <p className="text-sm font-bold text-text-primary">
+                    {formatCurrency(totals.revenue)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Food Cost</p>
+                  <p className="text-sm font-bold text-danger">{formatCurrency(totals.cost)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Gross Profit</p>
+                  <p className="text-sm font-bold text-success">
+                    {formatCurrency(totals.profit)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted">Per Person</p>
+                  <p className="text-sm font-bold text-text-primary">
+                    {formatCurrency(totals.perPerson)}
+                  </p>
+                </div>
+              </div>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Menu notes (optional)…"
+                rows={2}
+                className="w-48 rounded border border-border bg-card px-2 py-1 text-xs text-text-primary"
+              />
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="self-end rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-60"
+              >
+                {saving ? 'Saving…' : 'Save Menu'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function BookingMenuPage() {
   return (
@@ -62,6 +599,32 @@ function BookingMenuContent() {
   const [existingMenu, setExistingMenu] = useState<EventMenu | null>(null);
   const [guestSelections, setGuestSelections] = useState<GuestMenuSelection[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+
+  // Load private dinner template from localStorage
+  const template = useMemo<PrivateDinnerTemplate>(() => {
+    try {
+      const raw = localStorage.getItem('privateDinnerTemplate');
+      return raw ? { ...DEFAULT_PRIVATE_DINNER_TEMPLATE, ...JSON.parse(raw) } : DEFAULT_PRIVATE_DINNER_TEMPLATE;
+    } catch {
+      return DEFAULT_PRIVATE_DINNER_TEMPLATE;
+    }
+  }, []);
+
+  const enabledUpgrades = useMemo(() => template.upgrades.filter((u) => u.enabled), [template]);
+
+  // Protein dropdown: use items tagged 'hibachi' from the catalog; fall back to template if none
+  const proteinOptions = useMemo(() => {
+    const hibachiItems = menuItems.filter(
+      (item) => item.tags?.includes('hibachi') && item.isAvailable
+    );
+    if (hibachiItems.length > 0) {
+      return hibachiItems.map((item) => ({ value: item.name, label: item.name }));
+    }
+    // Fallback: template base proteins
+    return template.baseProteins
+      .filter((p) => p.enabled)
+      .map((p) => ({ value: p.protein, label: p.label }));
+  }, [menuItems, template]);
 
   // Load menu items so we can calculate menu-based pricing
   useEffect(() => {
@@ -138,13 +701,27 @@ function BookingMenuContent() {
       const totalGuests = foundBooking.adults + foundBooking.children;
       const initialSelections: GuestMenuSelection[] = [];
 
+      // Determine default proteins: prefer hibachi-tagged catalog items, fall back to template keys
+      let defaultP1 = 'chicken';
+      let defaultP2 = 'steak';
+      try {
+        const rawItems = localStorage.getItem('menuItems');
+        if (rawItems) {
+          const allItems: MenuItem[] = JSON.parse(rawItems);
+          const hibachi = allItems.filter((i) => i.tags?.includes('hibachi') && i.isAvailable);
+          if (hibachi.length > 0) defaultP1 = hibachi[0].name;
+          if (hibachi.length > 1) defaultP2 = hibachi[1].name;
+          else if (hibachi.length === 1) defaultP2 = hibachi[0].name;
+        }
+      } catch { /* keep defaults */ }
+
       for (let i = 0; i < totalGuests; i++) {
         initialSelections.push({
           id: `guest-${i + 1}`,
           guestName: '',
           isAdult: i < foundBooking.adults, // First N guests are adults
-          protein1: 'chicken',
-          protein2: 'steak',
+          protein1: defaultP1,
+          protein2: defaultP2,
           wantsFriedRice: true,
           wantsNoodles: true,
           wantsSalad: true,
@@ -186,8 +763,32 @@ function BookingMenuContent() {
     );
   }, [booking, existingMenu, guestSelections, menuItems, rules]);
 
+  const upgradeTotals = useMemo(() => {
+    let revenueAdd = 0;
+    let costAdd = 0;
+    guestSelections.forEach((g) => {
+      (g.upgradeProteins ?? []).forEach((p) => {
+        const u = enabledUpgrades.find((u) => u.protein === p);
+        if (u) {
+          revenueAdd += u.pricePerPerson;
+          costAdd += u.costPerPerson;
+        }
+      });
+    });
+    return { revenueAdd, costAdd };
+  }, [guestSelections, enabledUpgrades]);
+
+  const finalMenuPricing = useMemo(() => {
+    if (!menuPricing) return null;
+    return {
+      ...menuPricing,
+      subtotalOverride: menuPricing.subtotalOverride + upgradeTotals.revenueAdd,
+      foodCostOverride: menuPricing.foodCostOverride + upgradeTotals.costAdd,
+    };
+  }, [menuPricing, upgradeTotals]);
+
   const pricingPreview = useMemo(() => {
-    if (!booking || !menuPricing) return null;
+    if (!booking || !finalMenuPricing) return null;
     return calculateEventFinancials(
       {
         adults: booking.adults,
@@ -197,12 +798,12 @@ function BookingMenuContent() {
         distanceMiles: booking.distanceMiles,
         premiumAddOn: booking.premiumAddOn,
         staffingProfileId: booking.staffingProfileId,
-        subtotalOverride: menuPricing.subtotalOverride,
-        foodCostOverride: menuPricing.foodCostOverride,
+        subtotalOverride: finalMenuPricing.subtotalOverride,
+        foodCostOverride: finalMenuPricing.foodCostOverride,
       },
       rules
     );
-  }, [booking, menuPricing, rules]);
+  }, [booking, finalMenuPricing, rules]);
 
   const handleSave = () => {
     if (!booking || !bookingId) return;
@@ -223,10 +824,16 @@ function BookingMenuContent() {
       createdAt: existingMenu?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    const snapshot = buildMenuPricingSnapshot(menu, menuItems, {
+    const baseSnapshot = buildMenuPricingSnapshot(menu, menuItems, {
       childDiscountPercent: rules.pricing.childDiscountPercent,
       premiumAddOnPerGuest: booking.premiumAddOn,
     });
+    // Apply upgrade add-on pricing on top of the base menu snapshot
+    const snapshot = {
+      ...baseSnapshot,
+      subtotalOverride: baseSnapshot.subtotalOverride + upgradeTotals.revenueAdd,
+      foodCostOverride: baseSnapshot.foodCostOverride + upgradeTotals.costAdd,
+    };
     const updatedFinancials = calculateEventFinancials(
       {
         adults: booking.adults,
@@ -281,16 +888,11 @@ function BookingMenuContent() {
   };
 
   const summary = useMemo(() => {
-    const proteinCounts: Record<ProteinType, number> = {
-      chicken: 0,
-      steak: 0,
-      shrimp: 0,
-      scallops: 0,
-    };
+    const proteinCounts: Record<string, number> = {};
 
     guestSelections.forEach((guest) => {
-      proteinCounts[guest.protein1]++;
-      proteinCounts[guest.protein2]++;
+      proteinCounts[guest.protein1] = (proteinCounts[guest.protein1] ?? 0) + 1;
+      proteinCounts[guest.protein2] = (proteinCounts[guest.protein2] ?? 0) + 1;
     });
 
     return {
@@ -315,6 +917,11 @@ function BookingMenuContent() {
         </div>
       </div>
     );
+  }
+
+  // Dual-mode branch: non-private-dinner events use the catering menu builder
+  if (booking.eventType !== 'private-dinner') {
+    return <CateringMenuBuilder booking={booking} router={router} />;
   }
 
   return (
@@ -363,29 +970,18 @@ function BookingMenuContent() {
             </p>
           </div>
 
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
-            <h3 className="text-sm font-medium text-red-900 dark:text-red-200">
-              Chicken & Steak
-            </h3>
-            <p className="mt-2 text-2xl font-bold text-red-600 dark:text-red-400">
-              {summary.proteinCounts.chicken + summary.proteinCounts.steak}
-            </p>
-            <p className="mt-1 text-xs text-red-700 dark:text-red-300">
-              {summary.proteinCounts.chicken} chicken, {summary.proteinCounts.steak} steak
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-orange-950/20">
-            <h3 className="text-sm font-medium text-orange-900 dark:text-orange-200">
-              Shrimp & Scallops
-            </h3>
-            <p className="mt-2 text-2xl font-bold text-orange-600 dark:text-orange-400">
-              {summary.proteinCounts.shrimp + summary.proteinCounts.scallops}
-            </p>
-            <p className="mt-1 text-xs text-orange-700 dark:text-orange-300">
-              {summary.proteinCounts.shrimp} shrimp, {summary.proteinCounts.scallops} scallops
-            </p>
-          </div>
+          {Object.entries(summary.proteinCounts)
+            .filter(([, count]) => count > 0)
+            .map(([protein, count]) => {
+              const label = proteinOptions.find((o) => o.value === protein)?.label ?? protein;
+              return (
+                <div key={protein} className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
+                  <h3 className="text-sm font-medium text-red-900 dark:text-red-200">{label}</h3>
+                  <p className="mt-2 text-2xl font-bold text-red-600 dark:text-red-400">{count}</p>
+                  <p className="mt-1 text-xs text-red-700 dark:text-red-300">selections</p>
+                </div>
+              );
+            })}
 
           <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-950/20">
             <h3 className="text-sm font-medium text-yellow-900 dark:text-yellow-200">
@@ -404,7 +1000,7 @@ function BookingMenuContent() {
               Menu Revenue Estimate
             </h3>
             <p className="mt-2 text-xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(menuPricing?.subtotalOverride ?? 0)}
+              {formatCurrency(finalMenuPricing?.subtotalOverride ?? 0)}
             </p>
             <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
               Includes premium add-on (${booking.premiumAddOn.toFixed(2)}/guest)
@@ -416,7 +1012,7 @@ function BookingMenuContent() {
               Food Cost Estimate
             </h3>
             <p className="mt-2 text-xl font-bold text-rose-600 dark:text-rose-400">
-              {formatCurrency(menuPricing?.foodCostOverride ?? 0)}
+              {formatCurrency(finalMenuPricing?.foodCostOverride ?? 0)}
             </p>
             <p className="mt-1 text-xs text-rose-700 dark:text-rose-300">
               Gross Profit: {formatCurrency(pricingPreview?.grossProfit ?? 0)}
@@ -424,9 +1020,9 @@ function BookingMenuContent() {
           </div>
         </div>
 
-        {menuPricing && menuPricing.missingItemIds.length > 0 && (
+        {finalMenuPricing && finalMenuPricing.missingItemIds.length > 0 && (
           <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
-            Missing menu items in catalog for: {menuPricing.missingItemIds.join(', ')}. Their price/cost was treated as $0.00.
+            Missing menu items in catalog for: {finalMenuPricing.missingItemIds.join(', ')}. Their price/cost was treated as $0.00.
           </div>
         )}
 
@@ -451,6 +1047,11 @@ function BookingMenuContent() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Protein 2
                   </th>
+                  {enabledUpgrades.length > 0 && (
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
+                      Upgrades
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Sides
                   </th>
@@ -521,6 +1122,36 @@ function BookingMenuContent() {
                         ))}
                       </select>
                     </td>
+                    {enabledUpgrades.length > 0 && (
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col gap-1 text-xs">
+                          {enabledUpgrades.map((upgrade) => {
+                            const checked = (guest.upgradeProteins ?? []).includes(upgrade.protein);
+                            return (
+                              <label key={upgrade.protein} className="flex cursor-pointer items-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    const current = guest.upgradeProteins ?? [];
+                                    updateGuestSelection(
+                                      index,
+                                      'upgradeProteins',
+                                      checked
+                                        ? current.filter((p) => p !== upgrade.protein)
+                                        : [...current, upgrade.protein]
+                                    );
+                                  }}
+                                  className="h-3 w-3 rounded border-border text-accent"
+                                />
+                                <span className="text-text-secondary">{upgrade.label}</span>
+                                <span className="text-text-muted">(+${upgrade.pricePerPerson})</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    )}
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1 text-xs">
                         <label className="flex items-center gap-1">

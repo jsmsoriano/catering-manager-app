@@ -1,4 +1,4 @@
-import type { ShoppingList } from './shoppingTypes';
+import type { ShoppingList, ShoppingListItem } from './shoppingTypes';
 
 export const SHOPPING_LISTS_KEY = 'shoppingLists';
 
@@ -63,4 +63,16 @@ export function upsertShoppingList(list: ShoppingList) {
 export function removeShoppingListForBooking(bookingId: string) {
   const remaining = loadShoppingLists().filter((list) => list.bookingId !== bookingId);
   saveShoppingLists(remaining);
+}
+
+/** Append a single item to an event's shopping list (load fresh, append, save). */
+export function appendItemToShoppingList(bookingId: string, item: ShoppingListItem): void {
+  const list = ensureShoppingListForBooking(bookingId);
+  const items = Array.isArray(list.items) ? list.items : [];
+  const next: ShoppingList = {
+    ...list,
+    items: [...items, item],
+    updatedAt: new Date().toISOString(),
+  };
+  upsertShoppingList(next);
 }

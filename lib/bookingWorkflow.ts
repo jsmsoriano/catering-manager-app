@@ -1,4 +1,4 @@
-import type { Booking, BookingStatus, PaymentStatus } from './bookingTypes';
+import type { Booking, BookingStatus, PaymentStatus, PipelineStatus } from './bookingTypes';
 
 export const DEFAULT_DEPOSIT_PERCENT = 30;
 export const DEFAULT_PURCHASE_LEAD_DAYS = 2;
@@ -30,6 +30,29 @@ export function getBookingServiceStatus(booking: Booking): BookingStatus {
   return booking.serviceStatus ?? booking.status;
 }
 
+/** Derive default pipeline_status from source/status for backfill (localStorage data). */
+export function getDefaultPipelineStatus(booking: Booking): PipelineStatus {
+  if (booking.source === 'inquiry') return 'inquiry';
+  switch (booking.status) {
+    case 'completed':
+      return 'completed';
+    case 'confirmed':
+      return 'booked';
+    case 'pending':
+      return 'quote_sent';
+    case 'cancelled':
+      return 'booked';
+    default:
+      return 'inquiry';
+  }
+}
+
+/** Ensure booking has pipeline_status set; use for backfill when loading from localStorage. */
+export function ensurePipelineStatus(booking: Booking): Booking {
+  if (booking.pipeline_status != null) return booking;
+  return { ...booking, pipeline_status: getDefaultPipelineStatus(booking) };
+}
+
 export function calculatePrepPurchaseByDate(
   eventDate: string,
   leadDays = DEFAULT_PURCHASE_LEAD_DAYS
@@ -56,13 +79,13 @@ function derivePaymentStatus(params: {
     return amountPaid > MONEY_EPSILON ? 'refunded' : 'unpaid';
   }
 
-  if (serviceStatus === 'pending') return 'unpaid';
-
   if (amountPaid + MONEY_EPSILON >= depositAmount) {
     const today = parseLocalDate(asOfDate);
     const eventLocalDate = parseLocalDate(eventDate);
     return today >= eventLocalDate ? 'balance-due' : 'deposit-paid';
   }
+
+  if (serviceStatus === 'pending') return 'deposit-due';
 
   return 'deposit-due';
 }
@@ -119,9 +142,10 @@ export function normalizeBookingWorkflowFields(
 
 export function applyConfirmationPaymentTerms(
   booking: Booking,
-  confirmedAtIso: string
+  confirmedAtIso: string,
+  rulesDepositPercent = DEFAULT_DEPOSIT_PERCENT
 ): Booking {
-  const depositPercent = toFiniteNonNegative(booking.depositPercent, DEFAULT_DEPOSIT_PERCENT);
+  const depositPercent = toFiniteNonNegative(booking.depositPercent, rulesDepositPercent);
   const depositAmount = roundMoney(booking.total * (depositPercent / 100));
   const amountPaid = roundMoney(toFiniteNonNegative(booking.amountPaid, 0));
   const confirmedLocalDate = toLocalDateISO(new Date(confirmedAtIso));
@@ -159,5 +183,29 @@ export function applyPaymentToBooking(
       paymentStatus: undefined, // Re-derive
     },
     paymentDate
+  );
+}
+
+/** Apply a refund: reduce amountPaid and set booking status to cancelled (payment status becomes refunded). */
+export function applyRefundToBooking(
+  booking: Booking,
+  refundAmount: number,
+  refundDate: string
+): Booking {
+  const normalizedBooking = normalizeBookingWorkflowFields(booking, refundDate);
+  const nextAmountPaid = roundMoney(
+    Math.max(0, (normalizedBooking.amountPaid ?? 0) - Math.max(0, refundAmount))
+  );
+
+  return normalizeBookingWorkflowFields(
+    {
+      ...normalizedBooking,
+      status: 'cancelled',
+      serviceStatus: 'cancelled',
+      amountPaid: nextAmountPaid,
+      balanceDueAmount: roundMoney(Math.max(0, normalizedBooking.total - nextAmountPaid)),
+      paymentStatus: undefined, // Re-derive (refunded when cancelled and amountPaid > 0)
+    },
+    refundDate
   );
 }

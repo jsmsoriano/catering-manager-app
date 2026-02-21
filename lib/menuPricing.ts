@@ -4,14 +4,15 @@ import type {
   MenuItem,
   MenuPricingBreakdown,
   MenuPricingSnapshot,
-  ProteinType,
 } from './menuTypes';
 
-const PROTEIN_ITEM_ID: Record<ProteinType, string> = {
+// Maps protein key → catalog item ID (string keys to support custom template proteins)
+const PROTEIN_ITEM_ID: Record<string, string> = {
   chicken: 'protein-chicken',
   steak: 'protein-steak',
   shrimp: 'protein-shrimp',
   scallops: 'protein-scallops',
+  'filet-mignon': 'protein-filet-mignon',
 };
 
 const SIDE_ITEM_ID = {

@@ -3,11 +3,11 @@
 /* Light theme (default when class="light" or no class) */
 :root {
   /* Surfaces */
-  --background: #F8F9FB;
+  --background: #E5E9F0;
   --sidebar: #FFFFFF;
   --card: #FFFFFF;
   --card-elevated: #F1F5F9;
-  --border: #E5E7EB;
+  --border: #D1D5DB;
 
   /* Text */
   --text-primary: #111827;

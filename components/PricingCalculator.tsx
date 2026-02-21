@@ -6,14 +6,17 @@ import {
   formatCurrency,
 } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
-import type { EventType, EventFinancials } from '@/lib/types';
+import { useTemplateConfig } from '@/lib/useTemplateConfig';
+import { getPricingSlot } from '@/lib/templateConfig';
+import type { EventFinancials } from '@/lib/types';
 
 export default function PricingCalculator() {
   const rules = useMoneyRules(); // Load saved rules from localStorage
+  const { config } = useTemplateConfig();
 
   const [adults, setAdults] = useState(15);
   const [children, setChildren] = useState(0);
-  const [eventType, setEventType] = useState<EventType>('private-dinner');
+  const [eventType, setEventType] = useState<string>(config.eventTypes[0]?.id ?? 'private-dinner');
   const [eventDate, setEventDate] = useState(() => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -29,6 +32,7 @@ export default function PricingCalculator() {
     eventDate: new Date(eventDate),
     distanceMiles,
     premiumAddOn,
+    pricingSlot: getPricingSlot(config.eventTypes, eventType),
   }, rules); // Use saved rules instead of defaults
 
   return (
@@ -49,15 +53,19 @@ export default function PricingCalculator() {
                 </label>
                 <select
                   value={eventType}
-                  onChange={(e) => setEventType(e.target.value as EventType)}
+                  onChange={(e) => setEventType(e.target.value)}
                   className="w-full rounded-md border border-border bg-card-elevated px-4 py-2 text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 >
-                  <option value="private-dinner">
-                    Private Dinner ({formatCurrency(rules.pricing.privateDinnerBasePrice)}/person)
-                  </option>
-                  <option value="buffet">
-                    Buffet Catering ({formatCurrency(rules.pricing.buffetBasePrice)}/person)
-                  </option>
+                  {config.eventTypes.map((et) => {
+                    const price = et.pricingSlot === 'primary'
+                      ? rules.pricing.primaryBasePrice
+                      : rules.pricing.secondaryBasePrice;
+                    return (
+                      <option key={et.id} value={et.id}>
+                        {et.label} ({formatCurrency(price)}/person)
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

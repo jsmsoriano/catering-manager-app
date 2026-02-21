@@ -20,11 +20,14 @@ import type {
   ShoppingListUnit,
 } from '@/lib/shoppingTypes';
 import { calculateShoppingListLineTotal, calculateShoppingListTotals } from '@/lib/shoppingUtils';
+import { loadShoppingPresets } from '@/app/menus/page';
+import type { ShoppingPreset } from '@/app/menus/page';
 
 const BOOKINGS_KEY = 'bookings';
 const EXPENSES_KEY = 'expenses';
 
 interface ShoppingItemFormState {
+  presetId: string; // '' = custom
   name: string;
   category: ShoppingListItemCategory;
   plannedQty: string;
@@ -35,6 +38,7 @@ interface ShoppingItemFormState {
 }
 
 const DEFAULT_ITEM_FORM: ShoppingItemFormState = {
+  presetId: '',
   name: '',
   category: 'food',
   plannedQty: '1',
@@ -96,6 +100,7 @@ function EventShoppingListContent() {
   const [itemForm, setItemForm] = useState<ShoppingItemFormState>(DEFAULT_ITEM_FORM);
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [presets, setPresets] = useState<ShoppingPreset[]>([]);
 
   useEffect(() => {
     if (!bookingId) {
@@ -138,8 +143,14 @@ function EventShoppingListContent() {
     };
   }, [bookingId]);
 
+  useEffect(() => {
+    setPresets(loadShoppingPresets());
+    const handleUpdate = () => setPresets(loadShoppingPresets());
+    window.addEventListener('shoppingPresetsUpdated', handleUpdate);
+    return () => window.removeEventListener('shoppingPresetsUpdated', handleUpdate);
+  }, []);
+
   const totals = useMemo(() => calculateShoppingListTotals(shoppingList), [shoppingList]);
-  const isLocked = shoppingList?.status === 'locked';
 
   const updateShoppingList = (nextValue: ShoppingList) => {
     setShoppingList(nextValue);
@@ -148,7 +159,6 @@ function EventShoppingListContent() {
 
   const handleAddItem = () => {
     if (!shoppingList) return;
-    if (isLocked) return;
 
     const name = itemForm.name.trim();
     if (!name) {
@@ -187,7 +197,7 @@ function EventShoppingListContent() {
     field: K,
     value: ShoppingListItem[K]
   ) => {
-    if (!shoppingList || isLocked) return;
+    if (!shoppingList) return;
     const nextItems = shoppingList.items.map((item) =>
       item.id === itemId ? { ...item, [field]: value } : item
     );
@@ -199,7 +209,7 @@ function EventShoppingListContent() {
   };
 
   const handleRemoveItem = (itemId: string) => {
-    if (!shoppingList || isLocked) return;
+    if (!shoppingList) return;
     if (!confirm('Remove this shopping list item?')) return;
 
     updateShoppingList({
@@ -218,32 +228,12 @@ function EventShoppingListContent() {
   };
 
   const handleMarkPurchased = () => {
-    if (!shoppingList || isLocked) return;
+    if (!shoppingList) return;
     const now = new Date().toISOString();
     const nextList: ShoppingList = {
       ...shoppingList,
       status: 'purchased',
       purchasedAt: shoppingList.purchasedAt || now,
-      updatedAt: now,
-    };
-    upsertShoppingList(nextList);
-    setShoppingList(nextList);
-    setHasChanges(false);
-  };
-
-  const handleLockList = () => {
-    if (!shoppingList) return;
-    if (shoppingList.status !== 'purchased') {
-      const proceed = confirm(
-        'Locking works best after marking purchased. Continue and lock anyway?'
-      );
-      if (!proceed) return;
-    }
-    const now = new Date().toISOString();
-    const nextList: ShoppingList = {
-      ...shoppingList,
-      status: 'locked',
-      lockedAt: shoppingList.lockedAt || now,
       updatedAt: now,
     };
     upsertShoppingList(nextList);
@@ -329,32 +319,19 @@ function EventShoppingListContent() {
           )}
           <button
             onClick={handleSave}
-            disabled={!hasChanges || isLocked}
+            disabled={!hasChanges}
             className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-              !hasChanges || isLocked
-                ? 'cursor-not-allowed bg-border'
-                : 'bg-blue-600 hover:bg-blue-700'
+              !hasChanges ? 'cursor-not-allowed bg-border' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             Save List
           </button>
           <button
             onClick={handleMarkPurchased}
-            disabled={isLocked}
-            className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-              isLocked ? 'cursor-not-allowed bg-border' : 'bg-accent hover:bg-accent-hover'
-            }`}
+            disabled={false}
+            className="rounded-md px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent-hover"
           >
             Mark Purchased
-          </button>
-          <button
-            onClick={handleLockList}
-            disabled={isLocked}
-            className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-              isLocked ? 'cursor-not-allowed bg-border' : 'bg-card-elevated hover:bg-card'
-            }`}
-          >
-            Lock List
           </button>
         </div>
       </div>
@@ -417,20 +394,60 @@ function EventShoppingListContent() {
       <div className="mb-8 rounded-lg border border-border bg-card p-6 ">
         <h2 className="mb-4 text-lg font-semibold text-text-primary">Add Item</h2>
         <div className="grid gap-3 md:grid-cols-7">
-          <input
-            type="text"
-            value={itemForm.name}
-            onChange={(event) => setItemForm({ ...itemForm, name: event.target.value })}
-            placeholder="Item name"
-            disabled={isLocked}
-            className="rounded-md border border-border px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
-          />
+          {presets.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              <select
+                value={itemForm.presetId}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  if (id === '') {
+                    setItemForm({ ...DEFAULT_ITEM_FORM, presetId: '' });
+                  } else {
+                    const preset = presets.find((p) => p.id === id);
+                    if (preset) {
+                      setItemForm({
+                        ...itemForm,
+                        presetId: id,
+                        name: preset.name,
+                        category: preset.category,
+                        plannedUnit: preset.defaultUnit,
+                      });
+                    }
+                  }
+                }}
+                className="rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
+              >
+                <option value="">— Select item —</option>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+                <option value="__custom__">Custom…</option>
+              </select>
+              {(itemForm.presetId === '__custom__' || itemForm.presetId === '') && (
+                <input
+                  type="text"
+                  value={itemForm.name}
+                  onChange={(event) => setItemForm({ ...itemForm, name: event.target.value })}
+                  placeholder="Item name"
+                  className="rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
+                />
+              )}
+            </div>
+          ) : (
+            <input
+              type="text"
+              value={itemForm.name}
+              onChange={(event) => setItemForm({ ...itemForm, name: event.target.value })}
+              placeholder="Item name"
+              className="rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
+            />
+          )}
           <select
             value={itemForm.category}
             onChange={(event) =>
               setItemForm({ ...itemForm, category: event.target.value as ShoppingListItemCategory })
             }
-            disabled={isLocked}
+            disabled={false}
             className="rounded-md border border-border px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
           >
             <option value="food">Food</option>
@@ -443,7 +460,7 @@ function EventShoppingListContent() {
             value={itemForm.plannedQty}
             onChange={(event) => setItemForm({ ...itemForm, plannedQty: event.target.value })}
             placeholder="Planned qty"
-            disabled={isLocked}
+            disabled={false}
             className="rounded-md border border-border px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
           />
           <select
@@ -451,7 +468,7 @@ function EventShoppingListContent() {
             onChange={(event) =>
               setItemForm({ ...itemForm, plannedUnit: event.target.value as ShoppingListUnit })
             }
-            disabled={isLocked}
+            disabled={false}
             className="rounded-md border border-border px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
           >
             {UNIT_OPTIONS.map((unit) => (
@@ -467,7 +484,7 @@ function EventShoppingListContent() {
             value={itemForm.actualQty}
             onChange={(event) => setItemForm({ ...itemForm, actualQty: event.target.value })}
             placeholder="Actual qty"
-            disabled={isLocked}
+            disabled={false}
             className="rounded-md border border-border px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
           />
           <input
@@ -477,15 +494,15 @@ function EventShoppingListContent() {
             value={itemForm.actualUnitCost}
             onChange={(event) => setItemForm({ ...itemForm, actualUnitCost: event.target.value })}
             placeholder="Unit cost"
-            disabled={isLocked}
+            disabled={false}
             className="rounded-md border border-border px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
           />
           <button
             type="button"
             onClick={handleAddItem}
-            disabled={isLocked}
+            disabled={false}
             className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-              isLocked ? 'cursor-not-allowed bg-border' : 'bg-indigo-600 hover:bg-indigo-700'
+              'bg-indigo-600 hover:bg-indigo-700'
             }`}
           >
             Add Item
@@ -536,7 +553,7 @@ function EventShoppingListContent() {
                     <td className="px-4 py-3">
                       <select
                         value={item.category}
-                        disabled={isLocked}
+                        disabled={false}
                         onChange={(event) =>
                           handleItemChange(
                             item.id,
@@ -559,7 +576,7 @@ function EventShoppingListContent() {
                         min="0"
                         step="0.01"
                         value={item.actualQty ?? ''}
-                        disabled={isLocked}
+                        disabled={false}
                         onChange={(event) =>
                           handleItemChange(item.id, 'actualQty', parseOptionalNumber(event.target.value))
                         }
@@ -572,7 +589,7 @@ function EventShoppingListContent() {
                         min="0"
                         step="0.01"
                         value={item.actualUnitCost ?? ''}
-                        disabled={isLocked}
+                        disabled={false}
                         onChange={(event) =>
                           handleItemChange(
                             item.id,
@@ -590,14 +607,14 @@ function EventShoppingListContent() {
                       <input
                         type="checkbox"
                         checked={Boolean(item.purchased)}
-                        disabled={isLocked}
+                        disabled={false}
                         onChange={(event) => handleItemChange(item.id, 'purchased', event.target.checked)}
                       />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        disabled={isLocked}
+                        disabled={false}
                         onClick={() => handleRemoveItem(item.id)}
                         className="text-xs font-medium text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:text-text-muted dark:text-red-400 dark:hover:text-red-300"
                       >
