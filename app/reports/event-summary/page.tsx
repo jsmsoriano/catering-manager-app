@@ -219,6 +219,7 @@ export default function EventSummaryReportPage() {
   }, [eventRows, selectedEventId]);
 
   const getEventPrintContent = (row: EventSummaryRow) => {
+    const hasMenu = !!(row.booking.menuId || row.booking.cateringMenuId);
     const lines: string[] = [
       `Event Summary`,
       `${format(parseLocalDate(row.eventDate), 'MMMM d, yyyy')} · ${row.eventType} · ${row.guests} guests`,
@@ -227,6 +228,7 @@ export default function EventSummaryReportPage() {
       `  Client: ${row.customerName}`,
       `  Event time: ${formatEventTime(row.booking.eventTime)}`,
       `  Address: ${row.booking.location || '—'}`,
+      `  Event menu: ${hasMenu ? 'Yes' : 'No'}`,
       ``,
       `Guests: ${row.guests}`,
       `Revenue (after discount): ${formatCurrency(row.revenueAfterDiscount)}`,
@@ -270,7 +272,7 @@ export default function EventSummaryReportPage() {
             </style></head><body>
             <h1>Event Summary</h1>
             <div class="meta">${format(parseLocalDate(row.eventDate), 'MMMM d, yyyy')} · ${row.eventType} · ${row.guests} guests</div>
-            <p><strong>Client:</strong> ${row.customerName} &nbsp; <strong>Event time:</strong> ${formatEventTime(row.booking.eventTime)}<br/><strong>Address:</strong> ${row.booking.location || '—'}</p>
+            <p><strong>Client:</strong> ${row.customerName} &nbsp; <strong>Event time:</strong> ${formatEventTime(row.booking.eventTime)}<br/><strong>Address:</strong> ${row.booking.location || '—'}<br/><strong>Event menu:</strong> ${row.booking.menuId || row.booking.cateringMenuId ? 'Yes' : 'No'}</p>
             <p><strong>Guests:</strong> ${row.guests} &nbsp; <strong>Price per person:</strong> ${formatCurrency(row.pricePerPerson)}</p>
             <p><strong>Revenue (after discount):</strong> ${formatCurrency(row.revenueAfterDiscount)} &nbsp; <strong>Gratuity:</strong> ${formatCurrency(row.gratuity)} &nbsp; <strong>Total:</strong> ${formatCurrency(row.revenueAfterDiscount + row.gratuity)}</p>
             <p style="margin-top:1rem;"><strong>Cost and expenses</strong></p>
@@ -311,7 +313,7 @@ export default function EventSummaryReportPage() {
 </style></head><body>
 <h1>Event Summary</h1>
 <div class="meta">${format(parseLocalDate(row.eventDate), 'MMMM d, yyyy')} · ${row.eventType} · ${row.guests} guests</div>
-<p><strong>Client:</strong> ${row.customerName} &nbsp; <strong>Event time:</strong> ${formatEventTime(row.booking.eventTime)}<br/><strong>Address:</strong> ${row.booking.location || '—'}</p>
+<p><strong>Client:</strong> ${row.customerName} &nbsp; <strong>Event time:</strong> ${formatEventTime(row.booking.eventTime)}<br/><strong>Address:</strong> ${row.booking.location || '—'}<br/><strong>Event menu:</strong> ${row.booking.menuId || row.booking.cateringMenuId ? 'Yes' : 'No'}</p>
 <p><strong>Guests:</strong> ${row.guests} &nbsp; <strong>Price per person:</strong> ${formatCurrency(row.pricePerPerson)}</p>
 <p><strong>Revenue (after discount):</strong> ${formatCurrency(row.revenueAfterDiscount)} &nbsp; <strong>Gratuity:</strong> ${formatCurrency(row.gratuity)} &nbsp; <strong>Total:</strong> ${formatCurrency(row.revenueAfterDiscount + row.gratuity)}</p>
 <p style="margin-top:1rem;"><strong>Cost and expenses</strong></p>
@@ -488,6 +490,23 @@ ${row.staff.map((s) => `<tr><td>${s.name}</td><td>${s.roleLabel}</td><td>${forma
                     <dt className="text-text-muted">Gratuity %</dt>
                     <dd className="text-text-primary">{selectedEventRow.gratuityPercent}%</dd>
                   </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-text-muted">Event menu</dt>
+                    <dd className="text-text-primary">
+                      {selectedEventRow.booking.menuId || selectedEventRow.booking.cateringMenuId
+                        ? 'Created'
+                        : 'None'}
+                      {' · '}
+                      <Link
+                        href={`/bookings/menu?bookingId=${selectedEventRow.booking.id}`}
+                        className="font-medium text-accent hover:text-accent-hover focus-visible:outline focus-visible:ring-2 focus-visible:ring-accent"
+                      >
+                        {selectedEventRow.booking.menuId || selectedEventRow.booking.cateringMenuId
+                          ? 'View / edit event menu'
+                          : 'Add event menu'}
+                      </Link>
+                    </dd>
+                  </div>
                 </dl>
               </div>
 
@@ -570,17 +589,29 @@ ${row.staff.map((s) => `<tr><td>${s.name}</td><td>${s.roleLabel}</td><td>${forma
                 <th className="px-4 py-3 text-left font-medium text-text-muted">Date</th>
                 <th className="px-4 py-3 text-left font-medium text-text-muted">Client</th>
                 <th className="px-4 py-3 text-left font-medium text-text-muted">Event type</th>
+                <th className="px-4 py-3 text-left font-medium text-text-muted">Menu</th>
                 <th className="px-4 py-3 text-right font-medium text-text-muted">Guests</th>
                 <th className="px-4 py-3 text-right font-medium text-text-muted">Revenue</th>
                 <th className="px-4 py-3 text-right font-medium text-text-muted w-32">Action</th>
               </tr>
             </thead>
             <tbody>
-              {eventRows.map((row) => (
+              {eventRows.map((row) => {
+                const hasMenu = !!(row.booking.menuId || row.booking.cateringMenuId);
+                const menuHref = `/bookings/menu?bookingId=${row.booking.id}`;
+                return (
                 <tr key={row.booking.id} className="border-b border-border/50 hover:bg-card-elevated/50">
                   <td className="px-4 py-3 text-text-primary">{format(parseLocalDate(row.eventDate), 'MMM d, yyyy')}</td>
                   <td className="px-4 py-3 font-medium text-text-primary">{row.customerName}</td>
                   <td className="px-4 py-3 text-text-secondary">{row.eventType}</td>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={menuHref}
+                      className="text-sm font-medium text-accent hover:text-accent-hover focus-visible:outline focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      {hasMenu ? 'View menu' : 'Add event menu'}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-right text-text-primary">{row.guests}</td>
                   <td className="px-4 py-3 text-right text-text-primary">{formatCurrency(row.revenueAfterDiscount + row.gratuity)}</td>
                   <td className="px-4 py-3 text-right">
@@ -639,7 +670,8 @@ ${row.staff.map((s) => `<tr><td>${s.name}</td><td>${s.roleLabel}</td><td>${forma
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>

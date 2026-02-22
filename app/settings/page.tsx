@@ -80,7 +80,7 @@ function SettingsContent() {
   }
 
 
-  const maxWidth = activeTab === 'rules' || activeTab === 'menu' ? 'max-w-5xl' : 'max-w-2xl';
+  const maxWidth = activeTab === 'rules' || activeTab === 'menu' ? 'max-w-5xl' : 'max-w-4xl';
 
   return (
     <div className="min-h-screen p-8">
@@ -168,14 +168,14 @@ function SettingsContent() {
             </div>
 
             {/* Event types */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-sm font-medium text-text-secondary">Event types</label>
               <p className="mt-0.5 text-xs text-text-muted">
                 These appear in booking forms, reports, and filters. <strong>Pricing slot</strong> maps to Primary or Secondary base price in Business Rules.
               </p>
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 min-w-0 space-y-2 overflow-x-auto">
                 {form.eventTypes.map((et, i) => (
-                  <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto_auto] items-center gap-2">
+                  <div key={i} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto_auto] items-center gap-2">
                     <input
                       type="text"
                       value={et.id}
@@ -185,7 +185,7 @@ function SettingsContent() {
                         setForm((prev) => ({ ...prev, eventTypes: next }));
                       }}
                       placeholder="id (e.g. private-dinner)"
-                      className="rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
+                      className="min-w-0 rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
                     />
                     <input
                       type="text"
@@ -196,7 +196,7 @@ function SettingsContent() {
                         setForm((prev) => ({ ...prev, eventTypes: next }));
                       }}
                       placeholder="Admin label"
-                      className="rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
+                      className="min-w-0 rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
                     />
                     <input
                       type="text"
@@ -207,7 +207,7 @@ function SettingsContent() {
                         setForm((prev) => ({ ...prev, eventTypes: next }));
                       }}
                       placeholder="Customer label"
-                      className="rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
+                      className="min-w-0 rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
                     />
                     <select
                       value={et.pricingSlot}
@@ -216,7 +216,7 @@ function SettingsContent() {
                         next[i] = { ...next[i], pricingSlot: e.target.value as 'primary' | 'secondary' };
                         setForm((prev) => ({ ...prev, eventTypes: next }));
                       }}
-                      className="rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
+                      className="shrink-0 rounded-md border border-border bg-card px-2 py-1.5 text-sm text-text-primary"
                     >
                       <option value="primary">Primary $</option>
                       <option value="secondary">Secondary $</option>
@@ -224,7 +224,7 @@ function SettingsContent() {
                     <button
                       type="button"
                       onClick={() => setForm((prev) => ({ ...prev, eventTypes: prev.eventTypes.filter((_, j) => j !== i) }))}
-                      className="rounded-md px-2 py-1.5 text-sm text-danger hover:bg-danger/10"
+                      className="shrink-0 rounded-md px-2 py-1.5 text-sm text-danger hover:bg-danger/10"
                       title="Remove"
                     >
                       ✕
@@ -253,12 +253,12 @@ function SettingsContent() {
             </div>
 
             {/* Occasions */}
-            <div>
+            <div className="min-w-0">
               <label className="block text-sm font-medium text-text-secondary">Occasions</label>
               <p className="mt-0.5 text-xs text-text-muted">Options shown on the public inquiry form.</p>
               <div className="mt-2 space-y-1.5">
                 {form.occasions.map((occ, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i} className="flex min-w-0 items-center gap-2">
                     <input
                       type="text"
                       value={occ}
@@ -267,12 +267,12 @@ function SettingsContent() {
                         next[i] = e.target.value;
                         setForm((prev) => ({ ...prev, occasions: next }));
                       }}
-                      className="flex-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-text-primary"
+                      className="min-w-0 flex-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm text-text-primary"
                     />
                     <button
                       type="button"
                       onClick={() => setForm((prev) => ({ ...prev, occasions: prev.occasions.filter((_, j) => j !== i) }))}
-                      className="rounded-md px-2 py-1.5 text-sm text-danger hover:bg-danger/10"
+                      className="shrink-0 rounded-md px-2 py-1.5 text-sm text-danger hover:bg-danger/10"
                       title="Remove"
                     >
                       ✕
