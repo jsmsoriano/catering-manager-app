@@ -15,33 +15,6 @@ import {
   getCategoryName,
   LEGACY_CATEGORY_MAP,
 } from '@/lib/menuCategories';
-import type { ShoppingListItemCategory, ShoppingListUnit } from '@/lib/shoppingTypes';
-
-export const SHOPPING_PRESETS_KEY = 'shoppingPresets';
-
-export interface ShoppingPreset {
-  id: string;
-  name: string;
-  category: ShoppingListItemCategory;
-  defaultUnit: ShoppingListUnit;
-}
-
-export function loadShoppingPresets(): ShoppingPreset[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(SHOPPING_PRESETS_KEY);
-    return raw ? (JSON.parse(raw) as ShoppingPreset[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveShoppingPresets(presets: ShoppingPreset[]): void {
-  localStorage.setItem(SHOPPING_PRESETS_KEY, JSON.stringify(presets));
-  window.dispatchEvent(new Event('shoppingPresetsUpdated'));
-}
-
-const UNIT_OPTIONS: ShoppingListUnit[] = ['lb', 'kg', 'oz', 'g', 'ea', 'case', 'bottle', 'tray', 'other'];
 
 const categoryLabels: Record<MenuCategory, string> = {
   protein: 'Proteins',
@@ -51,13 +24,6 @@ const categoryLabels: Record<MenuCategory, string> = {
   beverage: 'Beverages',
 };
 
-const categoryColors: Record<MenuCategory, string> = {
-  protein: 'bg-red-100 text-red-800',
-  side: 'bg-yellow-100 text-yellow-800',
-  appetizer: 'bg-green-100 text-green-800',
-  dessert: 'bg-pink-100 text-pink-800',
-  beverage: 'bg-blue-100 text-blue-800',
-};
 
 // ─── Menu Template Tab ──────────────────────────────────────────────────────
 
@@ -1110,122 +1076,6 @@ function ItemCatalogTab() {
   );
 }
 
-// ─── Shopping Presets Tab ────────────────────────────────────────────────────
-
-function ShoppingPresetsTab() {
-  const [presets, setPresets] = useState<ShoppingPreset[]>([]);
-  const [addName, setAddName] = useState('');
-  const [addCategory, setAddCategory] = useState<ShoppingListItemCategory>('food');
-  const [addUnit, setAddUnit] = useState<ShoppingListUnit>('lb');
-
-  useEffect(() => {
-    setPresets(loadShoppingPresets());
-    const handleUpdate = () => setPresets(loadShoppingPresets());
-    window.addEventListener('shoppingPresetsUpdated', handleUpdate);
-    return () => window.removeEventListener('shoppingPresetsUpdated', handleUpdate);
-  }, []);
-
-  const handleAdd = () => {
-    const name = addName.trim();
-    if (!name) return;
-    const next = [...presets, { id: crypto.randomUUID(), name, category: addCategory, defaultUnit: addUnit }];
-    saveShoppingPresets(next);
-    setPresets(next);
-    setAddName('');
-  };
-
-  const handleDelete = (id: string) => {
-    const next = presets.filter((p) => p.id !== id);
-    saveShoppingPresets(next);
-    setPresets(next);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Add preset form */}
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-text-muted">Add Item</h3>
-        <div className="flex flex-wrap gap-2">
-          <input
-            type="text"
-            value={addName}
-            onChange={(e) => setAddName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Item name (e.g. Chicken Thighs)"
-            className="flex-1 min-w-48 rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-primary"
-          />
-          <select
-            value={addCategory}
-            onChange={(e) => setAddCategory(e.target.value as ShoppingListItemCategory)}
-            className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-primary"
-          >
-            <option value="food">Food</option>
-            <option value="supplies">Supplies</option>
-          </select>
-          <select
-            value={addUnit}
-            onChange={(e) => setAddUnit(e.target.value as ShoppingListUnit)}
-            className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-primary"
-          >
-            {UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-          <button
-            onClick={handleAdd}
-            disabled={!addName.trim()}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40"
-          >
-            Add
-          </button>
-        </div>
-      </div>
-
-      {/* Presets list */}
-      <div className="rounded-xl border border-border bg-card">
-        {presets.length === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-text-muted">
-            No items configured yet. Add items above and they'll appear in the shopping list dropdown.
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="border-b border-border bg-card-elevated">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-text-secondary">Name</th>
-                <th className="px-4 py-3 text-left font-medium text-text-secondary">Category</th>
-                <th className="px-4 py-3 text-left font-medium text-text-secondary">Default unit</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {presets.map((preset) => (
-                <tr key={preset.id}>
-                  <td className="px-4 py-3 font-medium text-text-primary">{preset.name}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      preset.category === 'food'
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
-                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
-                    }`}>
-                      {preset.category}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-text-secondary">{preset.defaultUnit}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleDelete(preset.id)}
-                      className="text-xs font-medium text-danger hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── Page Shell (exported for use in Settings) ─────────────────────────────────
 

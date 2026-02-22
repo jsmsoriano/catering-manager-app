@@ -1,4 +1,30 @@
-import type { ShoppingList, ShoppingListItem } from './shoppingTypes';
+import type { ShoppingList, ShoppingListItem, ShoppingListItemCategory, ShoppingListUnit } from './shoppingTypes';
+
+// ─── Shopping Presets (catalog of common items for shopping lists) ─────────────
+
+export const SHOPPING_PRESETS_KEY = 'shoppingPresets';
+
+export interface ShoppingPreset {
+  id: string;
+  name: string;
+  category: ShoppingListItemCategory;
+  defaultUnit: ShoppingListUnit;
+}
+
+export function loadShoppingPresets(): ShoppingPreset[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(SHOPPING_PRESETS_KEY);
+    return raw ? (JSON.parse(raw) as ShoppingPreset[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveShoppingPresets(presets: ShoppingPreset[]): void {
+  localStorage.setItem(SHOPPING_PRESETS_KEY, JSON.stringify(presets));
+  window.dispatchEvent(new Event('shoppingPresetsUpdated'));
+}
 
 export const SHOPPING_LISTS_KEY = 'shoppingLists';
 

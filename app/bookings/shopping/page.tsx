@@ -20,8 +20,8 @@ import type {
   ShoppingListUnit,
 } from '@/lib/shoppingTypes';
 import { calculateShoppingListLineTotal, calculateShoppingListTotals } from '@/lib/shoppingUtils';
-import { loadShoppingPresets } from '@/app/menus/page';
-import type { ShoppingPreset } from '@/app/menus/page';
+import { loadShoppingPresets } from '@/lib/shoppingStorage';
+import type { ShoppingPreset } from '@/lib/shoppingStorage';
 
 const BOOKINGS_KEY = 'bookings';
 const EXPENSES_KEY = 'expenses';
