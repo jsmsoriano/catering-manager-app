@@ -323,7 +323,11 @@ function CateringMenuBuilder({
     }
 
     setSaving(false);
-    router.push(`/bookings?bookingId=${booking.id}`);
+    if (booking.source === 'menu-template') {
+      router.push('/menus?subtab=event-menus');
+    } else {
+      router.push(`/bookings/${booking.id}?step=menu`);
+    }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -341,7 +345,11 @@ function CateringMenuBuilder({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => router.push(`/bookings?bookingId=${booking.id}`)}
+            onClick={() =>
+              booking.source === 'menu-template'
+                ? router.push('/menus?subtab=event-menus')
+                : router.push(`/bookings/${booking.id}?step=menu`)
+            }
             className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-secondary hover:bg-card"
           >
             ← Back
@@ -992,7 +1000,11 @@ function BookingMenuContent() {
     }
 
     alert('Menu saved successfully!');
-    router.push('/bookings');
+    if (booking.source === 'menu-template') {
+      router.push('/menus?subtab=event-menus');
+    } else {
+      router.push(`/bookings/${bookingId}?step=menu`);
+    }
   };
 
   const summary = useMemo(() => {
@@ -1056,7 +1068,11 @@ function BookingMenuContent() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => router.push('/bookings')}
+              onClick={() =>
+                booking.source === 'menu-template'
+                  ? router.push('/menus?subtab=event-menus')
+                  : router.push(`/bookings/${bookingId}?step=menu`)
+              }
               className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
             >
               Cancel
@@ -1326,7 +1342,11 @@ function BookingMenuContent() {
         {/* Save Button (Bottom) */}
         <div className="mt-8 flex justify-end gap-2">
           <button
-            onClick={() => router.push('/bookings')}
+            onClick={() =>
+              booking.source === 'menu-template'
+                ? router.push('/menus?subtab=event-menus')
+                : router.push(`/bookings/${bookingId}?step=menu`)
+            }
             className="rounded-md border border-border bg-card-elevated px-6 py-3 text-text-secondary hover:bg-card"
           >
             Cancel
