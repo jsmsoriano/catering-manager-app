@@ -20,7 +20,6 @@ function parseLocalDate(dateString: string): Date {
 // ChefRole display labels
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
-  overflow: 'Overflow Chef',
   full: 'Full Chef',
   buffet: 'Buffet Chef',
   assistant: 'Assistant',
@@ -416,7 +415,6 @@ export default function StaffPayoutReportPage() {
           >
             <option value="all">All Roles</option>
             <option value="lead">Lead Chef</option>
-            <option value="overflow">Overflow Chef</option>
             <option value="full">Full Chef</option>
             <option value="buffet">Buffet Chef</option>
             <option value="assistant">Assistant</option>

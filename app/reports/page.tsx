@@ -7,6 +7,7 @@ import {
   ChartBarIcon,
   BanknotesIcon,
   UsersIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -58,6 +59,15 @@ const REPORTS: ReportDef[] = [
     href: '/reports/comparative',
     icon: UsersIcon,
     iconClass: 'bg-purple-500/10 text-purple-500',
+  },
+  {
+    id: 'menus-and-shopping',
+    name: 'Menus & Shopping',
+    description:
+      'Event menus and shopping lists linked to events. Most ordered items, metrics, tracking, and forecasting.',
+    href: '/reports/menus-and-shopping',
+    icon: ClipboardDocumentListIcon,
+    iconClass: 'bg-teal-500/10 text-teal-500',
   },
 ];
 

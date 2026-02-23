@@ -28,7 +28,6 @@ function formatEventTime(eventTime: string): string {
 
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
-  overflow: 'Overflow Chef',
   full: 'Full Chef',
   buffet: 'Buffet Chef',
   assistant: 'Assistant',

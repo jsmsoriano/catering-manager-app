@@ -5,10 +5,15 @@ const LEGACY_STORAGE_KEY_RULES = "hibachi.moneyRules.v1";
 
 export const DEFAULT_RULES: MoneyRules = {
   pricing: {
-    primaryBasePrice: 85,
-    secondaryBasePrice: 65,
+    primaryBasePrice: 60,
+    secondaryBasePrice: 32,
     premiumAddOnMin: 5,
     premiumAddOnMax: 20,
+    proteinAddOns: [
+      { protein: 'chicken', label: 'Chicken', pricePerPerson: 6 },
+      { protein: 'filet-mignon', label: 'Filet Mignon', pricePerPerson: 10 },
+      { protein: 'scallops', label: 'Scallops', pricePerPerson: 8 },
+    ],
     defaultGratuityPercent: 20,
     childDiscountPercent: 50,
     defaultDepositPercent: 30,
@@ -22,8 +27,6 @@ export const DEFAULT_RULES: MoneyRules = {
   privateLabor: {
     leadChefBasePercent: 15,
     leadChefCapPercent: null,
-    overflowChefBasePercent: 12,
-    overflowChefCapPercent: null,
     fullChefBasePercent: 10,
     fullChefCapPercent: null,
     assistantBasePercent: 8,
@@ -50,6 +53,10 @@ export const DEFAULT_RULES: MoneyRules = {
   profitDistribution: {
     businessRetainedPercent: 30,
     ownerDistributionPercent: 70,
+    owners: [
+      { id: 'owner-a', name: 'Owner A', equityPercent: 40 },
+      { id: 'owner-b', name: 'Owner B', equityPercent: 60 },
+    ],
     ownerAEquityPercent: 40,
     ownerBEquityPercent: 60,
     distributionFrequency: 'monthly',
@@ -130,6 +137,11 @@ function migrateLegacyRuleFields(parsed: Record<string, any>): void {
       delete parsed.costs.foodCostPercentBuffet;
     }
   }
+  // Remove overflow chef role (deprecated)
+  if (parsed.privateLabor) {
+    delete (parsed.privateLabor as Record<string, unknown>).overflowChefBasePercent;
+    delete (parsed.privateLabor as Record<string, unknown>).overflowChefCapPercent;
+  }
 }
 
 export function loadRules(): MoneyRules {
@@ -149,6 +161,16 @@ export function loadRules(): MoneyRules {
       // One-time field name migration (old hibachi-specific names → generic)
       migrateLegacyRuleFields(parsed);
       // Deep merge one level, stripping null/NaN values so defaults are used instead
+      const pd = { ...DEFAULT_RULES.profitDistribution, ...stripInvalid(parsed.profitDistribution) };
+      // Migrate legacy Owner A/B to owners array if not present
+      if (!Array.isArray(parsed.profitDistribution?.owners) || parsed.profitDistribution.owners.length === 0) {
+        pd.owners = [
+          { id: 'owner-a', name: 'Owner A', equityPercent: pd.ownerAEquityPercent ?? 40 },
+          { id: 'owner-b', name: 'Owner B', equityPercent: pd.ownerBEquityPercent ?? 60 },
+        ];
+      } else {
+        pd.owners = parsed.profitDistribution.owners;
+      }
       const merged = {
         pricing: { ...DEFAULT_RULES.pricing, ...stripInvalid(parsed.pricing) },
         staffing: { ...DEFAULT_RULES.staffing, ...stripInvalid(parsed.staffing) },
@@ -156,12 +178,23 @@ export function loadRules(): MoneyRules {
         buffetLabor: { ...DEFAULT_RULES.buffetLabor, ...stripInvalid(parsed.buffetLabor) },
         costs: { ...DEFAULT_RULES.costs, ...stripInvalid(parsed.costs) },
         distance: { ...DEFAULT_RULES.distance, ...stripInvalid(parsed.distance) },
-        profitDistribution: { ...DEFAULT_RULES.profitDistribution, ...stripInvalid(parsed.profitDistribution) },
+        profitDistribution: pd,
         safetyLimits: { ...DEFAULT_RULES.safetyLimits, ...stripInvalid(parsed.safetyLimits) },
       };
       // Ensure profiles is always a valid array
       if (!Array.isArray(merged.staffing.profiles)) {
         merged.staffing.profiles = [];
+      }
+      // Ensure proteinAddOns is a valid array of { protein, label, pricePerPerson }
+      if (!Array.isArray(merged.pricing.proteinAddOns)) {
+        merged.pricing.proteinAddOns = DEFAULT_RULES.pricing.proteinAddOns;
+      } else {
+        merged.pricing.proteinAddOns = merged.pricing.proteinAddOns
+          .filter((x) => x && typeof x.protein === 'string' && typeof x.label === 'string' && Number.isFinite(x.pricePerPerson))
+          .map((x) => ({ protein: x.protein, label: x.label, pricePerPerson: Number(x.pricePerPerson) }));
+        if (merged.pricing.proteinAddOns.length === 0) {
+          merged.pricing.proteinAddOns = DEFAULT_RULES.pricing.proteinAddOns;
+        }
       }
       return merged;
     } catch (e) {
@@ -290,8 +323,19 @@ export function calculateEventFinancials(
   const retainedAmount = grossProfit * (retainedPercent / 100);
   const distributionAmount = grossProfit * (distributionPercent / 100);
 
-  const ownerADistribution = distributionAmount * (rules.profitDistribution.ownerAEquityPercent / 100);
-  const ownerBDistribution = distributionAmount * (rules.profitDistribution.ownerBEquityPercent / 100);
+  const ownersList = rules.profitDistribution.owners && rules.profitDistribution.owners.length > 0
+    ? rules.profitDistribution.owners
+    : [
+        { id: 'owner-a', name: 'Owner A', equityPercent: rules.profitDistribution.ownerAEquityPercent },
+        { id: 'owner-b', name: 'Owner B', equityPercent: rules.profitDistribution.ownerBEquityPercent },
+      ];
+  const ownerDistributions = ownersList.map((o) => ({
+    ownerId: o.id,
+    ownerName: o.name,
+    amount: distributionAmount * (o.equityPercent / 100),
+  }));
+  const ownerADistribution = ownerDistributions[0]?.amount ?? 0;
+  const ownerBDistribution = ownerDistributions[1]?.amount ?? 0;
 
   // Warnings
   const warnings: string[] = [];
@@ -339,6 +383,7 @@ export function calculateEventFinancials(
     retainedPercent,
     distributionAmount,
     distributionPercent,
+    ownerDistributions,
     ownerADistribution,
     ownerBDistribution,
 
@@ -400,22 +445,20 @@ function buildStaffingPlanFromProfile(
         isOwner: false,
       });
     } else {
-      chefRoles.push(role);
+      // Map legacy 'overflow' to 'full' for saved profiles
+      const chefRole: ChefRole = (role as string) === 'overflow' ? 'full' : (role as ChefRole);
+      chefRoles.push(chefRole);
       let basePayPercent: number;
       let capPercent: number | null;
 
-      if (role === 'buffet') {
+      if (chefRole === 'buffet') {
         basePayPercent = rules.buffetLabor.chefBasePercent;
         capPercent = rules.buffetLabor.chefCapPercent;
       } else {
-        switch (role) {
+        switch (chefRole) {
           case 'lead':
             basePayPercent = rules.privateLabor.leadChefBasePercent;
             capPercent = rules.privateLabor.leadChefCapPercent;
-            break;
-          case 'overflow':
-            basePayPercent = rules.privateLabor.overflowChefBasePercent;
-            capPercent = rules.privateLabor.overflowChefCapPercent;
             break;
           case 'full':
             basePayPercent = rules.privateLabor.fullChefBasePercent;
@@ -427,7 +470,7 @@ function buildStaffingPlanFromProfile(
         }
       }
 
-      staff.push({ role, basePayPercent, capPercent, isOwner: false });
+      staff.push({ role: chefRole, basePayPercent, capPercent, isOwner: false });
     }
   }
 
@@ -480,19 +523,16 @@ function determineStaffing(
     };
   }
 
-  // Primary event type staffing: lead required; overflow when over threshold; full chefs beyond that
+  // Primary event type staffing: lead required; full chef(s) when over threshold
   const maxPerChef = rules.staffing.maxGuestsPerChefPrimary;
   const chefRoles: ChefRole[] = [];
 
   if (guestCount <= maxPerChef) {
     chefRoles.push('lead');
-  } else if (guestCount <= maxPerChef * 2) {
-    chefRoles.push('lead');
-    chefRoles.push('overflow');
   } else {
     chefRoles.push('lead');
     const additionalChefs = Math.ceil((guestCount - maxPerChef) / maxPerChef);
-    for (let i = 0; i < additionalChefs - 1; i++) {
+    for (let i = 0; i < additionalChefs; i++) {
       chefRoles.push('full');
     }
   }
@@ -507,10 +547,6 @@ function determineStaffing(
         case 'lead':
           basePayPercent = rules.privateLabor.leadChefBasePercent;
           capPercent = rules.privateLabor.leadChefCapPercent;
-          break;
-        case 'overflow':
-          basePayPercent = rules.privateLabor.overflowChefBasePercent;
-          capPercent = rules.privateLabor.overflowChefCapPercent;
           break;
         case 'full':
           basePayPercent = rules.privateLabor.fullChefBasePercent;

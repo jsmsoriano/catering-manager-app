@@ -164,7 +164,6 @@ export default function PricingCalculator() {
                 {financials.staffingPlan.chefRoles.map((role, idx) => (
                   <li key={idx}>
                     {role === 'lead' && 'Lead Chef (Owner A)'}
-                    {role === 'overflow' && 'Overflow Chef'}
                     {role === 'full' && 'Full Chef'}
                     {role === 'buffet' && idx === 0 && 'Chef (Owner A)'}
                     {role === 'buffet' && idx === 1 && 'Chef (Owner B)'}

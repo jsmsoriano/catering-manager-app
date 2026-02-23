@@ -10,7 +10,7 @@
 // Valid values at runtime are driven by BusinessTemplateConfig.eventTypes.
 export type EventType = string;
 
-export type ChefRole = 'lead' | 'overflow' | 'full' | 'buffet';
+export type ChefRole = 'lead' | 'full' | 'buffet';
 
 export type OwnerRole = 'owner-a' | 'owner-b';
 
@@ -58,6 +58,8 @@ export interface MoneyRules {
     secondaryBasePrice: number; // $ per guest — secondary event type (e.g. buffet, custom spread)
     premiumAddOnMin: number; // $ per guest
     premiumAddOnMax: number; // $ per guest
+    /** Per-protein add-on pricing (e.g. Chicken +$6, Filet Mignon +$10). Used in guest menu. */
+    proteinAddOns: { protein: string; label: string; pricePerPerson: number }[];
     defaultGratuityPercent: number; // %
     childDiscountPercent: number; // % (e.g., 50 for 50% off)
     defaultDepositPercent: number; // % required deposit when booking is confirmed (e.g., 30)
@@ -75,9 +77,7 @@ export interface MoneyRules {
   privateLabor: {
     leadChefBasePercent: number; // % of subtotal
     leadChefCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
-    overflowChefBasePercent: number; // % of subtotal (16-30 guests)
-    overflowChefCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
-    fullChefBasePercent: number; // % of subtotal (31+ guests)
+    fullChefBasePercent: number; // % of subtotal (16+ guests, second chef onward)
     fullChefCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
     assistantBasePercent: number; // % of subtotal
     assistantCapPercent: number | null; // % of (subtotal+gratuity) max, null = no cap
@@ -111,8 +111,10 @@ export interface MoneyRules {
   profitDistribution: {
     businessRetainedPercent: number; // % (default: 30)
     ownerDistributionPercent: number; // % (default: 70)
-    ownerAEquityPercent: number; // % (default: 40)
-    ownerBEquityPercent: number; // % (default: 60)
+    /** Dynamic owners: name + equity %. Replaces fixed Owner A/B when present. */
+    owners?: { id: string; name: string; equityPercent: number }[];
+    ownerAEquityPercent: number; // % (default: 40) — legacy, used when owners not set
+    ownerBEquityPercent: number; // % (default: 60) — legacy
     distributionFrequency: 'monthly' | 'quarterly' | 'annual';
   };
 
@@ -209,8 +211,10 @@ export interface EventFinancials {
   retainedPercent: number;
   distributionAmount: number;
   distributionPercent: number;
-  ownerADistribution: number;
-  ownerBDistribution: number;
+  /** Per-owner distribution when profitDistribution.owners is used */
+  ownerDistributions?: { ownerId: string; ownerName: string; amount: number }[];
+  ownerADistribution: number; // first owner or legacy A
+  ownerBDistribution: number; // second owner or legacy B
 
   // Warnings
   warnings: string[];

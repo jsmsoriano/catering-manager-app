@@ -7,7 +7,6 @@ import type { EventType, StaffPayOverride, ChefRole } from '@/lib/types';
 
 const ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
-  overflow: 'Overflow Chef',
   full: 'Full Chef',
   buffet: 'Buffet Chef',
   assistant: 'Assistant',

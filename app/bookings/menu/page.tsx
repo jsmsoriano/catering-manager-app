@@ -612,19 +612,37 @@ function BookingMenuContent() {
 
   const enabledUpgrades = useMemo(() => template.upgrades.filter((u) => u.enabled), [template]);
 
-  // Protein dropdown: use items tagged 'hibachi' from the catalog; fall back to template if none
+  // Upgrade options: prefer Business Rules protein add-ons when set, else menu template
+  const effectiveUpgrades = useMemo(() => {
+    const fromRules = rules?.pricing?.proteinAddOns ?? [];
+    if (fromRules.length > 0) {
+      return fromRules.filter((x) => x.protein && x.label);
+    }
+    return enabledUpgrades.map((u) => ({ protein: u.protein, label: u.label, pricePerPerson: u.pricePerPerson }));
+  }, [rules?.pricing?.proteinAddOns, enabledUpgrades]);
+
+  // Protein dropdown: base proteins + upgrades as options (upgrades show +$ in label)
   const proteinOptions = useMemo(() => {
+    const base: { value: string; label: string; isUpgrade?: boolean }[] = [];
     const hibachiItems = menuItems.filter(
       (item) => item.tags?.includes('hibachi') && item.isAvailable
     );
     if (hibachiItems.length > 0) {
-      return hibachiItems.map((item) => ({ value: item.name, label: item.name }));
+      base.push(...hibachiItems.map((item) => ({ value: item.name, label: item.name })));
+    } else {
+      base.push(
+        ...template.baseProteins
+          .filter((p) => p.enabled)
+          .map((p) => ({ value: p.protein, label: p.label }))
+      );
     }
-    // Fallback: template base proteins
-    return template.baseProteins
-      .filter((p) => p.enabled)
-      .map((p) => ({ value: p.protein, label: p.label }));
-  }, [menuItems, template]);
+    const upgradeOptions = effectiveUpgrades.map((u) => ({
+      value: u.protein,
+      label: `${u.label} (+$${Number(u.pricePerPerson).toFixed(0)})`,
+      isUpgrade: true as const,
+    }));
+    return [...base, ...upgradeOptions];
+  }, [menuItems, template, effectiveUpgrades]);
 
   // Load menu items so we can calculate menu-based pricing
   useEffect(() => {
@@ -741,7 +759,22 @@ function BookingMenuContent() {
     value: any
   ) => {
     const updated = [...guestSelections];
-    updated[index] = { ...updated[index], [field]: value };
+    const guest = updated[index];
+    if (field === 'protein1') {
+      if (value === guest.protein2) {
+        updated[index] = { ...guest, protein1: value, protein2: guest.protein1 };
+      } else {
+        updated[index] = { ...guest, protein1: value };
+      }
+    } else if (field === 'protein2') {
+      if (value === guest.protein1) {
+        updated[index] = { ...guest, protein1: guest.protein2, protein2: value };
+      } else {
+        updated[index] = { ...guest, protein2: value };
+      }
+    } else {
+      updated[index] = { ...guest, [field]: value };
+    }
     setGuestSelections(updated);
   };
 
@@ -763,20 +796,27 @@ function BookingMenuContent() {
     );
   }, [booking, existingMenu, guestSelections, menuItems, rules]);
 
+  // Upgrade totals: derived from protein1/protein2 when they are upgrade options (price from effectiveUpgrades)
   const upgradeTotals = useMemo(() => {
     let revenueAdd = 0;
     let costAdd = 0;
     guestSelections.forEach((g) => {
-      (g.upgradeProteins ?? []).forEach((p) => {
-        const u = enabledUpgrades.find((u) => u.protein === p);
-        if (u) {
-          revenueAdd += u.pricePerPerson;
-          costAdd += u.costPerPerson;
+      const multiplier = g.isAdult ? 1 : (rules?.pricing?.childDiscountPercent != null ? 1 - rules.pricing.childDiscountPercent / 100 : 0.5);
+      for (const protein of [g.protein1, g.protein2]) {
+        const fromEffective = effectiveUpgrades.find((x) => x.protein === protein);
+        if (fromEffective) {
+          revenueAdd += fromEffective.pricePerPerson * multiplier;
+        } else {
+          const u = enabledUpgrades.find((x) => x.protein === protein);
+          if (u) {
+            revenueAdd += u.pricePerPerson * multiplier;
+            costAdd += (u.costPerPerson ?? 0) * multiplier;
+          }
         }
-      });
+      }
     });
     return { revenueAdd, costAdd };
-  }, [guestSelections, enabledUpgrades]);
+  }, [guestSelections, effectiveUpgrades, enabledUpgrades, rules?.pricing?.childDiscountPercent]);
 
   const finalMenuPricing = useMemo(() => {
     if (!menuPricing) return null;
@@ -815,12 +855,25 @@ function BookingMenuContent() {
       return;
     }
 
-    // Create or update menu
+    // Validate exactly 2 different proteins per guest
+    const invalidProteins = guestSelections.filter((g) => !g.protein1 || !g.protein2 || g.protein1 === g.protein2);
+    if (invalidProteins.length > 0) {
+      alert('Each guest must select exactly 2 different proteins. Please fix the highlighted rows.');
+      return;
+    }
+
+    // Create or update menu (derive upgradeProteins from protein1/protein2 for stored consistency)
     const menuId = existingMenu?.id || `menu-${Date.now()}`;
+    const guestSelectionsToSave = guestSelections.map((g) => {
+      const upgradeProteins = [g.protein1, g.protein2].filter((p) =>
+        effectiveUpgrades.some((u) => u.protein === p)
+      );
+      return { ...g, upgradeProteins };
+    });
     const menu: EventMenu = {
       id: menuId,
       bookingId: bookingId,
-      guestSelections: guestSelections,
+      guestSelections: guestSelectionsToSave,
       createdAt: existingMenu?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1027,6 +1080,9 @@ function BookingMenuContent() {
         )}
 
         {/* Guest Selection Table */}
+        <p className="mb-2 text-sm text-text-muted">
+          Each guest must select exactly 2 different proteins.
+        </p>
         <div className="rounded-lg border border-border bg-card  ">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -1047,11 +1103,6 @@ function BookingMenuContent() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Protein 2
                   </th>
-                  {enabledUpgrades.length > 0 && (
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
-                      Upgrades
-                    </th>
-                  )}
                   <th className="px-4 py-3 text-left text-xs font-semibold text-text-primary">
                     Sides
                   </th>
@@ -1065,7 +1116,14 @@ function BookingMenuContent() {
               </thead>
               <tbody className="divide-y divide-border">
                 {guestSelections.map((guest, index) => (
-                  <tr key={guest.id} className="hover:bg-card-elevated">
+                  <tr
+                    key={guest.id}
+                    className={`hover:bg-card-elevated ${
+                      !guest.protein1 || !guest.protein2 || guest.protein1 === guest.protein2
+                        ? 'bg-rose-50/50 dark:bg-rose-950/20'
+                        : ''
+                    }`}
+                  >
                     <td className="px-4 py-4 text-sm font-medium text-text-primary">
                       {index + 1}
                     </td>
@@ -1122,81 +1180,51 @@ function BookingMenuContent() {
                         ))}
                       </select>
                     </td>
-                    {enabledUpgrades.length > 0 && (
-                      <td className="px-4 py-4">
-                        <div className="flex flex-col gap-1 text-xs">
-                          {enabledUpgrades.map((upgrade) => {
-                            const checked = (guest.upgradeProteins ?? []).includes(upgrade.protein);
-                            return (
-                              <label key={upgrade.protein} className="flex cursor-pointer items-center gap-1">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => {
-                                    const current = guest.upgradeProteins ?? [];
-                                    updateGuestSelection(
-                                      index,
-                                      'upgradeProteins',
-                                      checked
-                                        ? current.filter((p) => p !== upgrade.protein)
-                                        : [...current, upgrade.protein]
-                                    );
-                                  }}
-                                  className="h-3 w-3 rounded border-border text-accent"
-                                />
-                                <span className="text-text-secondary">{upgrade.label}</span>
-                                <span className="text-text-muted">(+${upgrade.pricePerPerson})</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </td>
-                    )}
                     <td className="px-4 py-4">
-                      <div className="flex flex-col gap-1 text-xs">
-                        <label className="flex items-center gap-1">
+                      <div className="flex flex-col gap-1 text-xs text-text-muted">
+                        <label className="flex cursor-default items-center gap-1 opacity-70">
                           <input
                             type="checkbox"
                             checked={guest.wantsFriedRice}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsFriedRice', e.target.checked)
-                            }
+                            disabled
+                            readOnly
                             className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-text-secondary">Fried Rice</span>
+                          <span>Fried Rice</span>
+                          <span className="text-text-muted">(included)</span>
                         </label>
-                        <label className="flex items-center gap-1">
+                        <label className="flex cursor-default items-center gap-1 opacity-70">
                           <input
                             type="checkbox"
                             checked={guest.wantsNoodles}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsNoodles', e.target.checked)
-                            }
+                            disabled
+                            readOnly
                             className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-text-secondary">Noodles</span>
+                          <span>Noodles</span>
+                          <span className="text-text-muted">(included)</span>
                         </label>
-                        <label className="flex items-center gap-1">
+                        <label className="flex cursor-default items-center gap-1 opacity-70">
                           <input
                             type="checkbox"
                             checked={guest.wantsSalad}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsSalad', e.target.checked)
-                            }
+                            disabled
+                            readOnly
                             className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-text-secondary">Salad</span>
+                          <span>Salad</span>
+                          <span className="text-text-muted">(included)</span>
                         </label>
-                        <label className="flex items-center gap-1">
+                        <label className="flex cursor-default items-center gap-1 opacity-70">
                           <input
                             type="checkbox"
                             checked={guest.wantsVeggies}
-                            onChange={(e) =>
-                              updateGuestSelection(index, 'wantsVeggies', e.target.checked)
-                            }
+                            disabled
+                            readOnly
                             className="h-3 w-3 rounded border-border text-emerald-600"
                           />
-                          <span className="text-text-secondary">Veggies</span>
+                          <span>Veggies</span>
+                          <span className="text-text-muted">(included)</span>
                         </label>
                       </div>
                     </td>

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { formatCurrency } from '@/lib/moneyRules';
 import type { MenuItem, MenuCategory, MenuCategoryNode, PrivateDinnerTemplate } from '@/lib/menuTypes';
 import { DEFAULT_MENU_ITEMS } from '@/lib/defaultMenuItems';
@@ -1080,7 +1081,19 @@ function ItemCatalogTab() {
 // ─── Page Shell (exported for use in Settings) ─────────────────────────────────
 
 export function MenuSettingsContent() {
-  const [activeTab, setActiveTab] = useState<'template' | 'catalog'>('template');
+  const searchParams = useSearchParams();
+  const subtabFromUrl = searchParams.get('subtab') === 'catalog' ? 'catalog' : 'template';
+  const [activeTab, setActiveTab] = useState<'template' | 'catalog'>(subtabFromUrl);
+  const router = useRouter();
+
+  useEffect(() => {
+    setActiveTab(subtabFromUrl);
+  }, [subtabFromUrl]);
+
+  const setTab = (tab: 'template' | 'catalog') => {
+    setActiveTab(tab);
+    router.replace(`/menus?subtab=${tab}`, { scroll: false });
+  };
 
   return (
     <div className="space-y-6">
@@ -1100,13 +1113,13 @@ export function MenuSettingsContent() {
 
       <div className="flex gap-1 rounded-lg border border-border bg-card-elevated p-1 w-fit">
         <button
-          onClick={() => setActiveTab('template')}
+          onClick={() => setTab('template')}
           className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'template' ? 'bg-accent text-white shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
         >
           Menu Template
         </button>
         <button
-          onClick={() => setActiveTab('catalog')}
+          onClick={() => setTab('catalog')}
           className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'catalog' ? 'bg-accent text-white shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
         >
           Item Catalog
@@ -1119,13 +1132,20 @@ export function MenuSettingsContent() {
 }
 
 export default function MenusPage() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace('/settings?tab=menu');
-  }, [router]);
   return (
-    <div className="flex h-full items-center justify-center p-8">
-      <p className="text-sm text-text-muted">Redirecting to Settings…</p>
+    <div className="min-h-screen p-8">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-text-primary">Menu Settings</h1>
+          <Link
+            href="/"
+            className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm font-medium text-text-secondary hover:bg-card"
+          >
+            ← Dashboard
+          </Link>
+        </div>
+        <MenuSettingsContent />
+      </div>
     </div>
   );
 }

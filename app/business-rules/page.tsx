@@ -6,6 +6,77 @@ import { DEFAULT_RULES, loadRules } from '@/lib/moneyRules';
 import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import type { MoneyRules, StaffingProfile, StaffingRoleEntry } from '@/lib/types';
 
+/** Currency input: $ prefix, step 0.01, round to 2 decimals on blur */
+function CurrencyInput({
+  value,
+  path,
+  updateRules,
+  min = 0,
+  ...rest
+}: {
+  value: number;
+  path: string[];
+  updateRules: (path: string[], value: any) => void;
+  min?: number;
+  className?: string;
+}) {
+  return (
+    <div className="mt-1 flex items-center rounded-md border border-border bg-card-elevated dark:border-border dark:bg-card-elevated">
+      <span className="pl-3 text-text-secondary">$</span>
+      <input
+        type="number"
+        min={min}
+        step="0.01"
+        value={value}
+        onChange={(e) => updateRules(path, parseFloat(e.target.value) || 0)}
+        onBlur={(e) => {
+          const n = parseFloat(e.target.value);
+          if (!Number.isNaN(n)) updateRules(path, Math.round(n * 100) / 100);
+        }}
+        className={`flex-1 border-0 bg-transparent py-2 pr-3 text-text-primary ${rest.className ?? ''}`}
+      />
+    </div>
+  );
+}
+
+/** Percent input: % suffix after the number */
+function PercentInput({
+  value,
+  path,
+  updateRules,
+  min = 0,
+  max = 100,
+  nullable,
+  ...rest
+}: {
+  value: number | null;
+  path: string[];
+  updateRules: (path: string[], value: any) => void;
+  min?: number;
+  max?: number;
+  nullable?: boolean;
+  className?: string;
+}) {
+  const displayVal = value ?? 0;
+  return (
+    <div className="mt-1 flex items-center rounded-md border border-border bg-card-elevated dark:border-border dark:bg-card-elevated">
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step="0.01"
+        value={displayVal}
+        onChange={(e) => {
+          const val = parseFloat(e.target.value);
+          updateRules(path, nullable && (val === 0 || Number.isNaN(val)) ? null : (val || 0));
+        }}
+        className={`flex-1 border-0 bg-transparent py-2 pl-3 pr-1 text-text-primary ${rest.className ?? ''}`}
+      />
+      <span className="pr-3 text-text-secondary">%</span>
+    </div>
+  );
+}
+
 export function BusinessRulesContent() {
   const [rules, setRules] = useState<MoneyRules>(DEFAULT_RULES);
   const { config: templateConfig } = useTemplateConfig();
@@ -64,13 +135,12 @@ export function BusinessRulesContent() {
 
   const ROLE_DISPLAY_LABELS: Record<StaffingRoleEntry, string> = {
     lead: 'Lead Chef',
-    overflow: 'Overflow Chef',
     full: 'Full Chef',
     buffet: 'Buffet Chef',
     assistant: 'Assistant',
   };
 
-  const AVAILABLE_ROLES: StaffingRoleEntry[] = ['lead', 'overflow', 'full', 'buffet', 'assistant'];
+  const AVAILABLE_ROLES: StaffingRoleEntry[] = ['lead', 'full', 'buffet', 'assistant'];
 
   const emptyProfile: StaffingProfile = {
     id: '',
@@ -142,35 +212,6 @@ export function BusinessRulesContent() {
         </p>
       </div>
 
-      {/* Save/Reset Actions */}
-      <div className="mb-8 flex items-center gap-4">
-        <button
-          onClick={handleSave}
-          disabled={!hasChanges}
-          className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-            hasChanges
-              ? 'bg-accent hover:bg-accent-hover'
-              : 'cursor-not-allowed bg-border'
-          }`}
-        >
-          Save Changes
-        </button>
-        <button
-          onClick={handleReset}
-          className="rounded-md border border-border bg-card-elevated px-4 py-2 text-sm font-medium text-text-secondary hover:bg-card"
-        >
-          Reset to Defaults
-        </button>
-        {showSaveSuccess && (
-          <span className="text-sm font-medium text-success">
-            ✓ Saved successfully
-          </span>
-        )}
-        {hasChanges && (
-          <span className="text-sm text-warning">● Unsaved changes</span>
-        )}
-      </div>
-
       {/* Tab Bar */}
       <div className="mb-8 border-b border-border">
         <nav className="-mb-px flex space-x-8">
@@ -199,114 +240,92 @@ export function BusinessRulesContent() {
           <h2 className="mb-6 text-xl font-semibold text-text-primary">
             Pricing
           </h2>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
                 {templateConfig.eventTypes[0]?.label ?? 'Primary Event'} Base Price ($/person)
               </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={rules.pricing.primaryBasePrice}
-                onChange={(e) =>
-                  updateRules(['pricing', 'primaryBasePrice'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="w-28">
+                <CurrencyInput
+                  value={rules.pricing.primaryBasePrice}
+                  path={['pricing', 'primaryBasePrice']}
+                  updateRules={updateRules}
+                />
+              </div>
             </div>
             {templateConfig.eventTypes[1] && (
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
                 {templateConfig.eventTypes[1].label} Base Price ($/person)
               </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={rules.pricing.secondaryBasePrice}
-                onChange={(e) =>
-                  updateRules(['pricing', 'secondaryBasePrice'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="w-28">
+                <CurrencyInput
+                  value={rules.pricing.secondaryBasePrice}
+                  path={['pricing', 'secondaryBasePrice']}
+                  updateRules={updateRules}
+                />
+              </div>
             </div>
             )}
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
                 Premium Add-on Min ($/person)
               </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={rules.pricing.premiumAddOnMin}
-                onChange={(e) =>
-                  updateRules(['pricing', 'premiumAddOnMin'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="w-28">
+                <CurrencyInput
+                  value={rules.pricing.premiumAddOnMin}
+                  path={['pricing', 'premiumAddOnMin']}
+                  updateRules={updateRules}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
                 Premium Add-on Max ($/person)
               </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={rules.pricing.premiumAddOnMax}
-                onChange={(e) =>
-                  updateRules(['pricing', 'premiumAddOnMax'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="w-28">
+                <CurrencyInput
+                  value={rules.pricing.premiumAddOnMax}
+                  path={['pricing', 'premiumAddOnMax']}
+                  updateRules={updateRules}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
                 Default Gratuity (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.pricing.defaultGratuityPercent}
-                onChange={(e) =>
-                  updateRules(['pricing', 'defaultGratuityPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="w-28">
+                <PercentInput
+                  value={rules.pricing.defaultGratuityPercent}
+                  path={['pricing', 'defaultGratuityPercent']}
+                  updateRules={updateRules}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
                 Child Discount (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.pricing.childDiscountPercent}
-                onChange={(e) =>
-                  updateRules(['pricing', 'childDiscountPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="w-28">
+                <PercentInput
+                  value={rules.pricing.childDiscountPercent}
+                  path={['pricing', 'childDiscountPercent']}
+                  updateRules={updateRules}
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
                 Required Deposit (%)
               </label>
-              <p className="mt-0.5 text-xs text-text-muted">Applied when a booking is confirmed.</p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.pricing.defaultDepositPercent}
-                onChange={(e) =>
-                  updateRules(['pricing', 'defaultDepositPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="w-28">
+                <PercentInput
+                  value={rules.pricing.defaultDepositPercent}
+                  path={['pricing', 'defaultDepositPercent']}
+                  updateRules={updateRules}
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -588,15 +607,10 @@ export function BusinessRulesContent() {
               <label className="block text-sm font-medium text-text-secondary">
                 Lead Chef Base (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.privateLabor.leadChefBasePercent}
-                onChange={(e) =>
-                  updateRules(['privateLabor', 'leadChefBasePercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['privateLabor', 'leadChefBasePercent']}
+                updateRules={updateRules}
               />
             </div>
             <div>
@@ -604,63 +618,21 @@ export function BusinessRulesContent() {
                 Lead Chef Cap (% of revenue+gratuity)
               </label>
               <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.privateLabor.leadChefCapPercent ?? 0}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  updateRules(['privateLabor', 'leadChefCapPercent'], val === 0 || isNaN(val) ? null : val);
-                }}
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
-                Overflow Chef Base (%)
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.privateLabor.overflowChefBasePercent}
-                onChange={(e) =>
-                  updateRules(['privateLabor', 'overflowChefBasePercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
-                Overflow Chef Cap (% of revenue+gratuity)
-              </label>
-              <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.privateLabor.overflowChefCapPercent ?? 0}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  updateRules(['privateLabor', 'overflowChefCapPercent'], val === 0 || isNaN(val) ? null : val);
-                }}
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+              <PercentInput
+                value={rules.privateLabor.leadChefCapPercent}
+                path={['privateLabor', 'leadChefCapPercent']}
+                updateRules={updateRules}
+                nullable
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Full Chef Base (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.privateLabor.fullChefBasePercent}
-                onChange={(e) =>
-                  updateRules(['privateLabor', 'fullChefBasePercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['privateLabor', 'fullChefBasePercent']}
+                updateRules={updateRules}
               />
             </div>
             <div>
@@ -668,31 +640,21 @@ export function BusinessRulesContent() {
                 Full Chef Cap (% of revenue+gratuity)
               </label>
               <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.privateLabor.fullChefCapPercent ?? 0}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  updateRules(['privateLabor', 'fullChefCapPercent'], val === 0 || isNaN(val) ? null : val);
-                }}
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+              <PercentInput
+                value={rules.privateLabor.fullChefCapPercent}
+                path={['privateLabor', 'fullChefCapPercent']}
+                updateRules={updateRules}
+                nullable
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Assistant Base (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.privateLabor.assistantBasePercent}
-                onChange={(e) =>
-                  updateRules(['privateLabor', 'assistantBasePercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['privateLabor', 'assistantBasePercent']}
+                updateRules={updateRules}
               />
             </div>
             <div>
@@ -700,16 +662,11 @@ export function BusinessRulesContent() {
                 Assistant Cap (% of revenue+gratuity)
               </label>
               <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.privateLabor.assistantCapPercent ?? 0}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  updateRules(['privateLabor', 'assistantCapPercent'], val === 0 || isNaN(val) ? null : val);
-                }}
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+              <PercentInput
+                value={rules.privateLabor.assistantCapPercent}
+                path={['privateLabor', 'assistantCapPercent']}
+                updateRules={updateRules}
+                nullable
               />
             </div>
           </div>
@@ -727,15 +684,10 @@ export function BusinessRulesContent() {
                 <label className="block text-sm font-medium text-text-secondary">
                   Chef(s) Gratuity Split (%)
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
+                <PercentInput
                   value={rules.privateLabor.chefGratuitySplitPercent}
-                  onChange={(e) =>
-                    updateRules(['privateLabor', 'chefGratuitySplitPercent'], parseFloat(e.target.value))
-                  }
-                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                  path={['privateLabor', 'chefGratuitySplitPercent']}
+                  updateRules={updateRules}
                 />
                 <p className="mt-1 text-xs text-text-muted ">
                   Split equally among all chefs on the event
@@ -745,15 +697,10 @@ export function BusinessRulesContent() {
                 <label className="block text-sm font-medium text-text-secondary">
                   Assistant Gratuity Split (%)
                 </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
+                <PercentInput
                   value={rules.privateLabor.assistantGratuitySplitPercent}
-                  onChange={(e) =>
-                    updateRules(['privateLabor', 'assistantGratuitySplitPercent'], parseFloat(e.target.value))
-                  }
-                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                  path={['privateLabor', 'assistantGratuitySplitPercent']}
+                  updateRules={updateRules}
                 />
               </div>
             </div>
@@ -778,15 +725,10 @@ export function BusinessRulesContent() {
               <label className="block text-sm font-medium text-text-secondary">
                 Chef Base (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.buffetLabor.chefBasePercent}
-                onChange={(e) =>
-                  updateRules(['buffetLabor', 'chefBasePercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['buffetLabor', 'chefBasePercent']}
+                updateRules={updateRules}
               />
             </div>
             <div>
@@ -794,16 +736,11 @@ export function BusinessRulesContent() {
                 Chef Cap (% of revenue+gratuity)
               </label>
               <p className="mt-0.5 text-xs text-text-muted">Leave 0 for no cap.</p>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.buffetLabor.chefCapPercent ?? 0}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  updateRules(['buffetLabor', 'chefCapPercent'], val === 0 || isNaN(val) ? null : val);
-                }}
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+              <PercentInput
+                value={rules.buffetLabor.chefCapPercent}
+                path={['buffetLabor', 'chefCapPercent']}
+                updateRules={updateRules}
+                nullable
               />
             </div>
           </div>
@@ -825,15 +762,10 @@ export function BusinessRulesContent() {
               <label className="block text-sm font-medium text-text-secondary">
                 Food Cost — {templateConfig.eventTypes[0]?.label ?? 'Primary'} (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.costs.primaryFoodCostPercent}
-                onChange={(e) =>
-                  updateRules(['costs', 'primaryFoodCostPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['costs', 'primaryFoodCostPercent']}
+                updateRules={updateRules}
               />
             </div>
             {templateConfig.eventTypes[1] && (
@@ -841,15 +773,10 @@ export function BusinessRulesContent() {
               <label className="block text-sm font-medium text-text-secondary">
                 Food Cost — {templateConfig.eventTypes[1].label} (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.costs.secondaryFoodCostPercent}
-                onChange={(e) =>
-                  updateRules(['costs', 'secondaryFoodCostPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['costs', 'secondaryFoodCostPercent']}
+                updateRules={updateRules}
               />
             </div>
             )}
@@ -857,29 +784,20 @@ export function BusinessRulesContent() {
               <label className="block text-sm font-medium text-text-secondary">
                 Supplies Cost (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.costs.suppliesCostPercent}
-                onChange={(e) =>
-                  updateRules(['costs', 'suppliesCostPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['costs', 'suppliesCostPercent']}
+                updateRules={updateRules}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Transportation Stipend ($)
               </label>
-              <input
-                type="number"
-                min="0"
+              <CurrencyInput
                 value={rules.costs.transportationStipend}
-                onChange={(e) =>
-                  updateRules(['costs', 'transportationStipend'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['costs', 'transportationStipend']}
+                updateRules={updateRules}
               />
             </div>
           </div>
@@ -909,28 +827,20 @@ export function BusinessRulesContent() {
               <label className="block text-sm font-medium text-text-secondary">
                 Base Distance Fee ($)
               </label>
-              <input
-                type="number"
-                min="0"
+              <CurrencyInput
                 value={rules.distance.baseDistanceFee}
-                onChange={(e) =>
-                  updateRules(['distance', 'baseDistanceFee'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['distance', 'baseDistanceFee']}
+                updateRules={updateRules}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Additional Fee per Increment ($)
               </label>
-              <input
-                type="number"
-                min="0"
+              <CurrencyInput
                 value={rules.distance.additionalFeePerIncrement}
-                onChange={(e) =>
-                  updateRules(['distance', 'additionalFeePerIncrement'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['distance', 'additionalFeePerIncrement']}
+                updateRules={updateRules}
               />
             </div>
             <div>
@@ -958,69 +868,115 @@ export function BusinessRulesContent() {
         <>
         {/* PROFIT DISTRIBUTION SECTION */}
         <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
-          <h2 className="mb-6 text-xl font-semibold text-text-primary">
+          <h2 className="mb-2 text-xl font-semibold text-text-primary">
             Profit Distribution
           </h2>
+          <p className="mb-6 text-sm text-text-muted">
+            Paid at the 10th of each month. After expenses are paid, the leftover profit is distributed amongst owners based on their equity %.
+          </p>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Business Retained (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.profitDistribution.businessRetainedPercent}
-                onChange={(e) =>
-                  updateRules(['profitDistribution', 'businessRetainedPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['profitDistribution', 'businessRetainedPercent']}
+                updateRules={updateRules}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Owner Distribution (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.profitDistribution.ownerDistributionPercent}
-                onChange={(e) =>
-                  updateRules(['profitDistribution', 'ownerDistributionPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['profitDistribution', 'ownerDistributionPercent']}
+                updateRules={updateRules}
               />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-text-secondary">
-                Owner A Equity (%)
+                Owners (equity % must total 100)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.profitDistribution.ownerAEquityPercent}
-                onChange={(e) =>
-                  updateRules(['profitDistribution', 'ownerAEquityPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary">
-                Owner B Equity (%)
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={rules.profitDistribution.ownerBEquityPercent}
-                onChange={(e) =>
-                  updateRules(['profitDistribution', 'ownerBEquityPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
-              />
+              <div className="mt-2 space-y-3">
+                {(rules.profitDistribution.owners ?? []).map((owner, idx) => (
+                  <div key={owner.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-card-elevated p-3">
+                    <input
+                      type="text"
+                      placeholder="Owner name"
+                      value={owner.name}
+                      onChange={(e) => {
+                        const next = [...(rules.profitDistribution.owners ?? [])];
+                        next[idx] = { ...next[idx], name: e.target.value };
+                        setRules((prev) => ({
+                          ...prev,
+                          profitDistribution: { ...prev.profitDistribution, owners: next },
+                        }));
+                        setHasChanges(true);
+                      }}
+                      className="min-w-[120px] rounded-md border border-border bg-card px-3 py-2 text-sm text-text-primary"
+                    />
+                    <div className="flex w-24 items-center rounded-md border border-border bg-card">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={owner.equityPercent}
+                        onChange={(e) => {
+                          const next = [...(rules.profitDistribution.owners ?? [])];
+                          next[idx] = { ...next[idx], equityPercent: parseFloat(e.target.value) || 0 };
+                          setRules((prev) => ({
+                            ...prev,
+                            profitDistribution: { ...prev.profitDistribution, owners: next },
+                          }));
+                          setHasChanges(true);
+                        }}
+                        className="w-full border-0 bg-transparent py-2 pl-2 pr-0 text-sm text-text-primary"
+                      />
+                      <span className="pr-2 text-sm text-text-secondary">%</span>
+                    </div>
+                    <span className="text-sm text-text-muted">equity</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = (rules.profitDistribution.owners ?? []).filter((_, i) => i !== idx);
+                        setRules((prev) => ({
+                          ...prev,
+                          profitDistribution: { ...prev.profitDistribution, owners: next },
+                        }));
+                        setHasChanges(true);
+                      }}
+                      className="rounded-md px-2 py-1 text-sm text-danger hover:bg-danger/10"
+                      title="Remove owner"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const owners = rules.profitDistribution.owners ?? [];
+                    const next = [...owners, { id: `owner-${Date.now()}`, name: '', equityPercent: 0 }];
+                    setRules((prev) => ({
+                      ...prev,
+                      profitDistribution: { ...prev.profitDistribution, owners: next },
+                    }));
+                    setHasChanges(true);
+                  }}
+                  className="rounded-md border border-dashed border-border px-3 py-2 text-sm text-text-muted hover:border-accent hover:text-accent"
+                >
+                  + Add owner
+                </button>
+                {((rules.profitDistribution.owners ?? []).reduce((s, o) => s + (o.equityPercent || 0), 0) !== 100) &&
+                  (rules.profitDistribution.owners ?? []).length > 0 && (
+                  <p className="text-sm text-warning">
+                    Equity % total is {((rules.profitDistribution.owners ?? []).reduce((s, o) => s + (o.equityPercent || 0), 0)).toFixed(1)}% — should be 100%.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-text-secondary">
@@ -1043,38 +999,31 @@ export function BusinessRulesContent() {
 
         {/* SAFETY LIMITS SECTION */}
         <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
-          <h2 className="mb-6 text-xl font-semibold text-text-primary">
+          <h2 className="mb-2 text-xl font-semibold text-text-primary">
             Safety Limits (Warnings Only)
           </h2>
+          <p className="mb-6 text-sm text-text-muted">
+            These thresholds are based on industry recommendations. The app will warn you when labor or food cost exceeds these limits as a share of revenue.
+          </p>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Max Total Labor (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.safetyLimits.maxTotalLaborPercent}
-                onChange={(e) =>
-                  updateRules(['safetyLimits', 'maxTotalLaborPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['safetyLimits', 'maxTotalLaborPercent']}
+                updateRules={updateRules}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary">
                 Max Food Cost (%)
               </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
+              <PercentInput
                 value={rules.safetyLimits.maxFoodCostPercent}
-                onChange={(e) =>
-                  updateRules(['safetyLimits', 'maxFoodCostPercent'], parseFloat(e.target.value))
-                }
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary dark:border-border bg-card-elevated text-text-primary"
+                path={['safetyLimits', 'maxFoodCostPercent']}
+                updateRules={updateRules}
               />
             </div>
             <div className="sm:col-span-2">

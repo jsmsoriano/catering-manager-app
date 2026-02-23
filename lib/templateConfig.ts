@@ -66,8 +66,8 @@ export const HIBACHI_TEMPLATE: BusinessTemplateConfig = {
     'profit_summary',
   ],
   eventTypes: [
-    { id: 'private-dinner', label: 'Hibachi Private Dinner', customerLabel: 'Hibachi Private Dinner', pricingSlot: 'primary' },
-    { id: 'buffet',         label: 'Hibachi Buffet',         customerLabel: 'Hibachi Buffet / Full Catering', pricingSlot: 'secondary' },
+    { id: 'private-dinner', label: 'Hibachi Private Event', customerLabel: 'Hibachi Private Event', pricingSlot: 'primary' },
+    { id: 'buffet',         label: 'Catering',               customerLabel: 'Catering', pricingSlot: 'secondary' },
   ],
   occasions: [
     'Birthday Party', 'Corporate Event', 'Wedding', 'Anniversary',

@@ -14,6 +14,7 @@ import type {
 } from '@/lib/staffTypes';
 import {
   ROLE_LABELS,
+  getRoleDisplayLabel,
   STATUS_LABELS,
   DAY_LABELS,
   DEFAULT_WEEKLY_AVAILABILITY,
@@ -24,7 +25,6 @@ import {
 
 const roleColors: Record<StaffRole, string> = {
   'lead-chef': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/20 dark:text-indigo-300',
-  'overflow-chef': 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300',
   'full-chef': 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
   'buffet-chef': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300',
   'assistant': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300',
@@ -112,14 +112,17 @@ function defaultEditForm(): EditForm {
 }
 
 function staffToEditForm(member: StaffMember): EditForm {
+  // Map legacy overflow-chef to full-chef
+  const primaryRole: StaffRole = member.primaryRole === 'overflow-chef' ? 'full-chef' : member.primaryRole;
+  const secondaryRoles: StaffRole[] = member.secondaryRoles.map((r) => (r === 'overflow-chef' ? 'full-chef' : r));
   return {
     name: member.name,
     email: member.email,
     phone: member.phone,
     profilePhoto: member.profilePhoto || '',
     profileSummary: member.profileSummary || '',
-    primaryRole: member.primaryRole,
-    secondaryRoles: [...member.secondaryRoles],
+    primaryRole,
+    secondaryRoles,
     status: member.status,
     isOwner: member.isOwner,
     ownerRole: member.ownerRole,
@@ -594,9 +597,9 @@ export default function StaffPage() {
                       <p className="truncate text-sm font-medium text-text-primary">{member.name}</p>
                       <div className="mt-0.5 flex flex-wrap items-center gap-1">
                         <span
-                          className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-medium ${roleColors[member.primaryRole]}`}
+                          className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-medium ${roleColors[member.primaryRole as StaffRole] ?? roleColors['full-chef']}`}
                         >
-                          {ROLE_LABELS[member.primaryRole]}
+                          {getRoleDisplayLabel(member.primaryRole)}
                         </span>
                         <span
                           className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusColors[member.status]}`}
@@ -650,9 +653,9 @@ export default function StaffPage() {
                   </h2>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${roleColors[editForm.primaryRole]}`}
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${roleColors[editForm.primaryRole as StaffRole] ?? roleColors['full-chef']}`}
                     >
-                      {ROLE_LABELS[editForm.primaryRole]}
+                      {getRoleDisplayLabel(editForm.primaryRole)}
                     </span>
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusColors[editForm.status]}`}

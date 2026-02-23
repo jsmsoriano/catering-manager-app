@@ -145,6 +145,27 @@ export default function InvoicePage() {
   const amountPaid = booking?.amountPaid ?? 0;
   const balanceDue = Math.max(0, total - amountPaid);
 
+  // Per-person breakdown for second page (cost + gratuity)
+  const totalGuests = (booking?.adults ?? 0) + (booking?.children ?? 0);
+  const perPersonBreakdown = useMemo(() => {
+    if (!booking || !snapshot || totalGuests <= 0) return null;
+    const adultSubtotalPer = snapshot.adultBasePrice + (booking.premiumAddOn ?? 0);
+    const childSubtotalPer = snapshot.childBasePrice + (booking.premiumAddOn ?? 0);
+    const adultGratuityPer = adultSubtotalPer * (snapshot.gratuityPercent / 100);
+    const childGratuityPer = childSubtotalPer * (snapshot.gratuityPercent / 100);
+    return {
+      avgSubtotalPer: subtotal / totalGuests,
+      avgGratuityPer: gratuityAmount / totalGuests,
+      avgTotalPer: total / totalGuests,
+      adultSubtotalPer,
+      childSubtotalPer,
+      adultGratuityPer,
+      childGratuityPer,
+      adultTotalPer: adultSubtotalPer + adultGratuityPer,
+      childTotalPer: childSubtotalPer + childGratuityPer,
+    };
+  }, [booking, snapshot, subtotal, gratuityAmount, total, totalGuests]);
+
   if (notFound) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8">
@@ -358,6 +379,124 @@ export default function InvoicePage() {
           <p className="mt-1 text-xs text-gray-500">We look forward to serving you.</p>
         </div>
       </div>
+
+      {/* Page 2: Cost + Gratuity per person (print only as second page) */}
+      {perPersonBreakdown && (
+        <div className="mx-auto mt-0 max-w-2xl overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md print:max-w-none print:rounded-none print:border-0 print:shadow-none print:break-before-page print:mt-0">
+          <div className="h-2 bg-orange-500" />
+          <div className="px-8 py-8 sm:px-10">
+            <p className="text-xs font-bold uppercase tracking-widest text-orange-500">
+              Invoice #{booking.id.slice(-8).toUpperCase()} — Page 2
+            </p>
+            <h2 className="mt-2 text-xl font-bold text-gray-900">
+              Cost + Gratuity Per Person
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              {booking.customerName} · {formattedDate} · {totalGuests} guest{totalGuests !== 1 ? 's' : ''}
+            </p>
+
+            {/* Average per person */}
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-gray-700">Per person (average)</h3>
+              <table className="mt-2 w-full max-w-sm text-sm">
+                <tbody className="divide-y divide-gray-100">
+                  <tr>
+                    <td className="py-2 text-gray-600">Subtotal</td>
+                    <td className="py-2 text-right font-medium text-gray-900">
+                      {formatCurrency(perPersonBreakdown.avgSubtotalPer)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 text-gray-600">Gratuity ({snapshot.gratuityPercent}%)</td>
+                    <td className="py-2 text-right font-medium text-gray-900">
+                      {formatCurrency(perPersonBreakdown.avgGratuityPer)}
+                    </td>
+                  </tr>
+                  <tr className="border-t border-gray-200">
+                    <td className="py-2 font-semibold text-gray-900">Total per person</td>
+                    <td className="py-2 text-right font-bold text-gray-900">
+                      {formatCurrency(perPersonBreakdown.avgTotalPer)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* By guest type (when both adults and children) */}
+            {(booking.children > 0 || booking.adults > 0) && (
+              <div className="mt-8">
+                <h3 className="text-sm font-semibold text-gray-700">By guest type</h3>
+                <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                  {booking.adults > 0 && (
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-sm font-medium text-gray-900">
+                        Adult{booking.adults !== 1 ? 's' : ''} ({booking.adults})
+                      </p>
+                      <table className="mt-2 w-full text-sm">
+                        <tbody className="divide-y divide-gray-100">
+                          <tr>
+                            <td className="py-1 text-gray-600">Subtotal per person</td>
+                            <td className="py-1 text-right text-gray-900">
+                              {formatCurrency(perPersonBreakdown.adultSubtotalPer)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1 text-gray-600">Gratuity per person</td>
+                            <td className="py-1 text-right text-gray-900">
+                              {formatCurrency(perPersonBreakdown.adultGratuityPer)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1 font-medium text-gray-900">Total per person</td>
+                            <td className="py-1 text-right font-semibold text-gray-900">
+                              {formatCurrency(perPersonBreakdown.adultTotalPer)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {booking.children > 0 && (
+                    <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-sm font-medium text-gray-900">
+                        Child{booking.children !== 1 ? 'ren' : ''} ({booking.children})
+                      </p>
+                      <table className="mt-2 w-full text-sm">
+                        <tbody className="divide-y divide-gray-100">
+                          <tr>
+                            <td className="py-1 text-gray-600">Subtotal per person</td>
+                            <td className="py-1 text-right text-gray-900">
+                              {formatCurrency(perPersonBreakdown.childSubtotalPer)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1 text-gray-600">Gratuity per person</td>
+                            <td className="py-1 text-right text-gray-900">
+                              {formatCurrency(perPersonBreakdown.childGratuityPer)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1 font-medium text-gray-900">Total per person</td>
+                            <td className="py-1 text-right font-semibold text-gray-900">
+                              {formatCurrency(perPersonBreakdown.childTotalPer)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                {(booking.distanceFee ?? 0) > 0 && (
+                  <p className="mt-3 text-xs text-gray-500">
+                    Travel fee ({formatCurrency(booking.distanceFee!)}) is a one-time event fee and is not included in per-person amounts above.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="h-2 bg-orange-500" />
+        </div>
+      )}
     </div>
   );
 }

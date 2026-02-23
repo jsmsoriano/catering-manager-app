@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { useFeatureFlags } from '@/lib/useFeatureFlags';
 import { useTheme } from 'next-themes';
 import {
   DndContext,
@@ -221,12 +223,19 @@ function useDraggableCard(id: string) {
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function PipelinePage() {
+  const router = useRouter();
+  const { flags } = useFeatureFlags();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const justDraggedRef = useRef(false);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!flags.pipeline) router.replace('/bookings');
+  }, [flags.pipeline, router]);
+
   const darkHeader = mounted && resolvedTheme === 'light';
 
   const loadBookings = useMemo(() => {

@@ -301,7 +301,7 @@ const SETTINGS_SECTIONS = [
   },
   {
     name: 'Menu Settings',
-    path: '/settings?tab=menu',
+    path: '/menus',
     description: 'Menu template (standard inclusions, base proteins, upgrade add-ons) and item catalog. Configure once; all guest menus and pricing use these settings.',
   },
   {

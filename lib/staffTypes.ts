@@ -4,8 +4,7 @@
 
 export type StaffRole =
   | 'lead-chef'      // Lead chef for private events
-  | 'overflow-chef'  // Overflow chef (16-30 guests)
-  | 'full-chef'      // Full chef (31+ guests)
+  | 'full-chef'      // Full chef (16+ guests, second chef onward)
   | 'buffet-chef'    // Buffet event chef
   | 'assistant'      // Assistant for private events
   | 'contractor';    // Hired contractor/freelancer
@@ -96,12 +95,16 @@ export interface StaffAssignment {
 // Role labels for display
 export const ROLE_LABELS: Record<StaffRole, string> = {
   'lead-chef': 'Lead Chef',
-  'overflow-chef': 'Overflow Chef',
   'full-chef': 'Full Chef',
   'buffet-chef': 'Buffet Chef',
   'assistant': 'Assistant',
   'contractor': 'Contractor',
 };
+
+/** Display label for a role; maps legacy 'overflow-chef' to 'Full Chef'. */
+export function getRoleDisplayLabel(role: string): string {
+  return ROLE_LABELS[role as StaffRole] ?? (role === 'overflow-chef' ? 'Full Chef' : role);
+}
 
 // Status labels for display
 export const STATUS_LABELS: Record<StaffStatus, string> = {
@@ -147,7 +150,6 @@ import type { ChefRole } from './types';
 
 export const CHEF_ROLE_TO_STAFF_ROLE: Record<ChefRole | 'assistant', StaffRole> = {
   lead: 'lead-chef',
-  overflow: 'overflow-chef',
   full: 'full-chef',
   buffet: 'buffet-chef',
   assistant: 'assistant',
@@ -155,7 +157,6 @@ export const CHEF_ROLE_TO_STAFF_ROLE: Record<ChefRole | 'assistant', StaffRole> 
 
 export const STAFF_ROLE_TO_CHEF_ROLE: Record<string, ChefRole | 'assistant'> = {
   'lead-chef': 'lead',
-  'overflow-chef': 'overflow',
   'full-chef': 'full',
   'buffet-chef': 'buffet',
   'assistant': 'assistant',
