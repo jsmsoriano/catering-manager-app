@@ -6,7 +6,7 @@ import { Bars3Icon } from '@heroicons/react/24/outline';
 import Sidebar from './Sidebar';
 import { useTemplateConfig } from '@/lib/useTemplateConfig';
 
-const AUTH_PATHS = ['/login', '/signup', '/auth'];
+const AUTH_PATHS = ['/login', '/signup', '/auth', '/proposal'];
 
 function isAuthPath(pathname: string): boolean {
   return AUTH_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'));

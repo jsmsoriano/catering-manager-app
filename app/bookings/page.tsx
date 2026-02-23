@@ -9,22 +9,21 @@ import {
   ChevronDownIcon,
   ClipboardDocumentListIcon,
   DocumentTextIcon,
-  EnvelopeIcon,
   LockClosedIcon,
   LockOpenIcon,
   PencilSquareIcon,
   ShoppingCartIcon,
   TableCellsIcon,
+  UsersIcon,
   ViewColumnsIcon,
 } from '@heroicons/react/24/outline';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
-import { formatPhone, isValidPhone } from '@/lib/phoneUtils';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import { isModuleEnabled, getPricingSlot } from '@/lib/templateConfig';
-import type { Booking, BookingStatus, BookingFormData, BookingPricingSnapshot, PaymentStatus } from '@/lib/bookingTypes';
+import type { Booking, BookingStatus, PaymentStatus } from '@/lib/bookingTypes';
 import type { EventMenu, GuestMenuSelection } from '@/lib/menuTypes';
 import type { EventFinancials } from '@/lib/types';
 import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
@@ -55,7 +54,6 @@ import {
 } from '@/lib/shoppingStorage';
 const CHEF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
-  overflow: 'Overflow Chef',
   full: 'Full Chef',
   buffet: 'Buffet Chef',
   assistant: 'Assistant',
@@ -212,9 +210,6 @@ export default function BookingsPage() {
   const openedBookingFromQueryRef = useRef<string | null>(null);
   const rules = useMoneyRules();
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [filterStatuses, setFilterStatuses] = useState<BookingStatus[]>([]);
   const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -247,45 +242,18 @@ export default function BookingsPage() {
   const statusFilterRef = useRef<HTMLDivElement>(null);
 
   const { config: templateConfig } = useTemplateConfig();
-  const [formData, setFormData] = useState<BookingFormData>({
-    eventType: 'private-dinner',
-    eventDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-    eventTime: '18:00',
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    adults: 15,
-    children: 0,
-    location: '',
-    distanceMiles: 10,
-    premiumAddOn: 0,
-    notes: '',
-    discountType: undefined,
-    discountValue: undefined,
-    staffingProfileId: undefined,
-    pricingMode: undefined,
-    businessType: undefined,
-  });
 
-  // Pre-fill from "Book Again" on customers page
+  // Redirect to new event page when "Book Again" prefill is present (from customers page)
   useEffect(() => {
     const raw = sessionStorage.getItem('bookingPrefill');
     if (!raw) return;
-    sessionStorage.removeItem('bookingPrefill');
     try {
-      const prefill = JSON.parse(raw) as { customerName?: string; customerPhone?: string; customerEmail?: string };
-      setFormData((prev) => ({
-        ...prev,
-        customerName:  prefill.customerName  ?? prev.customerName,
-        customerEmail: prefill.customerEmail ?? prev.customerEmail,
-        customerPhone: prefill.customerPhone ?? prev.customerPhone,
-      }));
-      setIsEditing(false);
-      setShowModal(true);
+      JSON.parse(raw);
+      router.push('/bookings/new');
     } catch {
-      // malformed prefill — ignore
+      sessionStorage.removeItem('bookingPrefill');
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [router]);
 
   // Load bookings
   useEffect(() => {
@@ -545,227 +513,13 @@ export default function BookingsPage() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const bookingId = new URLSearchParams(window.location.search).get('bookingId');
-    if (!bookingId) return;
-    if (openedBookingFromQueryRef.current === bookingId) return;
-
+    if (!bookingId || openedBookingFromQueryRef.current === bookingId) return;
     const booking = bookings.find((entry) => entry.id === bookingId);
     if (!booking) return;
-
     openedBookingFromQueryRef.current = bookingId;
-    setSelectedBooking(booking);
-    setIsEditing(true);
-    setFormData({
-      eventType: booking.eventType,
-      eventDate: booking.eventDate,
-      eventTime: booking.eventTime,
-      customerName: booking.customerName,
-      customerEmail: booking.customerEmail,
-      customerPhone: booking.customerPhone,
-      adults: booking.adults,
-      children: booking.children,
-      location: booking.location,
-      distanceMiles: booking.distanceMiles,
-      premiumAddOn: booking.premiumAddOn,
-      notes: booking.notes,
-      serviceStatus: getBookingServiceStatus(booking),
-      discountType: booking.discountType,
-      discountValue: booking.discountValue,
-      staffAssignments: booking.staffAssignments,
-      staffingProfileId: booking.staffingProfileId,
-      pricingMode: booking.pricingMode ?? templateConfig.pricingModeDefault,
-      businessType: booking.businessType ?? templateConfig.businessType,
-    });
-    setShowModal(true);
-  }, [bookings, templateConfig.pricingModeDefault, templateConfig.businessType]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const validationErrors: string[] = [];
-    if (formData.customerPhone && !isValidPhone(formData.customerPhone)) {
-      validationErrors.push('Phone number must be in (xxx)-xxx-xxxx format.');
-    }
-    const duplicateStaffIds = getDuplicateAssignedStaffIds(formData.staffAssignments);
-    if (duplicateStaffIds.length > 0) {
-      const duplicateNames = duplicateStaffIds.map((staffId) => staffById.get(staffId)?.name ?? staffId);
-      validationErrors.push(`Duplicate staff assignments are not allowed: ${duplicateNames.join(', ')}`);
-    }
-
-    const assignedStaffIds = getUniqueAssignedStaffIds(formData.staffAssignments);
-    const conflicts = findStaffConflicts(
-      formData.eventDate,
-      formData.eventTime,
-      assignedStaffIds,
-      selectedBooking?.id
-    );
-    if (conflicts.length > 0) {
-      const conflictLines = conflicts.map((conflict) =>
-        `- ${conflict.staffName} is already assigned to ${conflict.conflictingBooking.customerName} (${conflict.conflictingBooking.eventDate} ${conflict.conflictingBooking.eventTime})`
-      );
-      validationErrors.push(`Staff double-booking conflict detected:\n${conflictLines.join('\n')}`);
-    }
-
-    if (validationErrors.length > 0) {
-      alert(`Please fix the following before saving:\n\n${validationErrors.join('\n\n')}`);
-      return;
-    }
-
-    const formPricingSlot = getPricingSlot(templateConfig.eventTypes, formData.eventType);
-    const existingPricingSlot = selectedBooking
-      ? getPricingSlot(templateConfig.eventTypes, selectedBooking.eventType)
-      : formPricingSlot;
-    const shouldPreserveMenuPricing = formPricingSlot === 'primary' && existingPricingSlot === 'primary';
-    const preservedMenuSnapshot = shouldPreserveMenuPricing
-      ? selectedBooking?.menuPricingSnapshot
-      : undefined;
-    const preservedMenuId = shouldPreserveMenuPricing ? selectedBooking?.menuId : undefined;
-
-    const financials = calculateEventFinancials(
-      {
-        adults: formData.adults,
-        children: formData.children,
-        eventType: formData.eventType,
-        eventDate: new Date(formData.eventDate),
-        distanceMiles: formData.distanceMiles,
-        premiumAddOn: formData.premiumAddOn,
-        subtotalOverride: preservedMenuSnapshot?.subtotalOverride,
-        foodCostOverride: preservedMenuSnapshot?.foodCostOverride,
-        staffingProfileId: formData.staffingProfileId,
-        pricingSlot: getPricingSlot(templateConfig.eventTypes, formData.eventType),
-      },
-      rules
-    );
-
-    const pricingSlot = getPricingSlot(templateConfig.eventTypes, formData.eventType);
-    const adultBasePrice = pricingSlot === 'primary'
-      ? rules.pricing.primaryBasePrice
-      : rules.pricing.secondaryBasePrice;
-    const pricingSnapshot: BookingPricingSnapshot = {
-      adultBasePrice,
-      childBasePrice: adultBasePrice * (1 - rules.pricing.childDiscountPercent / 100),
-      gratuityPercent: rules.pricing.defaultGratuityPercent,
-      capturedAt: new Date().toISOString(),
-    };
-
-    // Apply discount to revenue (subtotal) only; gratuity and distance fee unchanged
-    let subtotalAfterDiscount = financials.subtotal;
-    const discountType = formData.discountType;
-    const discountValue = formData.discountValue ?? 0;
-    if (discountType === 'percent' && Number.isFinite(discountValue) && discountValue > 0) {
-      const discountAmount = Math.round(financials.subtotal * (discountValue / 100) * 100) / 100;
-      subtotalAfterDiscount = Math.max(0, financials.subtotal - discountAmount);
-    } else if (discountType === 'amount' && Number.isFinite(discountValue) && discountValue > 0) {
-      subtotalAfterDiscount = Math.max(0, financials.subtotal - discountValue);
-    }
-    const totalWithDiscount = Math.round((subtotalAfterDiscount + financials.gratuity + financials.distanceFee) * 100) / 100;
-
-    const serviceStatus = formData.serviceStatus ?? (selectedBooking ? getBookingServiceStatus(selectedBooking) : 'pending');
-    const baseBooking = normalizeBookingWorkflowFields({
-      id: selectedBooking?.id || `booking-${Date.now()}`,
-      eventType: formData.eventType,
-      eventDate: formData.eventDate,
-      eventTime: formData.eventTime,
-      customerName: formData.customerName,
-      customerEmail: formData.customerEmail,
-      customerPhone: formData.customerPhone,
-      adults: formData.adults,
-      children: formData.children,
-      location: formData.location,
-      distanceMiles: formData.distanceMiles,
-      premiumAddOn: formData.premiumAddOn,
-      subtotal: subtotalAfterDiscount,
-      gratuity: financials.gratuity,
-      distanceFee: financials.distanceFee,
-      total: totalWithDiscount,
-      discountType: discountType && (discountValue > 0) ? discountType : undefined,
-      discountValue: discountType && discountValue > 0 ? discountValue : undefined,
-      status: serviceStatus,
-      serviceStatus,
-      paymentStatus: selectedBooking?.paymentStatus,
-      depositPercent: selectedBooking?.depositPercent,
-      depositAmount: selectedBooking?.depositAmount,
-      depositDueDate: selectedBooking?.depositDueDate,
-      balanceDueDate: selectedBooking?.balanceDueDate,
-      amountPaid: selectedBooking?.amountPaid,
-      balanceDueAmount: selectedBooking?.balanceDueAmount,
-      confirmedAt: selectedBooking?.confirmedAt,
-      prepPurchaseByDate: selectedBooking?.prepPurchaseByDate,
-      notes: formData.notes,
-      staffAssignments: formData.staffAssignments,
-      staffingProfileId: formData.staffingProfileId,
-      menuId: preservedMenuId,
-      menuPricingSnapshot: preservedMenuSnapshot,
-      pricingSnapshot,
-      reconciliationId: selectedBooking?.reconciliationId,
-      pricingMode: formData.pricingMode ?? templateConfig.pricingModeDefault,
-      businessType: formData.businessType ?? templateConfig.businessType,
-      createdAt: selectedBooking?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    const booking = normalizeBookingWorkflowFields(
-      serviceStatus === 'confirmed' || serviceStatus === 'completed'
-        ? {
-            ...baseBooking,
-            depositAmount:
-              Math.round(
-                baseBooking.total * ((baseBooking.depositPercent ?? 30) / 100) * 100
-              ) / 100,
-          }
-        : baseBooking
-    );
-
-    if (isEditing && selectedBooking) {
-      saveBookings(bookings.map((b) => (b.id === selectedBooking.id ? booking : b)));
-    } else {
-      saveBookings([...bookings, booking]);
-    }
-
-    setShowModal(false);
-    resetForm();
-  };
-
-  const resetForm = () => {
-    setSelectedBooking(null);
-    setIsEditing(false);
-    setFormData({
-      eventType: 'private-dinner',
-      eventDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-      eventTime: '18:00',
-      customerName: '',
-      customerEmail: '',
-      customerPhone: '',
-      adults: 15,
-      children: 0,
-      location: '',
-      distanceMiles: 10,
-      premiumAddOn: 0,
-      notes: '',
-      serviceStatus: undefined,
-      discountType: undefined,
-      discountValue: undefined,
-      staffAssignments: undefined,
-      staffingProfileId: undefined,
-      pricingMode: templateConfig.pricingModeDefault,
-      businessType: templateConfig.businessType,
-    });
-  };
-
-  const handleDelete = () => {
-    if (selectedBooking && confirm(`Delete booking for ${selectedBooking.customerName}?`)) {
-      const remainingLaborPayments = loadLaborPayments().filter((record) => record.bookingId !== selectedBooking.id);
-      saveLaborPayments(remainingLaborPayments);
-      const remainingCustomerPayments = loadCustomerPayments().filter(
-        (record) => record.bookingId !== selectedBooking.id
-      );
-      saveCustomerPayments(remainingCustomerPayments);
-      removeShoppingListForBooking(selectedBooking.id);
-      saveBookings(bookings.filter((b) => b.id !== selectedBooking.id));
-      setShowModal(false);
-      resetForm();
-    }
-  };
+    router.replace(`/bookings/${bookingId}`);
+  }, [bookings, router]);
 
   const updateBookingStatus = (booking: Booking, newStatus: BookingStatus) => {
     const now = new Date().toISOString();
@@ -1078,7 +832,6 @@ export default function BookingsPage() {
           : b
       )
     );
-    if (selectedBooking?.id === paymentModalBooking.id) setSelectedBooking(updatedBooking);
     setPaymentModalBooking(null);
     // Show verification popup before sending receipt (payment only, not refunds)
     if (!isRefund && updatedBooking.customerEmail) {
@@ -1097,146 +850,6 @@ export default function BookingsPage() {
       setSortField(field);
       setSortDirection('asc');
     }
-  };
-
-  // Compute staffing plan from current form data
-  const currentFinancials = useMemo(() => {
-    if (!formData.adults) return null;
-    const curPricingSlot = getPricingSlot(templateConfig.eventTypes, formData.eventType);
-    const selPricingSlot = selectedBooking
-      ? getPricingSlot(templateConfig.eventTypes, selectedBooking.eventType)
-      : curPricingSlot;
-    const activeMenuSnapshot =
-      curPricingSlot === 'primary' && selPricingSlot === 'primary'
-        ? selectedBooking?.menuPricingSnapshot
-        : undefined;
-
-    return calculateEventFinancials(
-      {
-        adults: formData.adults,
-        children: formData.children,
-        eventType: formData.eventType,
-        eventDate: new Date(formData.eventDate),
-        distanceMiles: formData.distanceMiles,
-        premiumAddOn: formData.premiumAddOn,
-        subtotalOverride: activeMenuSnapshot?.subtotalOverride,
-        foodCostOverride: activeMenuSnapshot?.foodCostOverride,
-        staffingProfileId: formData.staffingProfileId,
-        pricingSlot: curPricingSlot,
-      },
-      rules
-    );
-  }, [formData.eventType, formData.adults, formData.children, formData.distanceMiles, formData.premiumAddOn, formData.eventDate, formData.staffingProfileId, selectedBooking, rules, templateConfig.eventTypes]);
-
-  const selectedStaffIdsInForm = useMemo(
-    () => new Set(getUniqueAssignedStaffIds(formData.staffAssignments)),
-    [formData.staffAssignments]
-  );
-
-  // Get available staff for a given ChefRole: must match role (primary or secondary), and not double-booked on another event.
-  // We do not filter by calendar availability here so that lead chef and assistant can always be assigned; double-booking is still blocked.
-  // If currentlyAssignedStaffId is set, that staff is always included when they match the role and are active.
-  const getAvailableStaff = (chefRole: string, currentlyAssignedStaffId?: string): StaffRecord[] => {
-    const requiredStaffRole = CHEF_ROLE_TO_STAFF_ROLE[chefRole as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
-    if (!requiredStaffRole) return [];
-    const eventDate = formData.eventDate;
-    const eventTime = formData.eventTime ?? '18:00';
-    const excludeBookingId = selectedBooking?.id;
-
-    const roleMatches = (s: StaffRecord) =>
-      s.primaryRole === requiredStaffRole || (s.secondaryRoles ?? []).includes(requiredStaffRole);
-
-    const available = staffRecords.filter((s) => {
-      if (s.status !== 'active') return false;
-      if (!roleMatches(s)) return false;
-      // Only exclude if already assigned to another booking at same date/time (double-book); do not filter by calendar availability
-      const conflicts = findStaffConflicts(eventDate, eventTime, [s.id], excludeBookingId);
-      if (conflicts.length > 0) return false;
-      return true;
-    });
-
-    // Per business rules: keep currently assigned staff in the list so user can retain or change the assignment
-    if (currentlyAssignedStaffId) {
-      const current = staffRecords.find((s) => s.id === currentlyAssignedStaffId);
-      if (current && current.status === 'active' && roleMatches(current) && !available.some((a) => a.id === current.id)) {
-        return [...available, current];
-      }
-    }
-    return available;
-  };
-
-  // Find the assignment for a staffing plan position (handles duplicate roles)
-  const findAssignmentForPosition = (positionIndex: number): StaffAssignment | undefined => {
-    if (!currentFinancials || !formData.staffAssignments) return undefined;
-    const position = currentFinancials.staffingPlan.staff[positionIndex];
-    const staffRole = CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
-
-    // Count how many earlier positions have the same role
-    let sameRoleIndex = 0;
-    for (let i = 0; i < positionIndex; i++) {
-      if (currentFinancials.staffingPlan.staff[i].role === position.role) sameRoleIndex++;
-    }
-
-    // Find the nth assignment with this role
-    let matchCount = 0;
-    return formData.staffAssignments.find((a) => {
-      if (a.role === staffRole) {
-        if (matchCount === sameRoleIndex) return true;
-        matchCount++;
-      }
-      return false;
-    });
-  };
-
-  // Update a staff assignment for a given position index
-  const updateStaffAssignment = (positionIndex: number, staffId: string) => {
-    if (!currentFinancials) return;
-    const position = currentFinancials.staffingPlan.staff[positionIndex];
-    const staffRole = CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE];
-    const estimatedPay = currentFinancials.laborCompensation[positionIndex]?.finalPay || 0;
-
-    // Count how many earlier positions have the same role
-    let sameRoleIndex = 0;
-    for (let i = 0; i < positionIndex; i++) {
-      if (currentFinancials.staffingPlan.staff[i].role === position.role) sameRoleIndex++;
-    }
-
-    const assignments = [...(formData.staffAssignments || [])];
-
-    // Find existing assignment for this position
-    let matchCount = 0;
-    const existingIdx = assignments.findIndex((a) => {
-      if (a.role === staffRole) {
-        if (matchCount === sameRoleIndex) return true;
-        matchCount++;
-      }
-      return false;
-    });
-
-    if (!staffId) {
-      if (existingIdx >= 0) assignments.splice(existingIdx, 1);
-    } else {
-      const duplicateAssignmentIdx = assignments.findIndex(
-        (assignment, idx) => idx !== existingIdx && assignment.staffId === staffId
-      );
-      if (duplicateAssignmentIdx >= 0) {
-        const staffName = staffById.get(staffId)?.name ?? 'This staff member';
-        alert(`${staffName} is already assigned to another position for this booking.`);
-        return;
-      }
-
-      const newAssignment: StaffAssignment = { staffId, role: staffRole, estimatedPay, status: 'scheduled' };
-      if (existingIdx >= 0) {
-        assignments[existingIdx] = newAssignment;
-      } else {
-        assignments.push(newAssignment);
-      }
-    }
-
-    setFormData({
-      ...formData,
-      staffAssignments: assignments.length > 0 ? assignments : undefined,
-    });
   };
 
   // Events table: text-only (no pill) for Status and Payment columns
@@ -1281,13 +894,6 @@ export default function BookingsPage() {
     }
   }, [eventSummaryBooking?.id, eventSummaryBooking?.menuId]);
 
-  const selectedBookingPayments = useMemo(() => {
-    if (!selectedBooking) return [];
-    return customerPayments
-      .filter((payment) => payment.bookingId === selectedBooking.id)
-      .sort((a, b) => `${b.paymentDate}-${b.recordedAt}`.localeCompare(`${a.paymentDate}-${a.recordedAt}`));
-  }, [customerPayments, selectedBooking]);
-
   const PIPELINE_COLUMNS = [
     { status: 'pending',   label: 'Pending',   colorClass: 'border-amber-400/40',  headerClass: 'bg-amber-400/10 text-amber-600 dark:text-amber-400' },
     { status: 'confirmed', label: 'Confirmed', colorClass: 'border-info/40',       headerClass: 'bg-info/10 text-info' },
@@ -1308,15 +914,12 @@ export default function BookingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              resetForm();
-              setShowModal(true);
-            }}
+          <Link
+            href="/bookings/new"
             className="rounded-md bg-accent px-4 py-2 text-white hover:bg-accent-hover"
           >
             + New Event
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -1517,33 +1120,9 @@ export default function BookingsPage() {
 
                 const openModalForDay = () => {
                   if (dayBookings.length > 0) {
-                    const booking = dayBookings[0];
-                    setSelectedBooking(booking);
-                    setIsEditing(true);
-                    setFormData({
-                      eventType: booking.eventType,
-                      eventDate: booking.eventDate,
-                      eventTime: booking.eventTime,
-                      customerName: booking.customerName,
-                      customerEmail: booking.customerEmail,
-                      customerPhone: booking.customerPhone,
-                      adults: booking.adults,
-                      children: booking.children,
-                      location: booking.location,
-                      distanceMiles: booking.distanceMiles,
-                      premiumAddOn: booking.premiumAddOn,
-                      notes: booking.notes,
-                      serviceStatus: getBookingServiceStatus(booking),
-                      discountType: booking.discountType,
-                      discountValue: booking.discountValue,
-                      staffAssignments: booking.staffAssignments,
-                      staffingProfileId: booking.staffingProfileId,
-                    });
-                    setShowModal(true);
+                    router.push(`/bookings/${dayBookings[0].id}`);
                   } else {
-                    resetForm();
-                    setFormData((prev) => ({ ...prev, eventDate: format(day, 'yyyy-MM-dd') }));
-                    setShowModal(true);
+                    router.push(`/bookings/new?date=${format(day, 'yyyy-MM-dd')}`);
                   }
                 };
 
@@ -1577,28 +1156,7 @@ export default function BookingsPage() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedBooking(booking);
-                            setIsEditing(true);
-                            setFormData({
-                              eventType: booking.eventType,
-                              eventDate: booking.eventDate,
-                              eventTime: booking.eventTime,
-                              customerName: booking.customerName,
-                              customerEmail: booking.customerEmail,
-                              customerPhone: booking.customerPhone,
-                              adults: booking.adults,
-                              children: booking.children,
-                              location: booking.location,
-                              distanceMiles: booking.distanceMiles,
-                              premiumAddOn: booking.premiumAddOn,
-                              notes: booking.notes,
-                              serviceStatus: getBookingServiceStatus(booking),
-                              discountType: booking.discountType,
-                              discountValue: booking.discountValue,
-                              staffAssignments: booking.staffAssignments,
-                              staffingProfileId: booking.staffingProfileId,
-                            });
-                            setShowModal(true);
+                            router.push(`/bookings/${booking.id}`);
                           }}
                           className={`w-full rounded border-l-2 pl-1 py-0.5 text-left text-xs ${
                             statusBorderColors[getBookingServiceStatus(booking)]
@@ -1678,11 +1236,7 @@ export default function BookingsPage() {
                         <button
                           key={booking.id}
                           type="button"
-                          onClick={() => {
-                            setSelectedBooking(nb);
-                            setIsEditing(true);
-                            setShowModal(true);
-                          }}
+                          onClick={() => router.push(`/bookings/${booking.id}`)}
                           className="w-full rounded-lg border border-border bg-card-elevated p-3 text-left shadow-sm transition-all hover:border-accent/50 hover:shadow-md"
                         >
                           <p className="truncate text-sm font-semibold text-text-primary">
@@ -1947,6 +1501,16 @@ export default function BookingsPage() {
                                   View Invoice
                                 </Link>
                               )}
+                              <Link
+                                href={`/bookings/${booking.id}/beo`}
+                                target="_blank"
+                                onClick={closeActionsDropdown}
+                                className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary hover:bg-card-elevated"
+                                role="menuitem"
+                              >
+                                <ClipboardDocumentListIcon className="h-4 w-4 shrink-0" />
+                                Print BEO
+                              </Link>
                               {(getBookingServiceStatus(booking) === 'completed' || booking.reconciliationId) && (
                                 <Link
                                   href={`/bookings/reconcile?bookingId=${booking.id}`}
@@ -1979,20 +1543,6 @@ export default function BookingsPage() {
                                         Record Payment
                                       </button>
                                     )}
-                                  {booking.customerEmail && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        closeActionsDropdown();
-                                        setEmailVerifyPending({ type: 'confirmation', booking });
-                                      }}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
-                                      role="menuitem"
-                                    >
-                                      <EnvelopeIcon className="h-4 w-4 shrink-0" />
-                                      Send Confirmation
-                                    </button>
-                                  )}
                                   {booking.eventType === 'private-dinner' && (
                                     <Link
                                       href={`/bookings/menu?bookingId=${booking.id}`}
@@ -2019,28 +1569,7 @@ export default function BookingsPage() {
                                     type="button"
                                     onClick={() => {
                                       closeActionsDropdown();
-                                      setSelectedBooking(booking);
-                                      setIsEditing(true);
-                                      setFormData({
-                                        eventType: booking.eventType,
-                                        eventDate: booking.eventDate,
-                                        eventTime: booking.eventTime,
-                                        customerName: booking.customerName,
-                                        customerEmail: booking.customerEmail,
-                                        customerPhone: booking.customerPhone,
-                                        adults: booking.adults,
-                                        children: booking.children,
-                                        location: booking.location,
-                                        distanceMiles: booking.distanceMiles,
-                                        premiumAddOn: booking.premiumAddOn,
-                                        notes: booking.notes,
-                                        serviceStatus: getBookingServiceStatus(booking),
-                                        discountType: booking.discountType,
-                                        discountValue: booking.discountValue,
-                                        staffAssignments: booking.staffAssignments,
-                                        staffingProfileId: booking.staffingProfileId,
-                                      });
-                                      setShowModal(true);
+                                      router.push(`/bookings/${booking.id}`);
                                     }}
                                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-card-elevated"
                                     role="menuitem"
@@ -2084,516 +1613,6 @@ export default function BookingsPage() {
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-6 ">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-text-primary">
-                {isEditing ? 'Edit Event' : 'New Event'}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  resetForm();
-                }}
-                className="text-text-muted hover:text-text-primary"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Customer Info */}
-              <div>
-                <h3 className="mb-4 font-semibold text-text-primary">
-                  Customer Information
-                </h3>
-                <p className="mb-3 text-xs text-text-muted">
-                  Enter the primary contact details used for confirmations, payment follow-up, and event updates.
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Customer Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.customerName}
-                      onChange={(e) =>
-                        setFormData({ ...formData, customerName: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Email *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.customerEmail}
-                      onChange={(e) =>
-                        setFormData({ ...formData, customerEmail: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Phone *
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      value={formData.customerPhone}
-                      onChange={(e) =>
-                        setFormData({ ...formData, customerPhone: formatPhone(e.target.value) })
-                      }
-                      placeholder="(xxx)-xxx-xxxx"
-                      className={`mt-1 w-full rounded-md border px-3 py-2 text-text-primary bg-card-elevated ${
-                        formData.customerPhone && !isValidPhone(formData.customerPhone)
-                          ? 'border-danger'
-                          : 'border-border'
-                      }`}
-                    />
-                    {formData.customerPhone && !isValidPhone(formData.customerPhone) && (
-                      <p className="mt-1 text-xs text-danger">Format: (xxx)-xxx-xxxx</p>
-                    )}
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Event address *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
-                      placeholder="Event venue or delivery address"
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Event Details */}
-              <div>
-                <h3 className="mb-4 font-semibold text-text-primary">
-                  Event Details
-                </h3>
-                <p className="mb-3 text-xs text-text-muted">
-                  Set date and guest count accurately since pricing, staffing, and prep planning depend on this section.
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {isEditing && (
-                    <div>
-                      <label className="block text-sm font-medium text-text-secondary">
-                        Status
-                      </label>
-                      <select
-                        value={formData.serviceStatus ?? 'pending'}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            serviceStatus: e.target.value as BookingStatus,
-                          })
-                        }
-                        className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
-                    </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Event Type *
-                    </label>
-                    <select
-                      value={formData.eventType}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          eventType: e.target.value,
-                        })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    >
-                      {templateConfig.eventTypes.map(et => (
-                        <option key={et.id} value={et.id}>{et.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Event Date *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={formData.eventDate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, eventDate: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Event Time *
-                    </label>
-                    <input
-                      type="time"
-                      required
-                      value={formData.eventTime}
-                      onChange={(e) =>
-                        setFormData({ ...formData, eventTime: e.target.value })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Adults *
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      required
-                      value={formData.adults}
-                      onChange={(e) =>
-                        setFormData({ ...formData, adults: parseInt(e.target.value) || 1 })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Children
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.children}
-                      onChange={(e) =>
-                        setFormData({ ...formData, children: parseInt(e.target.value) || 0 })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Distance (miles)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.distanceMiles}
-                      onChange={(e) =>
-                        setFormData({ ...formData, distanceMiles: parseInt(e.target.value) || 0 })
-                      }
-                      className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                    />
-                  </div>
-                  {isModuleEnabled(templateConfig, 'guest_pricing') && (
-                    <div>
-                      <label className="block text-sm font-medium text-text-secondary">
-                        {getTemplateLabel(templateConfig.labels, 'premiumAddOn', 'Premium Add-on')} ($/guest)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formData.premiumAddOn}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            premiumAddOn: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Staffing Profile Selector */}
-              {(rules.staffing.profiles || []).length > 0 && (
-                <div>
-                  <h3 className="mb-4 font-semibold text-text-primary">
-                    Staffing Profile
-                  </h3>
-                  <p className="mb-3 text-xs text-text-muted">
-                    Choose a preset staffing setup for this event size, or leave Auto to apply your default business rules.
-                  </p>
-                  <select
-                    value={formData.staffingProfileId || ''}
-                    onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        staffingProfileId: e.target.value || undefined,
-                        staffAssignments: undefined, // Clear assignments when profile changes
-                      });
-                    }}
-                    className="w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                  >
-                    <option value="">Auto (best match)</option>
-                    {(rules.staffing.profiles || []).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.minGuests}–{p.maxGuests === 9999 ? '\u221E' : p.maxGuests} guests)
-                      </option>
-                    ))}
-                  </select>
-                  {currentFinancials?.staffingPlan.matchedProfileName && (
-                    <p className="mt-1 text-sm text-text-muted">
-                      Using profile: <span className="font-medium">{currentFinancials.staffingPlan.matchedProfileName}</span>
-                    </p>
-                  )}
-                  {!currentFinancials?.staffingPlan.matchedProfileId && (
-                    <p className="mt-1 text-sm text-text-muted">
-                      Using default staffing rules
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Staff Assignments */}
-              {currentFinancials && currentFinancials.staffingPlan.staff.length > 0 && (
-                <div>
-                  <h3 className="mb-4 font-semibold text-text-primary">
-                    Staff Assignments
-                  </h3>
-                  <p className="mb-3 text-xs text-text-muted">
-                    Assign each role before completion to avoid conflicts and ensure labor payouts are recorded correctly.
-                  </p>
-                  <div className="space-y-3">
-                    {currentFinancials.staffingPlan.staff.map((position, idx) => {
-                      const assignment = findAssignmentForPosition(idx);
-                      const available = getAvailableStaff(position.role, assignment?.staffId);
-                      const laborComp = currentFinancials.laborCompensation[idx];
-
-                      return (
-                        <div
-                          key={`${position.role}-${idx}`}
-                          className="flex items-center gap-4 rounded-lg border border-border bg-card-elevated px-4 py-3"
-                        >
-                          <div className="min-w-[140px]">
-                            <div className="text-sm font-medium text-text-primary">
-                              {CHEF_ROLE_LABELS[position.role] || position.role}
-                            </div>
-                            {laborComp && (
-                              <div className="text-xs text-text-muted">
-                                Est. {formatCurrency(laborComp.finalPay)}
-                              </div>
-                            )}
-                          </div>
-                          <select
-                            value={assignment?.staffId || ''}
-                            onChange={(e) => updateStaffAssignment(idx, e.target.value)}
-                            className="flex-1 rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
-                          >
-                            <option value="">Unassigned</option>
-                            {available.map((staff) => (
-                              <option
-                                key={staff.id}
-                                value={staff.id}
-                                disabled={selectedStaffIdsInForm.has(staff.id) && assignment?.staffId !== staff.id}
-                              >
-                                {staff.name}
-                                {staff.primaryRole === CHEF_ROLE_TO_STAFF_ROLE[position.role as keyof typeof CHEF_ROLE_TO_STAFF_ROLE]
-                                  ? ''
-                                  : ` (${STAFF_ROLE_LABELS[staff.primaryRole] || staff.primaryRole})`}
-                                {selectedStaffIdsInForm.has(staff.id) && assignment?.staffId !== staff.id
-                                  ? ' - already assigned'
-                                  : ''}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {staffRecords.filter((s) => s.status === 'active').length === 0 && (
-                    <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
-                      No active staff found. Add staff members on the Staff page to assign them here.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-medium text-text-secondary">
-                  Notes
-                </label>
-                <p className="mb-2 text-xs text-text-muted">
-                  Add internal context for your team, such as dietary restrictions, access instructions, or special setup details.
-                </p>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="mt-1 w-full rounded-md border border-border px-3 py-2 text-text-primary bg-card-elevated"
-                  placeholder="Special requests, dietary restrictions, etc."
-                />
-              </div>
-
-              {/* Apply discount (revenue/subtotal only, not gratuity) */}
-              <div className="rounded-lg border border-border bg-card-elevated p-4">
-                <h3 className="mb-2 font-semibold text-text-primary">
-                  Apply discount
-                </h3>
-                <p className="mb-3 text-xs text-text-muted">
-                  Discount applies to revenue (subtotal) only; gratuity and distance fee are unchanged.
-                </p>
-                <div className="flex flex-wrap items-end gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-text-secondary">
-                      Type
-                    </label>
-                    <select
-                      value={formData.discountType ?? ''}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          discountType: (e.target.value || undefined) as 'percent' | 'amount' | undefined,
-                          discountValue: e.target.value ? (formData.discountValue ?? 0) : undefined,
-                        })
-                      }
-                      className="mt-1 rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
-                    >
-                      <option value="">No discount</option>
-                      <option value="percent">Percent (%)</option>
-                      <option value="amount">Amount ($)</option>
-                    </select>
-                  </div>
-                  {(formData.discountType === 'percent' || formData.discountType === 'amount') && (
-                    <div>
-                      <label className="block text-sm font-medium text-text-secondary">
-                        {formData.discountType === 'percent' ? 'Percent' : 'Amount'}
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step={formData.discountType === 'percent' ? 1 : 0.01}
-                        value={formData.discountValue ?? ''}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            discountValue: e.target.value === '' ? undefined : parseFloat(e.target.value) || 0,
-                          })
-                        }
-                        placeholder={formData.discountType === 'percent' ? 'e.g. 10' : 'e.g. 50'}
-                        className="mt-1 w-28 rounded-md border border-border px-3 py-2 text-sm text-text-primary bg-card-elevated"
-                      />
-                      {formData.discountType === 'percent' && <span className="ml-1 text-sm text-text-muted">%</span>}
-                      {formData.discountType === 'amount' && <span className="ml-1 text-sm text-text-muted">$</span>}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Payments section — only when editing an existing booking */}
-              {isEditing && selectedBooking && (
-                <div className="space-y-3 rounded-lg border border-border bg-card-elevated p-4">
-                  <h3 className="text-sm font-semibold text-text-primary">Payments</h3>
-
-                  {/* Summary chips */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-md bg-card px-3 py-2">
-                      <p className="text-xs text-text-muted">Total</p>
-                      <p className="text-sm font-semibold text-text-primary">{formatCurrency(selectedBooking.total)}</p>
-                    </div>
-                    <div className="rounded-md bg-card px-3 py-2">
-                      <p className="text-xs text-text-muted">Paid</p>
-                      <p className="text-sm font-semibold text-success">{formatCurrency(selectedBooking.amountPaid ?? 0)}</p>
-                    </div>
-                    <div className="rounded-md bg-card px-3 py-2">
-                      <p className="text-xs text-text-muted">Balance Due</p>
-                      <p className="text-sm font-semibold text-accent">
-                        {formatCurrency(selectedBooking.balanceDueAmount ?? Math.max(0, selectedBooking.total - (selectedBooking.amountPaid ?? 0)))}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Payment history */}
-                  {selectedBookingPayments.length > 0 && (
-                    <div className="divide-y divide-border rounded-md border border-border">
-                      {selectedBookingPayments.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-text-primary">{formatCurrency(p.amount)}</span>
-                            <span className="text-xs capitalize text-text-muted">
-                              {p.type} · {p.method === 'bank-transfer' ? 'Bank Transfer' : p.method}
-                            </span>
-                            {p.notes && <span className="text-xs text-text-muted">· {p.notes}</span>}
-                          </div>
-                          <span className="text-xs text-text-muted">{p.paymentDate}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Record Payment button */}
-                  {(selectedBooking.paymentStatus ?? 'unpaid') !== 'paid-in-full' &&
-                    (selectedBooking.paymentStatus ?? 'unpaid') !== 'refunded' &&
-                    getBookingServiceStatus(selectedBooking) !== 'cancelled' && (
-                      <button
-                        type="button"
-                        onClick={() => openPaymentModal(selectedBooking)}
-                        className="flex items-center gap-2 rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm font-medium text-accent hover:bg-accent/10"
-                      >
-                        <BanknotesIcon className="h-4 w-4" />
-                        Record Payment
-                      </button>
-                    )}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex justify-between">
-                <div>
-                  {isEditing && (
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700"
-                    >
-                      Delete Booking
-                    </button>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowModal(false);
-                      resetForm();
-                    }}
-                    className="rounded-md border border-border bg-card-elevated px-4 py-2 text-text-secondary hover:bg-card"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-md bg-accent px-4 py-2 text-white hover:bg-accent-hover"
-                  >
-                    {isEditing ? 'Update Booking' : 'Create Booking'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Event Summary modal (confirmed bookings only) */}
       {eventSummaryBooking && (

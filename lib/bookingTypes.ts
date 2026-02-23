@@ -106,6 +106,11 @@ export interface Booking {
   pipeline_status?: PipelineStatus;
   pipeline_status_updated_at?: string; // ISO datetime when pipeline_status last changed
 
+  // Proposal (client-facing quote link)
+  proposalToken?: string;      // UUID token for the public proposal URL
+  proposalSentAt?: string;     // ISO datetime when proposal email was sent
+  proposalAccepted?: boolean;  // true once client accepts via public page
+
   // Metadata
   createdAt: string;
   updatedAt: string;

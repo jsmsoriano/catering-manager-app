@@ -23,35 +23,39 @@ import {
   InboxIcon,
   ViewColumnsIcon,
   ClipboardDocumentListIcon,
+  Squares2X2Icon,
 } from '@heroicons/react/24/outline';
-import ThemeToggle from './ThemeToggle';
 import { useAuth } from './AuthProvider';
+import { useFeatureFlags } from '@/lib/useFeatureFlags';
+import type { FeatureFlags } from '@/lib/featureFlags';
 import { loadFromStorage } from '@/lib/storage';
 import { normalizeBookingWorkflowFields, getBookingServiceStatus, toLocalDateISO } from '@/lib/bookingWorkflow';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import type { Booking } from '@/lib/bookingTypes';
 
 const navigation = [
-  { name: 'Home', href: '/', icon: HomeIcon },
-  { name: 'Events', href: '/bookings', icon: CalendarDaysIcon },
-  { name: 'Pipeline', href: '/pipeline', icon: ViewColumnsIcon },
-  { name: 'Inbox', href: '/inquiries', icon: InboxIcon },
-  { name: 'Customers', href: '/customers', icon: UserGroupIcon },
+  { name: 'Home', href: '/', icon: HomeIcon, featureKey: 'home' as const },
+  { name: 'Events', href: '/bookings', icon: CalendarDaysIcon, featureKey: 'events' as const },
+  { name: 'Pipeline', href: '/pipeline', icon: ViewColumnsIcon, featureKey: 'pipeline' as const },
+  { name: 'Inbox', href: '/inquiries', icon: InboxIcon, featureKey: 'inbox' as const },
+  { name: 'Customers', href: '/customers', icon: UserGroupIcon, featureKey: 'customers' as const },
   {
     name: 'Staff',
     icon: UsersIcon,
+    featureKey: 'staff' as const,
     children: [
       { name: 'Team', href: '/staff' },
       { name: 'Team Calendar', href: '/staff/availability' },
     ],
   },
-  { name: 'Menu Builder', href: '/menus/builder', icon: ClipboardDocumentListIcon },
-  { name: 'Calculator', href: '/calculator', icon: CalculatorIcon },
-  { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon },
-  { name: 'Invoices', href: '/invoices', icon: DocumentTextIcon },
-  { name: 'Reports', href: '/reports', icon: DocumentChartBarIcon },
-  { name: 'Wiki', href: '/wiki', icon: BookOpenIcon },
-  { name: 'Settings', href: '/settings', icon: CogIcon },
+  { name: 'Menu Builder', href: '/menus/builder', icon: ClipboardDocumentListIcon, featureKey: 'menuBuilder' as const },
+  { name: 'Menu Settings', href: '/menus', icon: Squares2X2Icon, featureKey: 'menuBuilder' as const },
+  { name: 'Calculator', href: '/calculator', icon: CalculatorIcon, featureKey: 'calculator' as const },
+  { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon, featureKey: 'expenses' as const },
+  { name: 'Invoices', href: '/invoices', icon: DocumentTextIcon, featureKey: 'invoices' as const },
+  { name: 'Reports', href: '/reports', icon: DocumentChartBarIcon, featureKey: 'reports' as const },
+  { name: 'Wiki', href: '/wiki', icon: BookOpenIcon, featureKey: 'wiki' as const },
+  { name: 'Settings', href: '/settings', icon: CogIcon, featureKey: 'settings' as const },
 ];
 
 function SidebarLogo({ collapsed }: { collapsed: boolean }) {
@@ -149,7 +153,15 @@ function SidebarFlyout({
 export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void }) {
   const pathname = usePathname();
   const { user, signOut, isAdmin } = useAuth();
-  const visibleNav = useMemo(() => navigation, []);
+  const { flags } = useFeatureFlags();
+  const visibleNav = useMemo(
+    () =>
+      navigation.filter((item) => {
+        const key = (item as { featureKey?: keyof FeatureFlags }).featureKey;
+        return key === 'settings' || !key || !!flags[key];
+      }),
+    [flags]
+  );
   const accordionNames = useMemo(() => getAccordionNames(visibleNav), [visibleNav]);
   const directLinkHrefs = useMemo(() => getDirectLinkHrefs(visibleNav), [visibleNav]);
 
@@ -470,6 +482,19 @@ function SidebarInner(props: {
               )}
             </Link>
           )}
+          {/* Build info */}
+          {!collapsed && (
+            <div className="px-2 pb-1">
+              <p className="text-[10px] leading-tight text-text-muted">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+                {' · '}
+                <span className="font-mono">{process.env.NEXT_PUBLIC_BUILD_SHA}</span>
+                {' · '}
+                {process.env.NEXT_PUBLIC_BUILD_DATE}
+              </p>
+            </div>
+          )}
+
           <div className={classNames(
             'flex items-center',
             collapsed ? 'flex-col gap-2' : 'justify-between'
@@ -483,7 +508,6 @@ function SidebarInner(props: {
               <ArrowRightOnRectangleIcon className="h-4 w-4 shrink-0" />
               {!collapsed && 'Sign out'}
             </button>
-            <ThemeToggle />
           </div>
         </div>
       </div>

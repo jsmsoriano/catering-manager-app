@@ -18,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/components/AuthProvider';
 import { createClient } from '@/lib/supabase/client';
+import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import { loadFromStorage } from '@/lib/storage';
 import {
   normalizeBookingWorkflowFields,
@@ -48,6 +49,7 @@ interface SmartAlert {
   detail: string;
   actionLabel: string;
   actionHref: string;
+  emailType?: 'deposit_reminder' | 'balance_reminder';
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -140,7 +142,17 @@ function InquiryRow({
 
 // ─── Alert card ───────────────────────────────────────────────────────────────
 
-function AlertCard({ alert }: { alert: SmartAlert }) {
+function AlertCard({
+  alert,
+  sendingId,
+  onSendReminder,
+}: {
+  alert: SmartAlert;
+  sendingId: string | null;
+  onSendReminder: (alert: SmartAlert) => void;
+}) {
+  const isSending = sendingId === alert.id;
+  const hasEmail = !!alert.booking.customerEmail;
   return (
     <div className={`flex items-start gap-3 rounded-lg border p-4 ${SEVERITY_BORDER[alert.severity]}`}>
       {SEVERITY_ICON[alert.severity]}
@@ -151,12 +163,25 @@ function AlertCard({ alert }: { alert: SmartAlert }) {
         </p>
         <p className="mt-0.5 text-xs text-text-secondary">{alert.detail}</p>
       </div>
-      <Link
-        href={alert.actionHref}
-        className="shrink-0 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-card-elevated"
-      >
-        {alert.actionLabel} →
-      </Link>
+      <div className="flex shrink-0 items-center gap-2">
+        {alert.emailType && hasEmail && (
+          <button
+            type="button"
+            disabled={isSending}
+            onClick={() => onSendReminder(alert)}
+            className="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
+            title={`Send reminder to ${alert.booking.customerEmail}`}
+          >
+            {isSending ? 'Sending…' : 'Send Reminder'}
+          </button>
+        )}
+        <Link
+          href={alert.actionHref}
+          className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-primary hover:bg-card-elevated"
+        >
+          {alert.actionLabel} →
+        </Link>
+      </div>
     </div>
   );
 }
@@ -169,6 +194,7 @@ function InboxContent() {
   const activeTab = searchParams.get('tab') === 'alerts' ? 'alerts' : 'inquiries';
 
   const { user, loading: authLoading } = useAuth();
+  const { config } = useTemplateConfig();
 
   const [allBookings, setAllBookings] = useState<Booking[]>(() =>
     loadFromStorage<Booking[]>('bookings', [])
@@ -178,6 +204,8 @@ function InboxContent() {
   const [menuLoading, setMenuLoading] = useState(false);
   const [converting, setConverting] = useState(false);
   const [declining, setDeclining] = useState(false);
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+  const [reminderToast, setReminderToast] = useState<string | null>(null);
 
   // Sync with bookingsUpdated events
   useEffect(() => {
@@ -264,6 +292,7 @@ function InboxContent() {
           title: 'Deposit Overdue',
           detail: `Was due ${formatDate(b.depositDueDate)} · ${days} day${days !== 1 ? 's' : ''} ago`,
           actionLabel: 'Record Payment', actionHref: href,
+          emailType: 'deposit_reminder',
         });
       // Deposit due soon (within 3 days, not overdue)
       } else if (b.paymentStatus === 'deposit-due' && b.depositDueDate && b.depositDueDate >= todayISO) {
@@ -274,6 +303,7 @@ function InboxContent() {
             title: 'Deposit Due Soon',
             detail: `Due in ${days} day${days !== 1 ? 's' : ''} (${formatDate(b.depositDueDate)})`,
             actionLabel: 'Record Payment', actionHref: href,
+            emailType: 'deposit_reminder',
           });
         }
       }
@@ -286,6 +316,7 @@ function InboxContent() {
           title: 'Balance Overdue',
           detail: `Was due ${formatDate(b.balanceDueDate)} · ${days} day${days !== 1 ? 's' : ''} ago`,
           actionLabel: 'Record Payment', actionHref: href,
+          emailType: 'balance_reminder',
         });
       // Balance due soon (within 5 days)
       } else if (b.paymentStatus === 'balance-due' && b.balanceDueDate && b.balanceDueDate >= todayISO) {
@@ -296,6 +327,7 @@ function InboxContent() {
             title: 'Balance Due Soon',
             detail: `Due in ${days} day${days !== 1 ? 's' : ''} (${formatDate(b.balanceDueDate)})`,
             actionLabel: 'Record Payment', actionHref: href,
+            emailType: 'balance_reminder',
           });
         }
       }
@@ -370,6 +402,26 @@ function InboxContent() {
     persistBookings(next as Booking[]);
     setSelectedId(null);
     setDeclining(false);
+  };
+
+  const handleSendReminder = async (alert: SmartAlert) => {
+    if (!alert.emailType || !alert.booking.customerEmail) return;
+    setSendingReminderId(alert.id);
+    try {
+      await fetch('/api/emails/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: alert.emailType,
+          booking: alert.booking,
+          businessName: config.businessName || 'Your Caterer',
+        }),
+      });
+      setReminderToast(`Reminder sent to ${alert.booking.customerEmail}`);
+      setTimeout(() => setReminderToast(null), 4000);
+    } finally {
+      setSendingReminderId(null);
+    }
   };
 
   if (authLoading) {
@@ -664,6 +716,11 @@ function InboxContent() {
       ) : (
         /* ── Alerts tab ── */
         <div className="flex-1 overflow-y-auto p-6">
+          {reminderToast && (
+            <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-success px-4 py-3 text-sm font-medium text-white shadow-lg">
+              {reminderToast}
+            </div>
+          )}
           {alerts.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-20 text-text-muted">
               <span className="text-5xl">✓</span>
@@ -686,7 +743,12 @@ function InboxContent() {
                     </p>
                     <div className="space-y-2">
                       {group.map((alert) => (
-                        <AlertCard key={alert.id} alert={alert} />
+                        <AlertCard
+                          key={alert.id}
+                          alert={alert}
+                          sendingId={sendingReminderId}
+                          onSendReminder={handleSendReminder}
+                        />
                       ))}
                     </div>
                   </div>

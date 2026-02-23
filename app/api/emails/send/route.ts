@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { createClient } from '@/lib/supabase/server';
-import { bookingConfirmationEmail, paymentReceiptEmail } from '@/lib/emailTemplates';
+import {
+  bookingConfirmationEmail,
+  paymentReceiptEmail,
+  depositReminderEmail,
+  balanceReminderEmail,
+  thankYouEmail,
+  proposalEmail,
+} from '@/lib/emailTemplates';
 import type { Booking } from '@/lib/bookingTypes';
+import type { ProposalSnapshot } from '@/lib/proposalTypes';
 
 async function getAuthenticatedUser() {
   const supabase = await createClient();
@@ -28,11 +36,13 @@ export async function POST(req: NextRequest) {
   }
 
   let body: {
-    type: 'confirmation' | 'receipt';
+    type: 'confirmation' | 'receipt' | 'deposit_reminder' | 'balance_reminder' | 'thank_you' | 'proposal';
     booking: Booking;
     businessName?: string;
     amount?: number;
     method?: string;
+    proposalUrl?: string;
+    snapshot?: ProposalSnapshot;
   };
 
   try {
@@ -63,6 +73,20 @@ export async function POST(req: NextRequest) {
       );
     }
     ({ subject, html } = paymentReceiptEmail(booking, amount, method, businessName));
+  } else if (type === 'deposit_reminder') {
+    ({ subject, html } = depositReminderEmail(booking, businessName));
+  } else if (type === 'balance_reminder') {
+    ({ subject, html } = balanceReminderEmail(booking, businessName));
+  } else if (type === 'thank_you') {
+    ({ subject, html } = thankYouEmail(booking, businessName));
+  } else if (type === 'proposal') {
+    if (!body.snapshot || !body.proposalUrl) {
+      return NextResponse.json(
+        { error: 'snapshot and proposalUrl are required for proposal emails' },
+        { status: 400 }
+      );
+    }
+    ({ subject, html } = proposalEmail(body.snapshot, body.proposalUrl));
   } else {
     return NextResponse.json({ error: 'Unknown email type' }, { status: 400 });
   }

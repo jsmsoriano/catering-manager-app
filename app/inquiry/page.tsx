@@ -71,6 +71,7 @@ export default function InquiryPage() {
   // Template config (loaded from public API — no auth required)
   const [eventTypes, setEventTypes] = useState<EventTypeConfig[]>(DEFAULT_TEMPLATE.eventTypes);
   const [occasions, setOccasions]   = useState<string[]>(DEFAULT_TEMPLATE.occasions);
+  const [businessName, setBusinessName] = useState('Your Caterer');
   useEffect(() => {
     fetch('/api/public/template')
       .then(r => r.json())
@@ -78,6 +79,7 @@ export default function InquiryPage() {
         if (Array.isArray(d.eventTypes) && d.eventTypes.length > 0) setEventTypes(d.eventTypes);
         if (Array.isArray(d.occasions) && d.occasions.length > 0) setOccasions(d.occasions);
         if (d.eventTypes?.[0]?.id) setEventType(d.eventTypes[0].id);
+        if (d.businessName) setBusinessName(d.businessName);
       })
       .catch(() => {/* use defaults */});
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,6 +178,20 @@ export default function InquiryPage() {
       }
     }
 
+    // Fire-and-forget inquiry acknowledgment email (best-effort)
+    if (email.trim()) {
+      fetch('/api/emails/send-public', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'inquiry_ack',
+          customerName: name.trim(),
+          booking: { customerEmail: email.trim(), eventDate },
+          businessName,
+        }),
+      }).catch(() => { /* silently ignore — inquiry still submitted */ });
+    }
+
     setSubmitted(true);
     setSubmitting(false);
   }
@@ -191,12 +207,18 @@ export default function InquiryPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="mb-2 text-2xl font-bold text-text-primary">Inquiry Submitted!</h1>
+          <h1 className="mb-2 text-2xl font-bold text-text-primary">Request Received!</h1>
           <p className="text-text-secondary">
-            Thank you, {name}! We&apos;ve received your inquiry and will reach out shortly to confirm your event.
+            Thank you, {name}! We&apos;ll be in touch within <strong>24 hours</strong> to confirm
+            availability and discuss the details for your event.
           </p>
+          {email && (
+            <p className="mt-3 rounded-lg bg-card-elevated px-4 py-3 text-sm text-text-secondary">
+              A confirmation has been sent to <strong>{email}</strong>
+            </p>
+          )}
           <p className="mt-4 text-sm text-text-muted">
-            We&apos;ll contact you at{phone ? ` ${phone}` : ''}{email ? ` / ${email}` : ''}.
+            Questions? Call us at {phone}.
           </p>
         </div>
       </div>

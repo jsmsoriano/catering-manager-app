@@ -6,7 +6,9 @@ const SIGNUP_PATH = '/signup';
 const AUTH_CALLBACK_PATH = '/auth/callback';
 const INQUIRY_PATH = '/inquiry';
 
-const publicPaths = [LOGIN_PATH, SIGNUP_PATH, AUTH_CALLBACK_PATH, INQUIRY_PATH];
+const PROPOSAL_PATH = '/proposal';
+
+const publicPaths = [LOGIN_PATH, SIGNUP_PATH, AUTH_CALLBACK_PATH, INQUIRY_PATH, PROPOSAL_PATH];
 
 function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api')) return true;
