@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { formatCurrency } from '@/lib/moneyRules';
+import { formatCurrency, loadRules } from '@/lib/moneyRules';
 import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import type { Booking } from '@/lib/bookingTypes';
 import type { EventMenu, CateringEventMenu } from '@/lib/menuTypes';
 import type { StaffMember } from '@/lib/staffTypes';
+import type { MoneyRules } from '@/lib/types';
 import { CATERING_EVENT_MENUS_KEY } from '@/lib/menuCategories';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -62,9 +63,12 @@ export default function BeoPage() {
   const [eventMenu, setEventMenu] = useState<EventMenu | null>(null);
   const [cateringMenu, setCateringMenu] = useState<CateringEventMenu | null>(null);
   const [staffRecords, setStaffRecords] = useState<StaffMember[]>([]);
+  const [rules, setRules] = useState<MoneyRules | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
+    setRules(loadRules());
+
     const bookings: Booking[] = JSON.parse(localStorage.getItem('bookings') || '[]');
     const found = bookings.find((b) => b.id === id) ?? null;
     if (!found) { setNotFound(true); return; }
@@ -108,6 +112,33 @@ export default function BeoPage() {
 
   const guests = booking.adults + (booking.children ?? 0);
   const businessName = config.businessName || 'Your Catering Company';
+
+  // ── Pricing rates ─────────────────────────────────────────────────────────
+  // Use the locked snapshot captured at booking save time; fall back to
+  // current business rules so the BEO is never missing key figures.
+  const isPricePerGuest = !booking.pricingMode || booking.pricingMode === 'per_guest';
+  const adultRate: number | null = isPricePerGuest
+    ? (booking.pricingSnapshot?.adultBasePrice
+        ?? (rules
+          ? (booking.eventType === 'private-dinner'
+              ? rules.pricing.primaryBasePrice
+              : rules.pricing.secondaryBasePrice)
+          : null))
+    : null;
+  const childRate: number | null = isPricePerGuest
+    ? (booking.pricingSnapshot?.childBasePrice
+        ?? (adultRate !== null && rules
+          ? adultRate * (1 - rules.pricing.childDiscountPercent / 100)
+          : null))
+    : null;
+  const gratuityPct =
+    booking.pricingSnapshot?.gratuityPercent
+    ?? rules?.pricing.defaultGratuityPercent
+    ?? 0;
+  const depositPct =
+    booking.depositPercent
+    ?? rules?.pricing.defaultDepositPercent
+    ?? 0;
 
   // Resolve staff names from assignments
   const assignedStaff = (booking.staffAssignments ?? []).map((a) => {
@@ -305,15 +336,52 @@ export default function BeoPage() {
           <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-text-muted">5 — Financial Summary</h2>
           <table className="beo-table">
             <tbody>
-              <tr><th style={{width:'50%'}}>Subtotal</th><td>{formatCurrency(booking.subtotal)}</td></tr>
+              {/* Per-plate rates */}
+              {adultRate !== null && (
+                <tr>
+                  <th style={{width:'50%'}}>Rate (Adult)</th>
+                  <td>{formatCurrency(adultRate)} / person</td>
+                </tr>
+              )}
+              {childRate !== null && (booking.children ?? 0) > 0 && (
+                <tr>
+                  <th>Rate (Child)</th>
+                  <td>{formatCurrency(childRate)} / person</td>
+                </tr>
+              )}
+              {/* Guest × rate breakdown */}
+              {adultRate !== null && (
+                <tr>
+                  <th>
+                    Adults ({booking.adults} × {formatCurrency(adultRate)})
+                    {(booking.children ?? 0) > 0 && childRate !== null
+                      ? ` + Children (${booking.children} × ${formatCurrency(childRate)})`
+                      : ''}
+                    {(booking.premiumAddOn ?? 0) > 0
+                      ? ` + Premium (${guests} × ${formatCurrency(booking.premiumAddOn)})`
+                      : ''}
+                  </th>
+                  <td>{formatCurrency(booking.subtotal)}</td>
+                </tr>
+              )}
+              {/* Subtotal (no breakdown available) */}
+              {adultRate === null && (
+                <tr><th style={{width:'50%'}}>Subtotal</th><td>{formatCurrency(booking.subtotal)}</td></tr>
+              )}
               {(booking.distanceFee ?? 0) > 0 && (
                 <tr><th>Distance Fee</th><td>{formatCurrency(booking.distanceFee)}</td></tr>
               )}
-              <tr><th>Gratuity</th><td>{formatCurrency(booking.gratuity)}</td></tr>
-              <tr><th style={{fontWeight:'700'}}>Total</th><td style={{fontWeight:'700'}}>{formatCurrency(booking.total)}</td></tr>
+              <tr>
+                <th>Gratuity ({gratuityPct}%)</th>
+                <td>{formatCurrency(booking.gratuity)}</td>
+              </tr>
+              <tr>
+                <th style={{fontWeight:'700'}}>Total</th>
+                <td style={{fontWeight:'700'}}>{formatCurrency(booking.total)}</td>
+              </tr>
               {(booking.depositAmount ?? 0) > 0 && (
                 <tr>
-                  <th>Deposit ({booking.depositPercent ?? 0}%)</th>
+                  <th>Deposit ({depositPct}%)</th>
                   <td>
                     {formatCurrency(booking.depositAmount ?? 0)}
                     {booking.depositDueDate ? ` · Due ${formatDate(booking.depositDueDate)}` : ''}
