@@ -136,8 +136,8 @@ export default function BeoPage() {
     ?? rules?.pricing.defaultGratuityPercent
     ?? 0;
   const depositPct =
-    booking.depositPercent
-    ?? rules?.pricing.defaultDepositPercent
+    rules?.pricing.defaultDepositPercent
+    ?? booking.depositPercent
     ?? 0;
 
   // Resolve staff names from assignments
