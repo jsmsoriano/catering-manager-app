@@ -113,8 +113,8 @@ function defaultEditForm(): EditForm {
 
 function staffToEditForm(member: StaffMember): EditForm {
   // Map legacy overflow-chef to full-chef
-  const primaryRole: StaffRole = member.primaryRole === 'overflow-chef' ? 'full-chef' : member.primaryRole;
-  const secondaryRoles: StaffRole[] = member.secondaryRoles.map((r) => (r === 'overflow-chef' ? 'full-chef' : r));
+  const primaryRole: StaffRole = (member.primaryRole as string) === 'overflow-chef' ? 'full-chef' : member.primaryRole;
+  const secondaryRoles: StaffRole[] = member.secondaryRoles.map((r) => ((r as string) === 'overflow-chef' ? 'full-chef' : r));
   return {
     name: member.name,
     email: member.email,
