@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatPhone, isValidPhone } from '@/lib/phoneUtils';
@@ -30,7 +30,7 @@ function saveBookings(bookings: Booking[]) {
   window.dispatchEvent(new Event('bookingsUpdated'));
 }
 
-export default function NewBookingPage() {
+function NewBookingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rules = useMoneyRules();
@@ -271,5 +271,13 @@ export default function NewBookingPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function NewBookingPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
+      <NewBookingContent />
+    </Suspense>
   );
 }
