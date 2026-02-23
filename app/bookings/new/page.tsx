@@ -40,6 +40,7 @@ export default function NewBookingPage() {
   const [customerPhone, setCustomerPhone] = useState('');
   const [location, setLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const defaultDateStr = getDefaultEventDate(searchParams.get('date'));
 
   // Prefill from "Book Again" (customers page) or ?date= from calendar
   useEffect(() => {
