@@ -18,6 +18,8 @@ import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import { isModuleEnabled, getPricingSlot } from '@/lib/templateConfig';
 import type { Booking, BookingStatus, BookingPricingSnapshot } from '@/lib/bookingTypes';
 import { getBookingServiceStatus, normalizeBookingWorkflowFields } from '@/lib/bookingWorkflow';
+import type { EventMenu, CateringEventMenu } from '@/lib/menuTypes';
+import { CATERING_EVENT_MENUS_KEY } from '@/lib/menuCategories';
 import type { StaffMember as StaffRecord, StaffAssignment } from '@/lib/staffTypes';
 import {
   BOOKING_WIZARD_STEPS,
@@ -112,6 +114,13 @@ function EventDetailContent() {
   });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [sendingProposal, setSendingProposal] = useState(false);
+  const [menuStatus, setMenuStatus] = useState<{
+    exists: boolean; complete: boolean;
+    guestsDone?: number; totalGuests?: number; itemCount?: number;
+  } | null>(null);
+  const [templateMenus, setTemplateMenus] = useState<Array<{
+    id: string; bookingId: string; name: string; type: 'hibachi' | 'catering';
+  }>>([]);
   const [proposalUrl, setProposalUrl] = useState<string | null>(null);
   const [proposalAccepted, setProposalAccepted] = useState(false);
 
@@ -153,6 +162,52 @@ function EventDetailContent() {
     };
   }, []);
 
+  // Load menu status and template menus when booking changes
+  useEffect(() => {
+    if (!booking) return;
+
+    // Menu status
+    if (booking.menuId) {
+      const raw = localStorage.getItem('eventMenus');
+      const menus: EventMenu[] = raw ? JSON.parse(raw) : [];
+      const m = menus.find((x) => x.id === booking.menuId);
+      if (m) {
+        const total = booking.adults + (booking.children ?? 0);
+        setMenuStatus({ exists: true, complete: m.guestSelections.length >= total, guestsDone: m.guestSelections.length, totalGuests: total });
+      }
+    } else if (booking.cateringMenuId) {
+      const raw = localStorage.getItem(CATERING_EVENT_MENUS_KEY);
+      const menus: CateringEventMenu[] = raw ? JSON.parse(raw) : [];
+      const m = menus.find((x) => x.id === booking.cateringMenuId);
+      if (m) setMenuStatus({ exists: true, complete: m.selectedItems.length > 0, itemCount: m.selectedItems.length });
+    } else {
+      setMenuStatus({ exists: false, complete: false });
+    }
+
+    // Template menus matching booking event type
+    const allBookingsRaw = localStorage.getItem('bookings');
+    const allBookings: Booking[] = allBookingsRaw ? JSON.parse(allBookingsRaw) : [];
+    const templateIds = new Set(allBookings.filter((b) => b.source === 'menu-template').map((b) => b.id));
+
+    if (booking.eventType === 'private-dinner') {
+      const raw = localStorage.getItem('eventMenus');
+      const menus: EventMenu[] = raw ? JSON.parse(raw) : [];
+      setTemplateMenus(
+        menus
+          .filter((m) => templateIds.has(m.bookingId))
+          .map((m) => ({ id: m.id, bookingId: m.bookingId, name: m.name || 'Unnamed Template', type: 'hibachi' as const }))
+      );
+    } else {
+      const raw = localStorage.getItem(CATERING_EVENT_MENUS_KEY);
+      const menus: CateringEventMenu[] = raw ? JSON.parse(raw) : [];
+      setTemplateMenus(
+        menus
+          .filter((m) => templateIds.has(m.bookingId))
+          .map((m) => ({ id: m.id, bookingId: m.bookingId, name: m.name || 'Unnamed Template', type: 'catering' as const }))
+      );
+    }
+  }, [booking?.id, booking?.menuId, booking?.cateringMenuId, booking?.eventType]);
+
   // Sync step from URL when search params change (e.g. after navigation or browser back)
   useEffect(() => {
     const step = searchParams.get('step');
@@ -185,6 +240,28 @@ function EventDetailContent() {
         }
       });
   }, [booking?.proposalToken, booking?.id]);
+
+  const cloneTemplateToBooking = (template: { id: string; bookingId: string; name: string; type: 'hibachi' | 'catering' }) => {
+    if (!booking) return;
+    const newId = `${template.type === 'hibachi' ? 'emenu' : 'cmenu'}-${Date.now()}`;
+    if (template.type === 'hibachi') {
+      const raw = localStorage.getItem('eventMenus');
+      const ems: EventMenu[] = raw ? JSON.parse(raw) : [];
+      const src = ems.find((m) => m.id === template.id);
+      if (!src) return;
+      const cloned: EventMenu = { ...src, id: newId, bookingId: booking.id, updatedAt: new Date().toISOString() };
+      localStorage.setItem('eventMenus', JSON.stringify([...ems, cloned]));
+      saveBookings(bookings.map((b) => b.id === booking.id ? { ...b, menuId: newId } : b));
+    } else {
+      const raw = localStorage.getItem(CATERING_EVENT_MENUS_KEY);
+      const cms: CateringEventMenu[] = raw ? JSON.parse(raw) : [];
+      const src = cms.find((m) => m.id === template.id);
+      if (!src) return;
+      const cloned: CateringEventMenu = { ...src, id: newId, bookingId: booking.id, updatedAt: new Date().toISOString() };
+      localStorage.setItem(CATERING_EVENT_MENUS_KEY, JSON.stringify([...cms, cloned]));
+      saveBookings(bookings.map((b) => b.id === booking.id ? { ...b, cateringMenuId: newId } : b));
+    }
+  };
 
   const handleSendProposal = async () => {
     if (!booking) return;
@@ -801,13 +878,21 @@ function EventDetailContent() {
         )}
 
         {stepId === 'menu' && (
-          <div className="space-y-6 rounded-lg border border-border bg-card-elevated p-6">
-            <h2 className="text-lg font-semibold text-text-primary">Menu creation</h2>
-            <p className="text-sm text-text-muted">
-              {booking.eventType === 'private-dinner'
-                ? 'Build the hibachi guest menu (per-guest proteins and sides).'
-                : 'Build the catering menu for this event.'}
-            </p>
+          <div className="space-y-4 rounded-lg border border-border bg-card-elevated p-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-text-primary">Menu creation</h2>
+              {menuStatus && (
+                menuStatus.exists ? (
+                  <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success">
+                    {booking.eventType === 'private-dinner'
+                      ? `${menuStatus.guestsDone}/${menuStatus.totalGuests} guests`
+                      : `${menuStatus.itemCount} item${menuStatus.itemCount !== 1 ? 's' : ''}`}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-warning/15 px-2.5 py-0.5 text-xs font-medium text-warning">No menu yet</span>
+                )
+              )}
+            </div>
             <div className="flex flex-wrap gap-3">
               <Link
                 href={`/bookings/menu?bookingId=${booking.id}`}
@@ -824,6 +909,25 @@ function EventDetailContent() {
                 Next: Staff assignments
               </button>
             </div>
+            {templateMenus.length > 0 && (
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="mb-3 text-sm font-medium text-text-secondary">Or use a saved template:</p>
+                <div className="space-y-2">
+                  {templateMenus.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between rounded-md bg-card-elevated px-3 py-2">
+                      <span className="text-sm text-text-primary">{t.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => cloneTemplateToBooking(t)}
+                        className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90"
+                      >
+                        Use this menu
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

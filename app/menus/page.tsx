@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatCurrency } from '@/lib/moneyRules';
-import type { MenuItem, MenuCategory, MenuCategoryNode, PrivateDinnerTemplate } from '@/lib/menuTypes';
+import type { MenuItem, MenuCategory, MenuCategoryNode, PrivateDinnerTemplate, EventMenu, CateringEventMenu } from '@/lib/menuTypes';
 import { DEFAULT_MENU_ITEMS } from '@/lib/defaultMenuItems';
 import { DEFAULT_PRIVATE_DINNER_TEMPLATE } from '@/lib/menuTypes';
 import {
@@ -15,7 +15,10 @@ import {
   getDescendantIds,
   getCategoryName,
   LEGACY_CATEGORY_MAP,
+  CATERING_EVENT_MENUS_KEY,
 } from '@/lib/menuCategories';
+import type { Booking } from '@/lib/bookingTypes';
+import { normalizeBookingWorkflowFields } from '@/lib/bookingWorkflow';
 
 const categoryLabels: Record<MenuCategory, string> = {
   protein: 'Proteins',
@@ -1078,19 +1081,276 @@ function ItemCatalogTab() {
 }
 
 
+// ─── Event Menus Tab ─────────────────────────────────────────────────────────
+
+type MenuEntry = {
+  id: string;
+  name: string;
+  type: 'hibachi' | 'catering';
+  bookingId: string;
+  bookingName: string;
+  isTemplate: boolean;
+  count: number;
+  date?: string;
+};
+
+function EventMenusTab() {
+  const router = useRouter();
+  const [menuEntries, setMenuEntries] = useState<MenuEntry[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [createType, setCreateType] = useState<'hibachi' | 'catering'>('hibachi');
+  const [createName, setCreateName] = useState('');
+  const [createAdults, setCreateAdults] = useState(10);
+  const [createChildren, setCreateChildren] = useState(0);
+
+  const loadEntries = () => {
+    const bookingsRaw = localStorage.getItem('bookings');
+    const bookings: Booking[] = bookingsRaw ? JSON.parse(bookingsRaw) : [];
+    const bookingMap = new Map(bookings.map((b) => [b.id, b]));
+    const entries: MenuEntry[] = [];
+
+    const eventMenusRaw = localStorage.getItem('eventMenus');
+    const eventMenus: EventMenu[] = eventMenusRaw ? JSON.parse(eventMenusRaw) : [];
+    for (const m of eventMenus) {
+      const b = bookingMap.get(m.bookingId);
+      entries.push({
+        id: m.id,
+        name: m.name || b?.customerName || 'Unnamed Menu',
+        type: 'hibachi',
+        bookingId: m.bookingId,
+        bookingName: b?.customerName || 'Unknown',
+        isTemplate: b?.source === 'menu-template',
+        count: m.guestSelections.length,
+        date: b?.eventDate,
+      });
+    }
+
+    const cateringRaw = localStorage.getItem(CATERING_EVENT_MENUS_KEY);
+    const cateringMenus: CateringEventMenu[] = cateringRaw ? JSON.parse(cateringRaw) : [];
+    for (const m of cateringMenus) {
+      const b = bookingMap.get(m.bookingId);
+      entries.push({
+        id: m.id,
+        name: m.name || b?.customerName || 'Unnamed Menu',
+        type: 'catering',
+        bookingId: m.bookingId,
+        bookingName: b?.customerName || 'Unknown',
+        isTemplate: b?.source === 'menu-template',
+        count: m.selectedItems.length,
+        date: b?.eventDate,
+      });
+    }
+
+    setMenuEntries(entries);
+  };
+
+  useEffect(() => {
+    loadEntries();
+  }, []);
+
+  const handleCreate = () => {
+    const id = `menu-template-${Date.now()}`;
+    const now = new Date().toISOString();
+    const placeholder: Booking = normalizeBookingWorkflowFields({
+      id,
+      source: 'menu-template',
+      customerName: createName.trim() || 'Menu Template',
+      eventType: createType === 'hibachi' ? 'private-dinner' : 'buffet',
+      adults: createType === 'hibachi' ? createAdults : 15,
+      children: createType === 'hibachi' ? createChildren : 0,
+      eventDate: now.split('T')[0],
+      eventTime: '18:00',
+      distanceMiles: 0,
+      premiumAddOn: 0,
+      customerEmail: '',
+      customerPhone: '',
+      location: 'Template',
+      subtotal: 0,
+      gratuity: 0,
+      distanceFee: 0,
+      total: 0,
+      status: 'pending',
+      notes: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+    const bookingsRaw = localStorage.getItem('bookings');
+    const bookings: Booking[] = bookingsRaw ? JSON.parse(bookingsRaw) : [];
+    localStorage.setItem('bookings', JSON.stringify([...bookings, placeholder]));
+    window.dispatchEvent(new Event('bookingsUpdated'));
+    router.push(`/bookings/menu?bookingId=${id}&type=${createType}`);
+  };
+
+  const templates = menuEntries.filter((e) => e.isTemplate);
+  const eventMenusList = menuEntries.filter((e) => !e.isTemplate);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-text-secondary">
+          Pre-build reusable menu templates, or view menus attached to events.
+        </p>
+        {!creating && (
+          <button
+            onClick={() => setCreating(true)}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+          >
+            + New Menu
+          </button>
+        )}
+      </div>
+
+      {creating && (
+        <div className="space-y-4 rounded-lg border border-border bg-card-elevated p-5">
+          <h3 className="font-semibold text-text-primary">New Menu Template</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Menu name</label>
+              <input
+                type="text"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="e.g. Standard Hibachi 12-guest"
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text-primary"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-text-secondary">Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['hibachi', 'catering'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setCreateType(t)}
+                    className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                      createType === t ? 'border-accent bg-accent/10' : 'border-border bg-card hover:bg-card-elevated'
+                    }`}
+                  >
+                    <span className="font-medium text-text-primary">
+                      {t === 'hibachi' ? 'Hibachi Private Dinner' : 'Banquet Order'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {createType === 'hibachi' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-text-secondary">Adults</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={createAdults}
+                    onChange={(e) => setCreateAdults(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text-primary"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-text-secondary">Children</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={createChildren}
+                    onChange={(e) => setCreateChildren(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-text-primary"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setCreating(false); setCreateName(''); }}
+              className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-secondary hover:bg-card"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreate}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+            >
+              Create & Open Builder
+            </button>
+          </div>
+        </div>
+      )}
+
+      {templates.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">Saved Templates</h3>
+          <div className="space-y-2">
+            {templates.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between rounded-lg border border-border bg-card-elevated px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${entry.type === 'hibachi' ? 'bg-accent/10 text-accent' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
+                    {entry.type === 'hibachi' ? 'Hibachi' : 'Banquet'}
+                  </span>
+                  <span className="text-sm font-medium text-text-primary">{entry.name}</span>
+                  <span className="text-xs text-text-muted">
+                    {entry.type === 'hibachi' ? `${entry.count} guests` : `${entry.count} items`}
+                  </span>
+                </div>
+                <Link
+                  href={`/bookings/menu?bookingId=${entry.bookingId}&type=${entry.type}`}
+                  className="rounded-md border border-border bg-card px-3 py-1 text-xs font-medium text-text-secondary hover:bg-card-elevated"
+                >
+                  Edit
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {eventMenusList.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-text-muted">Event Menus</h3>
+          <div className="space-y-2">
+            {eventMenusList.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between rounded-lg border border-border bg-card-elevated px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${entry.type === 'hibachi' ? 'bg-accent/10 text-accent' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
+                    {entry.type === 'hibachi' ? 'Hibachi' : 'Banquet'}
+                  </span>
+                  <span className="text-sm font-medium text-text-primary">{entry.bookingName}</span>
+                  <span className="text-xs text-text-muted">
+                    {entry.date} · {entry.type === 'hibachi' ? `${entry.count} guests` : `${entry.count} items`}
+                  </span>
+                </div>
+                <Link
+                  href={`/bookings/menu?bookingId=${entry.bookingId}`}
+                  className="rounded-md border border-border bg-card px-3 py-1 text-xs font-medium text-text-secondary hover:bg-card-elevated"
+                >
+                  Edit
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {templates.length === 0 && eventMenusList.length === 0 && !creating && (
+        <div className="flex h-32 items-center justify-center rounded-lg border border-border bg-card-elevated">
+          <p className="text-sm text-text-muted">No menus yet. Click + New Menu to create a template.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page Shell (exported for use in Settings) ─────────────────────────────────
 
 export function MenuSettingsContent() {
   const searchParams = useSearchParams();
-  const subtabFromUrl = searchParams.get('subtab') === 'catalog' ? 'catalog' : 'template';
-  const [activeTab, setActiveTab] = useState<'template' | 'catalog'>(subtabFromUrl);
+  const subtabFromUrl = searchParams.get('subtab') === 'catalog' ? 'catalog' : searchParams.get('subtab') === 'event-menus' ? 'event-menus' : 'template';
+  const [activeTab, setActiveTab] = useState<'template' | 'catalog' | 'event-menus'>(subtabFromUrl as 'template' | 'catalog' | 'event-menus');
   const router = useRouter();
 
   useEffect(() => {
     setActiveTab(subtabFromUrl);
   }, [subtabFromUrl]);
 
-  const setTab = (tab: 'template' | 'catalog') => {
+  const setTab = (tab: 'template' | 'catalog' | 'event-menus') => {
     setActiveTab(tab);
     router.replace(`/menus?subtab=${tab}`, { scroll: false });
   };
@@ -1124,9 +1384,17 @@ export function MenuSettingsContent() {
         >
           Item Catalog
         </button>
+        <button
+          onClick={() => setTab('event-menus')}
+          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'event-menus' ? 'bg-accent text-white shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+        >
+          Event Menus
+        </button>
       </div>
 
-      {activeTab === 'template' ? <MenuTemplateTab /> : <ItemCatalogTab />}
+      {activeTab === 'template' && <MenuTemplateTab />}
+      {activeTab === 'catalog' && <ItemCatalogTab />}
+      {activeTab === 'event-menus' && <EventMenusTab />}
     </div>
   );
 }

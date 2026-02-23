@@ -263,7 +263,7 @@ export default function BookingsPage() {
         try {
           const parsed = JSON.parse(saved) as Booking[];
           const normalized = parsed
-            .filter((b) => b.source !== 'inquiry')
+            .filter((b) => b.source !== 'inquiry' && b.source !== 'menu-template')
             .map((booking) => normalizeBookingWorkflowFields(booking));
           console.log('📅 Bookings: Loaded', normalized.length, 'bookings from localStorage');
           setBookings(normalized);

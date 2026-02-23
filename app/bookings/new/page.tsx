@@ -137,7 +137,7 @@ function NewBookingContent() {
 
     const existing = typeof window !== 'undefined' ? localStorage.getItem('bookings') : null;
     const list: Booking[] = existing ? JSON.parse(existing) : [];
-    const filtered = list.filter((b) => b.source !== 'inquiry');
+    const filtered = list.filter((b) => b.source !== 'inquiry' && b.source !== 'menu-template');
     saveBookings([...filtered, booking]);
     router.push(`/bookings/${booking.id}?step=${nextStepId ?? 'details'}`);
   };

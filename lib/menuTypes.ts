@@ -53,6 +53,7 @@ export interface CateringSelectedItem {
 export interface CateringEventMenu {
   id: string;
   bookingId: string;
+  name?: string;        // display name for template menus
   menuType: 'catering';
   selectedItems: CateringSelectedItem[];
   notes?: string;
@@ -88,6 +89,7 @@ export interface GuestMenuSelection {
 export interface EventMenu {
   id: string;
   bookingId: string;
+  name?: string;        // display name for template menus
   guestSelections: GuestMenuSelection[];
   createdAt: string;
   updatedAt: string;

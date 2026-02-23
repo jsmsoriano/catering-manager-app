@@ -49,15 +49,52 @@ function normalizeMenuItems(items: MenuItem[]): MenuItem[] {
   });
 }
 
+// ─── Menu Type Selector ───────────────────────────────────────────────────────
+
+function TypeSelectorHeader({
+  value,
+  onChange,
+}: {
+  value: 'hibachi' | 'catering';
+  onChange: (t: 'hibachi' | 'catering') => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {(
+        [
+          { id: 'hibachi' as const, title: 'Hibachi Private Dinner', desc: 'Per-guest protein & side selections' },
+          { id: 'catering' as const, title: 'Banquet Order', desc: 'Bulk items with servings & pricing' },
+        ] as const
+      ).map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onChange(opt.id)}
+          className={`rounded-xl border p-3 text-left transition-colors ${
+            value === opt.id
+              ? 'border-accent bg-accent/10'
+              : 'border-border bg-card hover:bg-card-elevated'
+          }`}
+        >
+          <p className="font-semibold text-text-primary">{opt.title}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{opt.desc}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Catering Menu Builder ────────────────────────────────────────────────────
 // Used for any event type that is NOT 'private-dinner' (e.g. buffet, corporate, etc.)
 
 function CateringMenuBuilder({
   booking,
   router,
+  typeSelector,
 }: {
   booking: Booking;
   router: ReturnType<typeof useRouter>;
+  typeSelector?: React.ReactNode;
 }) {
   const rules = useMoneyRules();
   const totalGuests = booking.adults + (booking.children ?? 0);
@@ -318,6 +355,13 @@ function CateringMenuBuilder({
           </button>
         </div>
       </div>
+
+      {/* Type selector strip */}
+      {typeSelector && (
+        <div className="shrink-0 border-b border-border bg-card-elevated px-6 py-3">
+          {typeSelector}
+        </div>
+      )}
 
       {/* Main: category tree (left) + item list (right) */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -594,7 +638,13 @@ function BookingMenuContent() {
   const router = useRouter();
   const rules = useMoneyRules();
   const bookingId = searchParams.get('bookingId');
+  const typeParam = searchParams.get('type') as 'hibachi' | 'catering' | null;
 
+  const [menuType, setMenuType] = useState<'hibachi' | 'catering'>(() => {
+    if (typeParam === 'hibachi') return 'hibachi';
+    if (typeParam === 'catering') return 'catering';
+    return 'hibachi'; // will be updated in useEffect once booking loads
+  });
   const [booking, setBooking] = useState<Booking | null>(null);
   const [existingMenu, setExistingMenu] = useState<EventMenu | null>(null);
   const [guestSelections, setGuestSelections] = useState<GuestMenuSelection[]>([]);
@@ -700,6 +750,11 @@ function BookingMenuContent() {
       }
 
       setBooking(foundBooking);
+
+      // Set menu type from booking when no explicit ?type= param
+      if (!typeParam) {
+        setMenuType(foundBooking.eventType === 'private-dinner' ? 'hibachi' : 'catering');
+      }
 
       // Load existing menu if it exists
       if (foundBooking.menuId) {
@@ -972,9 +1027,15 @@ function BookingMenuContent() {
     );
   }
 
-  // Dual-mode branch: non-private-dinner events use the catering menu builder
-  if (booking.eventType !== 'private-dinner') {
-    return <CateringMenuBuilder booking={booking} router={router} />;
+  // Dual-mode branch: show catering builder unless hibachi is selected
+  if (menuType !== 'hibachi') {
+    return (
+      <CateringMenuBuilder
+        booking={booking}
+        router={router}
+        typeSelector={<TypeSelectorHeader value={menuType} onChange={setMenuType} />}
+      />
+    );
   }
 
   return (
@@ -1007,6 +1068,11 @@ function BookingMenuContent() {
               Save Menu
             </button>
           </div>
+        </div>
+
+        {/* Type selector */}
+        <div className="mb-8">
+          <TypeSelectorHeader value={menuType} onChange={setMenuType} />
         </div>
 
         {/* Summary Cards */}
