@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatCurrency } from '@/lib/moneyRules';
@@ -1131,7 +1131,7 @@ export function MenuSettingsContent() {
   );
 }
 
-export default function MenusPage() {
+function MenusContent() {
   return (
     <div className="min-h-screen p-8">
       <div className="mx-auto max-w-5xl">
@@ -1147,5 +1147,14 @@ export default function MenusPage() {
         <MenuSettingsContent />
       </div>
     </div>
+  );
+}
+
+
+export default function MenusPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
+      <MenusContent />
+    </Suspense>
   );
 }

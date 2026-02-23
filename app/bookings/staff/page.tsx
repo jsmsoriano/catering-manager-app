@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeftIcon, UsersIcon } from '@heroicons/react/24/outline';
@@ -61,7 +61,7 @@ function findAssignmentForPosition(
   });
 }
 
-export default function BookingStaffPage() {
+function BookingStaffContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const bookingId = searchParams.get('bookingId');
@@ -384,5 +384,13 @@ export default function BookingStaffPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookingStaffPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
+      <BookingStaffContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
@@ -63,7 +63,7 @@ function saveBookings(bookings: Booking[]) {
   window.dispatchEvent(new Event('bookingsUpdated'));
 }
 
-export default function EventDetailPage() {
+function EventDetailContent() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -852,5 +852,14 @@ export default function EventDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+
+export default function EventDetailPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
+      <EventDetailContent />
+    </Suspense>
   );
 }
