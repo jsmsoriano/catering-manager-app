@@ -130,12 +130,18 @@ export default function BeoPage() {
         .beo-table { width: 100%; border-collapse: collapse; }
         .beo-table th, .beo-table td {
           text-align: left; padding: 0.4rem 0.6rem;
-          border: 1px solid #d1d5db; font-size: 0.875rem;
+          border: 1px solid var(--border); font-size: 0.875rem;
+          color: var(--text-primary);
         }
-        .beo-table th { background: #f3f4f6; font-weight: 600; }
+        .beo-table th {
+          background: var(--card-elevated);
+          color: var(--text-secondary);
+          font-weight: 600;
+        }
+        .beo-table tr:nth-child(even) td { background: var(--card-elevated); }
       `}</style>
 
-      <div className="beo-wrap font-sans text-gray-900">
+      <div className="beo-wrap font-sans text-text-primary">
 
         {/* Screen-only controls */}
         <div className="no-print mb-6 flex items-center justify-between">
@@ -155,20 +161,20 @@ export default function BeoPage() {
         </div>
 
         {/* ─── Header ─────────────────────────────────────────── */}
-        <div className="beo-section flex items-start justify-between border-b-2 border-gray-800 pb-4">
+        <div className="beo-section flex items-start justify-between border-b-2 border-border pb-4">
           <div>
-            <h1 className="text-2xl font-bold">{businessName}</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Banquet Event Order</p>
+            <h1 className="text-2xl font-bold text-text-primary">{businessName}</h1>
+            <p className="mt-0.5 text-sm text-text-muted">Banquet Event Order</p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-semibold">BEO # {beoNumber(booking.id)}</p>
-            <p className="text-xs text-gray-500">Generated {formatDate(new Date().toISOString().split('T')[0])}</p>
+            <p className="text-sm font-semibold text-text-primary">BEO # {beoNumber(booking.id)}</p>
+            <p className="text-xs text-text-muted">Generated {formatDate(new Date().toISOString().split('T')[0])}</p>
           </div>
         </div>
 
         {/* ─── Section 1: Event Overview ───────────────────────── */}
         <div className="beo-section">
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">1 — Event Overview</h2>
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-text-muted">1 — Event Overview</h2>
           <table className="beo-table">
             <tbody>
               <tr><th style={{width:'30%'}}>Event Type</th><td>{EVENT_LABELS[booking.eventType] ?? capitalize(booking.eventType)}</td></tr>
@@ -191,7 +197,7 @@ export default function BeoPage() {
 
         {/* ─── Section 2: Client Info ──────────────────────────── */}
         <div className="beo-section">
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">2 — Client Information</h2>
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-text-muted">2 — Client Information</h2>
           <table className="beo-table">
             <tbody>
               <tr><th style={{width:'30%'}}>Name</th><td>{booking.customerName}</td></tr>
@@ -203,7 +209,7 @@ export default function BeoPage() {
 
         {/* ─── Section 3: Menu ─────────────────────────────────── */}
         <div className="beo-section">
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">3 — Menu</h2>
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-text-muted">3 — Menu</h2>
 
           {/* Hibachi per-guest menu */}
           {eventMenu && eventMenu.guestSelections.length > 0 ? (
@@ -268,13 +274,13 @@ export default function BeoPage() {
               </tbody>
             </table>
           ) : (
-            <p className="text-sm text-gray-500 italic">No menu on file for this event.</p>
+            <p className="text-sm text-text-muted italic">No menu on file for this event.</p>
           )}
         </div>
 
         {/* ─── Section 4: Staff ────────────────────────────────── */}
         <div className="beo-section">
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">4 — Staff Assignments</h2>
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-text-muted">4 — Staff Assignments</h2>
           {assignedStaff.length > 0 ? (
             <table className="beo-table">
               <thead>
@@ -290,13 +296,13 @@ export default function BeoPage() {
               </tbody>
             </table>
           ) : (
-            <p className="text-sm text-gray-500 italic">No staff assigned yet.</p>
+            <p className="text-sm text-text-muted italic">No staff assigned yet.</p>
           )}
         </div>
 
         {/* ─── Section 5: Financials ───────────────────────────── */}
         <div className="beo-section">
-          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">5 — Financial Summary</h2>
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-text-muted">5 — Financial Summary</h2>
           <table className="beo-table">
             <tbody>
               <tr><th style={{width:'50%'}}>Subtotal</th><td>{formatCurrency(booking.subtotal)}</td></tr>
@@ -337,23 +343,15 @@ export default function BeoPage() {
         {/* ─── Section 6: Notes ────────────────────────────────── */}
         {booking.notes && (
           <div className="beo-section">
-            <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-gray-500">6 — Notes / Special Instructions</h2>
-            <div
-              style={{
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                padding: '0.75rem',
-                fontSize: '0.875rem',
-                whiteSpace: 'pre-wrap',
-              }}
-            >
+            <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-text-muted">6 — Notes / Special Instructions</h2>
+            <div className="rounded border border-border bg-card-elevated p-3 text-sm text-text-primary whitespace-pre-wrap">
               {booking.notes}
             </div>
           </div>
         )}
 
         {/* ─── Footer ─────────────────────────────────────────── */}
-        <div className="mt-8 border-t border-gray-200 pt-4 text-center text-xs text-gray-400">
+        <div className="mt-8 border-t border-border pt-4 text-center text-xs text-text-muted">
           {businessName} · BEO #{beoNumber(booking.id)} · Generated {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
         </div>
 
