@@ -6,14 +6,12 @@ import { createClient } from '@/lib/supabase/client';
 import { fetchBookings, upsertBookings, deleteBooking } from '@/lib/db/bookings';
 import { normalizeBookingWorkflowFields } from '@/lib/bookingWorkflow';
 import { loadFromStorage } from '@/lib/storage';
-import { useAuth } from '@/components/AuthProvider';
 import type { Booking } from '@/lib/bookingTypes';
 
 export const BOOKINGS_QK = ['bookings'] as const;
 
 export function useBookingsQuery() {
   const supabase = useMemo(() => createClient(), []);
-  const { user } = useAuth();
   const qc = useQueryClient();
 
   const query = useQuery({
@@ -28,7 +26,7 @@ export function useBookingsQuery() {
   const saveBooking = useMutation({
     mutationFn: async (booking: Booking) => {
       const normalized = normalizeBookingWorkflowFields(booking);
-      await upsertBookings(supabase!, [normalized], user?.id);
+      await upsertBookings(supabase!, [normalized]);
       return normalized;
     },
     onMutate: async (booking) => {
@@ -50,7 +48,7 @@ export function useBookingsQuery() {
   const addBooking = useMutation({
     mutationFn: async (booking: Booking) => {
       const normalized = normalizeBookingWorkflowFields(booking);
-      await upsertBookings(supabase!, [normalized], user?.id);
+      await upsertBookings(supabase!, [normalized]);
       return normalized;
     },
     onMutate: async (booking) => {
