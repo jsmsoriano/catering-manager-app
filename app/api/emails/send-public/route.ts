@@ -4,39 +4,73 @@
 // Only allows 'inquiry_ack' type. No auth required so public forms can send
 // acknowledgment emails without an active admin session.
 // Scoped narrowly to prevent abuse: only one email type, requires RESEND_API_KEY.
+// Validates email format and optionally restricts to RESEND_ALLOWED_EMAIL_DOMAINS.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { inquiryAckEmail } from '@/lib/emailTemplates';
+import { createRateLimiter } from '@/lib/rateLimit';
+import { sendPublicEmailBodySchema } from '@/lib/apiSchemas';
+
+const limiter = createRateLimiter({ windowMs: 60_000, max: 10 });
+
+/** If set (comma-separated, e.g. gmail.com,outlook.com), only these domains may receive inquiry_ack. */
+function getAllowedEmailDomains(): string[] {
+  const raw = process.env.RESEND_ALLOWED_EMAIL_DOMAINS;
+  if (!raw?.trim()) return [];
+  return raw.split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
+}
+
+function isEmailDomainAllowed(email: string, allowedDomains: string[]): boolean {
+  if (allowedDomains.length === 0) return true;
+  const domain = email.split('@')[1]?.toLowerCase();
+  return domain ? allowedDomains.includes(domain) : false;
+}
 
 export async function POST(req: NextRequest) {
+  const rl = await limiter.check(req);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a moment and try again.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+    );
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     // Email not configured — silently succeed so inquiry submission still works
     return NextResponse.json({ success: true, skipped: true });
   }
 
-  let body: {
-    type: 'inquiry_ack';
-    customerName: string;
-    booking: { customerEmail: string; eventDate: string };
-    businessName?: string;
-  };
-
+  let rawBody: unknown;
   try {
-    body = await req.json();
+    rawBody = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  if (body.type !== 'inquiry_ack') {
-    return NextResponse.json({ error: 'Only inquiry_ack is allowed on this endpoint' }, { status: 400 });
+  const parsed = sendPublicEmailBodySchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', issues: parsed.error.issues },
+      { status: 400 }
+    );
   }
 
-  const { customerName, booking, businessName = 'Your Caterer' } = body;
+  const { customerName, booking, businessName = 'Your Caterer' } = parsed.data;
+  const allowedDomains = getAllowedEmailDomains();
+  if (process.env.NODE_ENV === 'production' && allowedDomains.length === 0) {
+    return NextResponse.json(
+      { error: 'Email allowlist is not configured' },
+      { status: 503 }
+    );
+  }
 
-  if (!booking?.customerEmail) {
-    return NextResponse.json({ error: 'No customer email provided' }, { status: 400 });
+  if (!isEmailDomainAllowed(booking.customerEmail, allowedDomains)) {
+    return NextResponse.json(
+      { error: 'Email domain is not allowed for this endpoint' },
+      { status: 400 }
+    );
   }
 
   const { subject, html } = inquiryAckEmail(customerName, booking.eventDate ?? '', businessName);
