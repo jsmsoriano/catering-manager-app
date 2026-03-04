@@ -36,6 +36,48 @@ export interface MenuItem {
   tags?: string[];            // workflow tags e.g., ['hibachi', 'standard', 'custom']
   dietaryTags?: string[];     // e.g., ['vegetarian', 'gluten-free', 'dairy-free']
   allergens?: string[];       // e.g., ['shellfish', 'nuts', 'dairy']
+  station?: string;
+  status?: 'active' | 'inactive' | 'archived';
+  isBeverage?: boolean;
+  accountingCode?: string;
+  internalNotes?: string;
+  recipe?: MenuItemRecipeLine[];
+  laborMinutes?: number;
+  laborRatePerHour?: number;
+  packlistItems?: MenuItemPacklistLine[];
+  packageAssociations?: string[];
+  portionSegments?: MenuItemPortionSegment[];
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  lastCostUpdatedAt?: string;
+}
+
+export interface MenuItemRecipeLine {
+  id: string;
+  ingredient: string;
+  quantity: number;
+  unit: string;
+  unitCost?: number;
+  notes?: string;
+}
+
+export interface MenuItemPacklistLine {
+  id: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  required?: boolean;
+  notes?: string;
+}
+
+export interface MenuItemPortionSegment {
+  id: string;
+  label: string;
+  portionSize: number;
+  portionUnit: string;
+  yieldCount: number;
+  salePrice: number;
+  cost: number;
 }
 
 // ─── Catering event menu (bulk/buffet — not per-guest) ───────────────────────
@@ -57,6 +99,9 @@ export interface CateringEventMenu {
   menuType: 'catering';
   selectedItems: CateringSelectedItem[];
   notes?: string;
+  approvalStatus?: 'draft' | 'ready' | 'approved';
+  approvedAt?: string;
+  approvedBy?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +136,9 @@ export interface EventMenu {
   bookingId: string;
   name?: string;        // display name for template menus
   guestSelections: GuestMenuSelection[];
+  approvalStatus?: 'draft' | 'ready' | 'approved';
+  approvedAt?: string;
+  approvedBy?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,4 +1,5 @@
 import type { Booking } from './bookingTypes';
+import { StorageEvent } from './storageEvents';
 
 export type CustomerId = string;
 
@@ -42,7 +43,11 @@ export interface DerivedCustomer {
   totalRevenue: number;      // sum of non-cancelled booking.total
   totalPaid: number;         // sum of non-cancelled booking.amountPaid
   bookingCount: number;
+  eventCount: number;
   completedCount: number;
+  averageEventValue: number;
+  lifetimeRevenue: number;
+  lifetimePaid: number;
   lastEventDate: string | null;
   firstEventDate: string | null;
   tags: CustomerTag[];
@@ -56,4 +61,4 @@ export interface BookingPrefill {
 }
 
 export const CUSTOMER_PROFILES_KEY = 'customerProfiles';
-export const CUSTOMER_PROFILES_EVENT = 'customerProfilesUpdated';
+export const CUSTOMER_PROFILES_EVENT = StorageEvent.CustomerProfiles;

@@ -4,8 +4,10 @@
 
 1. Open your project: [Supabase Dashboard](https://app.supabase.com) → select **catering-manager-app** (or your project).
 2. Go to **SQL Editor** → **New query**.
-3. Copy the contents of `migrations/001_initial_schema.sql` and paste into the editor.
-4. Click **Run**. All tables and RLS policies will be created (or skipped if they already exist).
+3. Apply migration files in order (`001` → latest), including:
+   - `migrations/017_harden_proposal_tokens_select.sql`
+   - `migrations/018_drop_proposal_tokens_public_read.sql`
+4. Click **Run** for each migration. All tables, indexes, and RLS policies will be created (or skipped if already applied).
 
 ## 2. Test the database from the app
 
@@ -40,5 +42,10 @@ Ensure `.env.local` has:
 
 - `NEXT_PUBLIC_SUPABASE_URL` = your project URL (e.g. `https://xxxx.supabase.co`)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = your project anon key
+- `SUPABASE_SERVICE_ROLE_KEY` = your project service role key (server-only; never expose to browser)
+- `BYPASS_AUTH=false` for production
+- `NEXT_PUBLIC_SITE_URL=https://your-app-domain` for proposal link generation
+- `RESEND_ALLOWED_EMAIL_DOMAINS=...` for public inquiry email restrictions
+- `ADMIN_EMAILS=owner@...` for bootstrap admin access fallback
 
 From Supabase: **Project Settings** → **API** → Project URL and anon public key.

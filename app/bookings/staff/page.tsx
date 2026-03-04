@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useLocalStorageSync } from '@/lib/useLocalStorageSync';
+import { StorageEvent } from '@/lib/storageEvents';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeftIcon, UsersIcon } from '@heroicons/react/24/outline';
@@ -66,8 +68,8 @@ function BookingStaffContent() {
   const router = useRouter();
   const bookingId = searchParams.get('bookingId');
   const rules = useMoneyRules();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
+  const [bookings] = useLocalStorageSync<Booking[]>('bookings', [], StorageEvent.Bookings);
+  const [staffRecords] = useLocalStorageSync<StaffRecord[]>('staff', [], StorageEvent.Staff);
   const [staffingProfileId, setStaffingProfileId] = useState<string | undefined>(undefined);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[] | undefined>(undefined);
   const [saved, setSaved] = useState(false);
@@ -77,29 +79,6 @@ function BookingStaffContent() {
     [bookings, bookingId]
   );
 
-  useEffect(() => {
-    const raw = localStorage.getItem('bookings');
-    setBookings(raw ? JSON.parse(raw) : []);
-    const onUpdate = () => setBookings(JSON.parse(localStorage.getItem('bookings') || '[]'));
-    window.addEventListener('storage', onUpdate);
-    window.addEventListener('bookingsUpdated', onUpdate);
-    return () => {
-      window.removeEventListener('storage', onUpdate);
-      window.removeEventListener('bookingsUpdated', onUpdate);
-    };
-  }, []);
-
-  useEffect(() => {
-    const raw = localStorage.getItem('staff');
-    setStaffRecords(raw ? JSON.parse(raw) : []);
-    const onUpdate = () => setStaffRecords(JSON.parse(localStorage.getItem('staff') || '[]'));
-    window.addEventListener('storage', onUpdate);
-    window.addEventListener('staffUpdated', onUpdate);
-    return () => {
-      window.removeEventListener('storage', onUpdate);
-      window.removeEventListener('staffUpdated', onUpdate);
-    };
-  }, []);
 
   useEffect(() => {
     if (booking) {
@@ -238,7 +217,7 @@ function BookingStaffContent() {
     localStorage.setItem('bookings', JSON.stringify(list));
     window.dispatchEvent(new Event('bookingsUpdated'));
     setSaved(true);
-    setTimeout(() => router.push('/bookings'), 1500);
+    setTimeout(() => router.push(bookingId ? `/bookings/${bookingId}?step=staff` : '/bookings'), 1500);
   };
 
   if (!bookingId) {
@@ -280,6 +259,20 @@ function BookingStaffContent() {
         <div className="mb-6 rounded-lg border border-border bg-card-elevated p-4">
           <p className="text-sm font-medium text-text-primary">{booking.customerName}</p>
           <p className="text-sm text-text-muted">{eventDate} · {guests} guests</p>
+          {financialsWithProfile && (
+            <p className="mt-1 text-xs text-text-muted">
+              {financialsWithProfile.staffingPlan.chefRoles.length} chef(s)
+              {financialsWithProfile.staffingPlan.assistantNeeded ? ' + 1 assistant' : ''}
+              {typeof financialsWithProfile.staffingPlan.recommendedGrills === 'number'
+                ? ` · ${financialsWithProfile.staffingPlan.recommendedGrills} grill(s)`
+                : ''}
+              {typeof financialsWithProfile.staffingPlan.showIncluded === 'boolean'
+                ? financialsWithProfile.staffingPlan.showIncluded
+                  ? ' · Chef show included'
+                  : ' · No chef show (buffet service)'
+                : ''}
+            </p>
+          )}
         </div>
 
         {(rules.staffing.profiles ?? []).length > 0 && (

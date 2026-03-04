@@ -6,6 +6,7 @@ import type { EventType } from './types';
 import type { StaffAssignment } from './staffTypes';
 import type { MenuPricingSnapshot } from './menuTypes';
 import type { BusinessType, PricingMode } from './templateConfig';
+import type { HibachiServiceFormat } from './hibachiService';
 
 export interface BookingPricingSnapshot {
   adultBasePrice: number;   // rate per adult at booking time
@@ -19,10 +20,13 @@ export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 /** CRM pipeline stage for Kanban board */
 export type PipelineStatus =
   | 'inquiry'
+  | 'qualified'
   | 'quote_sent'
+  | 'follow_up'
   | 'deposit_pending'
   | 'booked'
-  | 'completed';
+  | 'completed'
+  | 'declined';
 
 export type ServiceStatus = BookingStatus;
 export type PaymentStatus =
@@ -43,10 +47,12 @@ export interface Booking {
   customerName: string;
   customerEmail: string;
   customerPhone: string;
+  customerId?: string;
 
   // Event Details
   adults: number;
   children: number;
+  serviceFormat?: HibachiServiceFormat;
   location: string;
   distanceMiles: number;
   premiumAddOn: number;
@@ -105,11 +111,20 @@ export interface Booking {
   // CRM pipeline (Kanban)
   pipeline_status?: PipelineStatus;
   pipeline_status_updated_at?: string; // ISO datetime when pipeline_status last changed
+  inquiryScore?: number;
+  lastContactedAt?: string;
+  nextFollowUpAt?: string;
+  lostReason?: string;
+  sourceChannel?: string;
 
   // Proposal (client-facing quote link)
   proposalToken?: string;      // UUID token for the public proposal URL
   proposalSentAt?: string;     // ISO datetime when proposal email was sent
   proposalAccepted?: boolean;  // true once client accepts via public page
+  quoteVersion?: number;       // Quote revision version (v1, v2, ...)
+  quoteRevisionCount?: number; // Number of times quote was revised after v1
+  lastQuoteRevisionReason?: string;
+  lastQuoteRevisedAt?: string;
 
   // Metadata
   createdAt: string;
@@ -125,6 +140,7 @@ export interface BookingFormData {
   customerPhone: string;
   adults: number;
   children: number;
+  serviceFormat?: HibachiServiceFormat;
   location: string;
   distanceMiles: number;
   premiumAddOn: number;

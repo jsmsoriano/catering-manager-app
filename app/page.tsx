@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { format, startOfMonth, endOfMonth, isWithinInterval, isToday, isTomorrow, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isWithinInterval, isToday, isTomorrow, startOfDay, endOfDay, eachWeekOfInterval } from 'date-fns';
 import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import { useAuth } from '@/components/AuthProvider';
-import type { Booking } from '@/lib/bookingTypes';
+import { useBookingsQuery } from '@/lib/hooks/useBookingsQuery';
 import {
   CalendarDaysIcon,
   BanknotesIcon,
@@ -20,6 +20,18 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
 
 function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
@@ -49,7 +61,8 @@ function getAvatarUrl(user: { user_metadata?: { avatar_url?: string; picture?: s
 export default function DashboardPage() {
   const { user } = useAuth();
   const rules = useMoneyRules();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const { bookings } = useBookingsQuery();
+  const [mounted, setMounted] = useState(false);
   const [periodStart, setPeriodStart] = useState<string>(() =>
     format(getDefaultPeriod().start, 'yyyy-MM-dd')
   );
@@ -57,49 +70,34 @@ export default function DashboardPage() {
     format(getDefaultPeriod().end, 'yyyy-MM-dd')
   );
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const setPeriodToCurrentMonth = () => {
     const { start, end } = getDefaultPeriod();
     setPeriodStart(format(start, 'yyyy-MM-dd'));
     setPeriodEnd(format(end, 'yyyy-MM-dd'));
   };
 
-  // Load bookings and listen for updates
-  useEffect(() => {
-    const loadBookings = () => {
-      const saved = localStorage.getItem('bookings');
-      if (saved) {
-        try {
-          setBookings(JSON.parse(saved));
-        } catch {
-          // ignore parse errors
-        }
-      }
-    };
-
-    loadBookings();
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'bookings') loadBookings();
-    };
-    const handleCustomEvent = () => loadBookings();
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('bookingsUpdated', handleCustomEvent);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('bookingsUpdated', handleCustomEvent);
-    };
-  }, []);
-
   // Dashboard computed data (filtered by selected period)
   const dashboard = useMemo(() => {
     const now = new Date();
-    const rangeStart = startOfDay(parseLocalDate(periodStart));
-    const rangeEnd = endOfDay(parseLocalDate(periodEnd));
+    const list = Array.isArray(bookings) ? bookings : [];
+    let rangeStart: Date;
+    let rangeEnd: Date;
+    try {
+      rangeStart = startOfDay(parseLocalDate(periodStart));
+      rangeEnd = endOfDay(parseLocalDate(periodEnd));
+      if (Number.isNaN(rangeStart.getTime())) rangeStart = startOfMonth(now);
+      if (Number.isNaN(rangeEnd.getTime())) rangeEnd = endOfMonth(now);
+    } catch {
+      rangeStart = startOfMonth(now);
+      rangeEnd = endOfMonth(now);
+    }
 
     // Bookings in selected period (non-cancelled)
-    const periodBookings = bookings.filter((b) => {
+    const periodBookings = list.filter((b) => {
       const d = parseLocalDate(b.eventDate);
       return isWithinInterval(d, { start: rangeStart, end: rangeEnd }) && b.status !== 'cancelled';
     });
@@ -127,9 +125,12 @@ export default function DashboardPage() {
     });
 
     const profitMargin = totalRevenue > 0 ? (totalGrossProfit / totalRevenue) * 100 : 0;
+    const n = periodBookings.length;
+    const avgRevenuePerEvent = n > 0 ? totalRevenue / n : 0;
+    const avgProfitPerEvent = n > 0 ? totalGrossProfit / n : 0;
 
     // Upcoming events (confirmed or pending, future dates, across all months)
-    const upcoming = bookings
+    const upcoming = list
       .filter((b) => {
         const d = parseLocalDate(b.eventDate);
         return d >= new Date(now.getFullYear(), now.getMonth(), now.getDate()) &&
@@ -151,21 +152,103 @@ export default function DashboardPage() {
       });
 
     // Action items
-    const todayEvents = bookings.filter((b) => {
+    const todayEvents = list.filter((b) => {
       const d = parseLocalDate(b.eventDate);
       return isToday(d) && b.status !== 'cancelled';
     });
-    const tomorrowEvents = bookings.filter((b) => {
+    const tomorrowEvents = list.filter((b) => {
       const d = parseLocalDate(b.eventDate);
       return isTomorrow(d) && b.status !== 'cancelled';
     });
-    const pendingBookings = bookings.filter((b) => b.status === 'pending');
+    const pendingBookings = list.filter((b) => b.status === 'pending');
+
+    // Pending $ at stake (quotes awaiting confirmation)
+    let pendingRevenue = 0;
+    pendingBookings.forEach((b) => {
+      const { financials: fin } = calculateBookingFinancials(b, rules);
+      pendingRevenue += fin.totalCharged;
+    });
+
+    // This week / next week (load and revenue — how caterers plan)
+    const weekOpt = { weekStartsOn: 0 as const };
+    const thisWeekStart = startOfWeek(now, weekOpt);
+    const thisWeekEnd = endOfWeek(now, weekOpt);
+    const nextWeekStart = addDays(thisWeekEnd, 1);
+    const nextWeekEnd = endOfWeek(nextWeekStart, weekOpt);
+    const thisWeekBookings = list.filter((b) => {
+      const d = parseLocalDate(b.eventDate);
+      return isWithinInterval(d, { start: thisWeekStart, end: thisWeekEnd }) && b.status !== 'cancelled';
+    });
+    const nextWeekBookings = list.filter((b) => {
+      const d = parseLocalDate(b.eventDate);
+      return isWithinInterval(d, { start: nextWeekStart, end: nextWeekEnd }) && b.status !== 'cancelled';
+    });
+    let thisWeekRevenue = 0;
+    let thisWeekGuests = 0;
+    thisWeekBookings.forEach((b) => {
+      const { financials: fin } = calculateBookingFinancials(b, rules);
+      thisWeekRevenue += fin.totalCharged;
+      thisWeekGuests += b.adults + b.children;
+    });
+    let nextWeekRevenue = 0;
+    let nextWeekGuests = 0;
+    nextWeekBookings.forEach((b) => {
+      const { financials: fin } = calculateBookingFinancials(b, rules);
+      nextWeekRevenue += fin.totalCharged;
+      nextWeekGuests += b.adults + b.children;
+    });
+    const thisWeek = { events: thisWeekBookings.length, guests: thisWeekGuests, revenue: thisWeekRevenue };
+    const nextWeek = { events: nextWeekBookings.length, guests: nextWeekGuests, revenue: nextWeekRevenue };
+
+    const todayStart = startOfDay(now);
+
+    // Confirmed revenue in the next 30 days (cash flow)
+    const thirtyDaysOut = addDays(todayStart, 30);
+    const upcomingConfirmed = list.filter((b) => {
+      const d = parseLocalDate(b.eventDate);
+      return b.status === 'confirmed' && isWithinInterval(d, { start: todayStart, end: thirtyDaysOut });
+    });
+    let upcoming30DayRevenue = 0;
+    upcomingConfirmed.forEach((b) => {
+      const { financials: fin } = calculateBookingFinancials(b, rules);
+      upcoming30DayRevenue += fin.totalCharged;
+    });
+    const upcoming30DayEventCount = upcomingConfirmed.length;
 
     // Confirmed upcoming count (in period, from today onward)
-    const todayStart = startOfDay(now);
     const upcomingConfirmedCount = periodBookings.filter(
       (b) => b.status === 'confirmed' && parseLocalDate(b.eventDate) >= todayStart
     ).length;
+
+    // Revenue by week (for chart)
+    const weeks = eachWeekOfInterval({ start: rangeStart, end: rangeEnd }, { weekStartsOn: 0 });
+    const revenueByWeek = weeks.map((weekStart) => {
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekBookings = periodBookings.filter((b) => {
+        const d = parseLocalDate(b.eventDate);
+        return isWithinInterval(d, { start: weekStart, end: endOfDay(weekEnd) });
+      });
+      let rev = 0;
+      let profit = 0;
+      weekBookings.forEach((b) => {
+        const { financials: fin } = calculateBookingFinancials(b, rules);
+        rev += fin.subtotal + fin.distanceFee;
+        profit += fin.grossProfit;
+      });
+      return {
+        weekLabel: format(weekStart, 'MMM d'),
+        revenue: rev,
+        profit,
+        events: weekBookings.length,
+      };
+    });
+
+    // Event mix for pie (Private vs Buffet)
+    const eventMixData = [
+      { name: 'Private', value: privateCount, fill: 'var(--color-accent)' },
+      { name: 'Buffet', value: buffetCount, fill: 'var(--color-text-muted)' },
+    ].filter((d) => d.value > 0);
 
     return {
       upcomingConfirmedCount,
@@ -174,14 +257,23 @@ export default function DashboardPage() {
       totalGrossProfit,
       profitMargin,
       pendingCount: statusCounts.pending,
+      pendingRevenue,
       statusCounts,
       privateCount,
       buffetCount,
       totalEvents: periodBookings.length,
+      avgRevenuePerEvent,
+      avgProfitPerEvent,
       upcoming,
       todayEvents,
       tomorrowEvents,
       pendingBookings,
+      revenueByWeek,
+      eventMixData,
+      thisWeek,
+      nextWeek,
+      upcoming30DayRevenue,
+      upcoming30DayEventCount,
     };
   }, [bookings, rules, periodStart, periodEnd]);
 
@@ -310,10 +402,34 @@ export default function DashboardPage() {
                 <p className="text-2xl font-bold text-text-primary">
                   {dashboard.pendingBookings.length}
                 </p>
-                <p className="text-xs text-text-muted">awaiting confirmation</p>
+                <p className="text-xs text-text-muted">
+                  {dashboard.pendingRevenue > 0 ? formatCurrency(dashboard.pendingRevenue) + ' awaiting confirmation' : 'awaiting confirmation'}
+                </p>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* This week / Next week — load at a glance */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-4 text-base font-semibold text-text-primary">This week & next</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-lg bg-card-elevated/60 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">This week</p>
+              <p className="mt-1 text-2xl font-bold text-text-primary">{dashboard.thisWeek.events} events</p>
+              <p className="text-sm text-text-secondary">{dashboard.thisWeek.guests} guests · {formatCurrency(dashboard.thisWeek.revenue)}</p>
+            </div>
+            <div className="rounded-lg bg-card-elevated/60 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Next week</p>
+              <p className="mt-1 text-2xl font-bold text-text-primary">{dashboard.nextWeek.events} events</p>
+              <p className="text-sm text-text-secondary">{dashboard.nextWeek.guests} guests · {formatCurrency(dashboard.nextWeek.revenue)}</p>
+            </div>
+          </div>
+          {dashboard.upcoming30DayRevenue > 0 && (
+            <p className="mt-3 border-t border-border pt-3 text-sm text-text-secondary">
+              <span className="font-medium text-text-primary">Next 30 days (confirmed):</span> {formatCurrency(dashboard.upcoming30DayRevenue)} from {dashboard.upcoming30DayEventCount} events
+            </p>
+          )}
         </div>
 
         {/* Upcoming Events Table */}
@@ -394,6 +510,76 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Charts — render only after mount to avoid Recharts SSR/hydration issues */}
+        {mounted && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Revenue over time (by week in period) */}
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
+              Revenue by week
+            </h2>
+            {dashboard.revenueByWeek.length > 0 ? (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dashboard.revenueByWeek} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="weekLabel" tick={{ fontSize: 12 }} stroke="var(--color-text-muted)" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="var(--color-text-muted)" tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--color-card-elevated)', border: '1px solid var(--color-border)', borderRadius: '8px' }}
+                      labelStyle={{ color: 'var(--color-text-primary)' }}
+                      formatter={(value) => [formatCurrency(Number(value ?? 0)), '']}
+                      labelFormatter={(label) => `Week of ${label}`}
+                    />
+                    <Legend />
+                    <Bar dataKey="revenue" fill="var(--color-accent)" name="Revenue" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="profit" fill="var(--color-success)" name="Profit" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-text-muted">No events in this period</p>
+            )}
+          </div>
+
+          {/* Event mix: Private vs Buffet */}
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="mb-4 text-lg font-semibold text-text-primary">
+              Event mix
+            </h2>
+            {dashboard.eventMixData.length > 0 ? (
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={dashboard.eventMixData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={56}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      label={({ name, value }) => `${name}: ${value}`}
+                    >
+                      {dashboard.eventMixData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--color-card-elevated)', border: '1px solid var(--color-border)', borderRadius: '8px' }}
+                      formatter={(value) => [Number(value ?? 0), 'Events']}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-text-muted">No events in this period</p>
+            )}
+          </div>
+        </div>
+        )}
+
         {/* Monthly Snapshot + Action Items */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Monthly Snapshot */}
@@ -457,6 +643,22 @@ export default function DashboardPage() {
                     <span className="text-text-secondary">Gross Profit</span>
                     <span className="font-semibold text-success">{formatCurrency(dashboard.totalGrossProfit)}</span>
                   </div>
+                  {dashboard.totalEvents > 0 && (
+                    <div className="border-t border-border pt-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-text-secondary">Avg per event</span>
+                        <span className="text-text-muted">—</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-text-muted">
+                        <span>Revenue</span>
+                        <span>{formatCurrency(dashboard.avgRevenuePerEvent)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-text-muted">
+                        <span>Profit</span>
+                        <span>{formatCurrency(dashboard.avgProfitPerEvent)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

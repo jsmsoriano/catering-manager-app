@@ -193,9 +193,26 @@ export default function BeoPage() {
 
         {/* ─── Header ─────────────────────────────────────────── */}
         <div className="beo-section flex items-start justify-between border-b-2 border-border pb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary">{businessName}</h1>
-            <p className="mt-0.5 text-sm text-text-muted">Banquet Event Order</p>
+          <div className="flex items-start gap-3">
+            {config.logoUrl && (
+              <img
+                src={config.logoUrl}
+                alt={businessName}
+                className="h-12 w-12 rounded-md object-contain"
+              />
+            )}
+            <div>
+              <h1 className="text-2xl font-bold text-text-primary">{businessName}</h1>
+              <p className="mt-0.5 text-sm text-text-muted">Banquet Event Order</p>
+              {config.businessAddress && (
+                <p className="mt-0.5 text-xs text-text-muted">{config.businessAddress}</p>
+              )}
+              {(config.businessPhone || config.businessEmail) && (
+                <p className="text-xs text-text-muted">
+                  {[config.businessPhone, config.businessEmail].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold text-text-primary">BEO # {beoNumber(booking.id)}</p>

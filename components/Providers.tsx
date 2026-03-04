@@ -1,11 +1,28 @@
 'use client';
 
+import { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 30_000,    // data stays fresh 30s; no background polling
+            gcTime: 5 * 60_000,   // cache kept 5 min after component unmounts
+            retry: 1,
+          },
+        },
+      })
+  );
+
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-      {children}
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        {children}
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

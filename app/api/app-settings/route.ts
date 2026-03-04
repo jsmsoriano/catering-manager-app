@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getTemplateConfig, saveTemplateConfig } from '@/lib/appSettings';
 import { normalizeTemplateConfig } from '@/lib/templateConfig';
+import { isAdminUser } from '@/lib/auth/admin';
 
 async function getAuthenticatedUser() {
   const supabase = await createClient();
@@ -28,7 +29,7 @@ export async function PATCH(request: Request) {
   if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  if (user.app_metadata?.role !== 'admin') {
+  if (!isAdminUser(user)) {
     return Response.json({ error: 'Forbidden' }, { status: 403 });
   }
   try {

@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import type { ProposalToken } from '@/lib/proposalTypes';
+import { calculateGuestChangeCutoffISO, isGuestChangeLocked } from '@/lib/guestChangePolicy';
+import { calculateMenuChangeCutoffISO, isMenuChangeLocked } from '@/lib/menuChangePolicy';
+import { getLocalProposalToken, updateLocalProposalSnapshot, updateLocalProposalStatus } from '@/lib/localProposalTokens';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -19,6 +21,28 @@ function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
+function formatDateTime(iso: string | null | undefined) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d);
+}
+
+/** Safe logo URL for <img src>: only https: or data:image/ (inline images). */
+function safeLogoUrl(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const t = url.trim().toLowerCase();
+  if (t.startsWith('https://')) return url;
+  if (t.startsWith('data:image/')) return url;
+  return null;
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ProposalPage() {
@@ -30,40 +54,57 @@ export default function ProposalPage() {
   const [notFound, setNotFound] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [editingAdults, setEditingAdults] = useState(1);
+  const [editingChildren, setEditingChildren] = useState(0);
+  const [savingGuests, setSavingGuests] = useState(false);
+  const [guestMessage, setGuestMessage] = useState<string | null>(null);
+  const [menuRequestNote, setMenuRequestNote] = useState('');
+  const [savingMenuRequest, setSavingMenuRequest] = useState(false);
+  const [menuRequestMessage, setMenuRequestMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      const supabase = createClient();
-      if (!supabase) { setNotFound(true); setLoading(false); return; }
+      const local = getLocalProposalToken(token);
+      if (local) {
+        setProposal(local);
+        if (local.status === 'accepted') setAccepted(true);
+        setLoading(false);
+        return;
+      }
 
-      const { data, error } = await supabase
-        .from('proposal_tokens')
-        .select('*')
-        .eq('token', token)
-        .single();
-
-      if (error || !data) {
+      const res = await fetch(`/api/proposals/public/${encodeURIComponent(token)}`);
+      if (!res.ok) {
         setNotFound(true);
       } else {
-        // Map snake_case DB columns to camelCase
-        setProposal({
-          id: data.id,
-          token: data.token,
-          bookingId: data.booking_id,
-          status: data.status,
-          snapshot: data.snapshot,
-          createdAt: data.created_at,
-          acceptedAt: data.accepted_at,
-          expiresAt: data.expires_at,
-        });
-        if (data.status === 'accepted') setAccepted(true);
+        const payload = await res.json().catch(() => ({ proposal: null as ProposalToken | null }));
+        if (!payload?.proposal) {
+          setNotFound(true);
+        } else {
+          setProposal(payload.proposal);
+          if (payload.proposal.status === 'accepted') setAccepted(true);
+        }
       }
       setLoading(false);
     };
     load();
   }, [token]);
 
+  useEffect(() => {
+    if (!proposal) return;
+    setEditingAdults(proposal.snapshot.adults);
+    setEditingChildren(proposal.snapshot.children ?? 0);
+    setMenuRequestNote(proposal.snapshot.menuChangeRequestNote ?? '');
+  }, [proposal]);
+
   const handleAccept = async () => {
+    if (token.startsWith('local-')) {
+      const updated = updateLocalProposalStatus(token, 'accepted');
+      if (updated) {
+        setProposal(updated);
+        setAccepted(true);
+      }
+      return;
+    }
     setAccepting(true);
     try {
       const res = await fetch('/api/proposals/accept', {
@@ -101,7 +142,125 @@ export default function ProposalPage() {
   }
 
   const { snapshot } = proposal;
+  const cutoffAt = snapshot.guestChangeCutoffAt || calculateGuestChangeCutoffISO(snapshot.eventDate);
+  const guestLocked = isGuestChangeLocked({
+    eventDate: snapshot.eventDate,
+    guestCountLockedAt: snapshot.guestCountLockedAt,
+    guestChangeCutoffAt: cutoffAt,
+  });
   const guests = snapshot.adults + (snapshot.children ?? 0);
+  const menuCutoffAt = snapshot.menuChangeCutoffAt || calculateMenuChangeCutoffISO(snapshot.eventDate);
+  const menuLocked = isMenuChangeLocked({
+    eventDate: snapshot.eventDate,
+    menuChangeLockedAt: snapshot.menuChangeLockedAt,
+    menuChangeCutoffAt: menuCutoffAt,
+  });
+  const logoUrl = safeLogoUrl(snapshot.logoUrl);
+
+  const handleSubmitMenuRequest = async () => {
+    const note = menuRequestNote.trim();
+    if (!note) {
+      setMenuRequestMessage('Please enter the menu updates you want.');
+      return;
+    }
+    setSavingMenuRequest(true);
+    setMenuRequestMessage(null);
+    try {
+      if (token.startsWith('local-')) {
+        const now = new Date().toISOString();
+        const locked = isMenuChangeLocked({
+          nowIso: now,
+          eventDate: snapshot.eventDate,
+          menuChangeLockedAt: snapshot.menuChangeLockedAt,
+          menuChangeCutoffAt: menuCutoffAt,
+        });
+        const updated = updateLocalProposalSnapshot(token, (prev) => ({
+          ...prev,
+          menuChangeCutoffAt: prev.menuChangeCutoffAt || menuCutoffAt,
+          menuChangeRequestStatus: 'pending',
+          menuChangeRequestNote: note,
+          menuChangeRequestedAt: now,
+          menuChangeRequestLate: locked,
+          menuChangeLockedAt: locked ? prev.menuChangeLockedAt ?? now : undefined,
+          menuChangeLockedReason: locked
+            ? prev.menuChangeLockedReason ?? 'Menu self-service changes are locked 2 days before the event.'
+            : undefined,
+          menuChangeResolvedAt: undefined,
+          menuChangeResolvedBy: undefined,
+          menuChangeResolutionNote: undefined,
+          requiresReview: true,
+        }));
+        if (updated) setProposal(updated);
+        setMenuRequestMessage(
+          locked
+            ? 'Late menu request submitted. Our team will review based on staff and supply availability.'
+            : 'Menu change request submitted. Our team will review and confirm updates.'
+        );
+        return;
+      }
+
+      const res = await fetch('/api/proposals/request-menu-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, note }),
+      });
+      const payload = await res.json().catch(() => ({} as { error?: string; locked?: boolean; snapshot?: ProposalToken['snapshot'] }));
+      if (!res.ok) {
+        setMenuRequestMessage(payload.error || 'Could not submit menu change request.');
+        return;
+      }
+      if (payload.snapshot) {
+        setProposal((prev) => (prev ? { ...prev, snapshot: payload.snapshot } : prev));
+      }
+      setMenuRequestMessage(
+        payload.locked
+          ? 'Late menu request submitted. Our team will review based on staff and supply availability.'
+          : 'Menu change request submitted. Our team will review and confirm updates.'
+      );
+    } finally {
+      setSavingMenuRequest(false);
+    }
+  };
+
+  const handleSaveGuestCount = async () => {
+    setSavingGuests(true);
+    setGuestMessage(null);
+    try {
+      const res = await fetch('/api/proposals/update-guests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          adults: Math.max(1, Math.round(editingAdults)),
+          children: Math.max(0, Math.round(editingChildren)),
+        }),
+      });
+      const payload = await res.json().catch(() => ({} as { error?: string; snapshot?: ProposalToken['snapshot'] }));
+      if (!res.ok) {
+        setGuestMessage(payload.error || 'Could not save guest count.');
+        if (res.status === 409) {
+          setProposal((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  snapshot: {
+                    ...prev.snapshot,
+                    guestCountLockedAt: prev.snapshot.guestCountLockedAt ?? new Date().toISOString(),
+                  },
+                }
+              : prev
+          );
+        }
+        return;
+      }
+      if (payload.snapshot) {
+        setProposal((prev) => (prev ? { ...prev, snapshot: payload.snapshot } : prev));
+      }
+      setGuestMessage('Guest count updated. We will review staffing and pricing changes.');
+    } finally {
+      setSavingGuests(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background py-10 px-4">
@@ -109,6 +268,11 @@ export default function ProposalPage() {
 
         {/* Header */}
         <div className="mb-8 text-center">
+          {logoUrl && (
+            <div className="mb-3 flex justify-center">
+              <img src={logoUrl} alt={snapshot.businessName} className="h-14 w-auto max-w-[220px] object-contain" />
+            </div>
+          )}
           <p className="text-sm font-semibold uppercase tracking-widest text-accent">
             {snapshot.businessName}
           </p>
@@ -157,6 +321,100 @@ export default function ProposalPage() {
               <p className="font-medium text-text-primary capitalize">{snapshot.eventType}</p>
             </div>
           </div>
+        </div>
+
+        {/* Guest Change Window */}
+        <div className="mb-5 rounded-xl border border-border bg-card p-6">
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-text-muted">Guest Count Window</h2>
+          {!guestLocked ? (
+            <p className="mb-4 text-sm text-text-secondary">
+              You can update guest count until <span className="font-medium text-text-primary">{formatDateTime(cutoffAt)}</span>.
+            </p>
+          ) : (
+            <p className="mb-4 text-sm text-amber-700 dark:text-amber-400">
+              Guest count is now locked. Contact us directly for urgent changes.
+            </p>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">Adults</label>
+              <input
+                type="number"
+                min={1}
+                value={editingAdults}
+                disabled={guestLocked}
+                onChange={(e) => setEditingAdults(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-secondary">Children</label>
+              <input
+                type="number"
+                min={0}
+                value={editingChildren}
+                disabled={guestLocked}
+                onChange={(e) => setEditingChildren(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+          </div>
+          {!guestLocked && (
+            <button
+              type="button"
+              onClick={handleSaveGuestCount}
+              disabled={savingGuests}
+              className="mt-4 inline-flex items-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60"
+            >
+              {savingGuests ? 'Saving…' : 'Save Guest Count'}
+            </button>
+          )}
+          {guestMessage && (
+            <p className={`mt-3 text-sm ${guestLocked ? 'text-amber-700 dark:text-amber-400' : 'text-text-secondary'}`}>
+              {guestMessage}
+            </p>
+          )}
+        </div>
+
+        {/* Menu Summary */}
+        <div className="mb-5 rounded-xl border border-border bg-card p-6">
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-text-muted">Menu Change Requests</h2>
+          {!menuLocked ? (
+            <p className="mb-4 text-sm text-text-secondary">
+              Self-service menu change requests are open until <span className="font-medium text-text-primary">{formatDateTime(menuCutoffAt)}</span>.
+            </p>
+          ) : (
+            <p className="mb-4 text-sm text-amber-700 dark:text-amber-400">
+              {snapshot.menuChangeLockedReason || 'Menu self-service changes are locked 2 days before the event.'}
+              {' '}You can still submit a late request and we will review availability.
+            </p>
+          )}
+          <label className="mb-1 block text-xs font-medium text-text-secondary">Requested menu updates</label>
+          <textarea
+            rows={3}
+            value={menuRequestNote}
+            onChange={(e) => setMenuRequestNote(e.target.value)}
+            placeholder="Example: Swap 4 guests from steak to chicken, no mushrooms on veggies."
+            className="w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-primary"
+          />
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleSubmitMenuRequest}
+              disabled={savingMenuRequest}
+              className="inline-flex items-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60"
+            >
+              {savingMenuRequest ? 'Submitting…' : menuLocked ? 'Submit Late Request' : 'Submit Menu Request'}
+            </button>
+            {snapshot.menuChangeRequestStatus && snapshot.menuChangeRequestStatus !== 'none' && (
+              <span className="text-xs font-medium text-text-muted">
+                Status: {snapshot.menuChangeRequestStatus}
+              </span>
+            )}
+          </div>
+          {menuRequestMessage && (
+            <p className="mt-3 text-sm text-text-secondary">{menuRequestMessage}</p>
+          )}
         </div>
 
         {/* Menu Summary */}

@@ -10,6 +10,8 @@ import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import { getPricingSlot } from '@/lib/templateConfig';
 import type { Booking, BookingPricingSnapshot } from '@/lib/bookingTypes';
 import { normalizeBookingWorkflowFields } from '@/lib/bookingWorkflow';
+import { getHibachiServiceFormat } from '@/lib/hibachiService';
+import { useBookingsQuery } from '@/lib/hooks/useBookingsQuery';
 import {
   BOOKING_WIZARD_STEPS,
   getNextStepId,
@@ -24,17 +26,12 @@ function getDefaultEventDate(dateParam: string | null): string {
   return new Date(Date.now() + 86400000).toISOString().split('T')[0];
 }
 
-function saveBookings(bookings: Booking[]) {
-  const normalized = bookings.map((b) => normalizeBookingWorkflowFields(b));
-  localStorage.setItem('bookings', JSON.stringify(normalized));
-  window.dispatchEvent(new Event('bookingsUpdated'));
-}
-
 function NewBookingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rules = useMoneyRules();
   const { config: templateConfig } = useTemplateConfig();
+  const { addBooking } = useBookingsQuery();
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -62,23 +59,20 @@ function NewBookingContent() {
   const stepIndex = BOOKING_WIZARD_STEPS.findIndex((s) => s.id === currentStepId);
   const nextStepId = getNextStepId(currentStepId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!customerName.trim()) {
-      setError('Customer name is required.');
-      return;
-    }
-    if (!customerEmail.trim()) {
-      setError('Email is required.');
-      return;
-    }
-    if (customerPhone && !isValidPhone(customerPhone)) {
+    const missing: string[] = [];
+    if (!customerName.trim()) missing.push('Customer name');
+    if (!customerEmail.trim()) missing.push('Email');
+    if (!customerPhone?.trim()) missing.push('Phone');
+    else if (!isValidPhone(customerPhone)) {
       setError('Phone number must be in (xxx)-xxx-xxxx format.');
       return;
     }
-    if (!location.trim()) {
-      setError('Event address is required.');
+    if (!location.trim()) missing.push('Event address');
+    if (missing.length > 0) {
+      setError('Please enter required info: ' + missing.join(', ') + '.');
       return;
     }
 
@@ -118,6 +112,7 @@ function NewBookingContent() {
       customerPhone: customerPhone.trim(),
       adults: 15,
       children: 0,
+      serviceFormat: getHibachiServiceFormat(eventType),
       location: location.trim(),
       distanceMiles: 10,
       premiumAddOn: 0,
@@ -135,10 +130,7 @@ function NewBookingContent() {
       updatedAt: new Date().toISOString(),
     });
 
-    const existing = typeof window !== 'undefined' ? localStorage.getItem('bookings') : null;
-    const list: Booking[] = existing ? JSON.parse(existing) : [];
-    const filtered = list.filter((b) => b.source !== 'inquiry' && b.source !== 'menu-template');
-    saveBookings([...filtered, booking]);
+    await addBooking(booking);
     router.push(`/bookings/${booking.id}?step=${nextStepId ?? 'details'}`);
   };
 
@@ -216,7 +208,6 @@ function NewBookingContent() {
                 <label className="block text-sm font-medium text-text-secondary">Phone *</label>
                 <input
                   type="tel"
-                  required
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(formatPhone(e.target.value))}
                   placeholder="(xxx)-xxx-xxxx"

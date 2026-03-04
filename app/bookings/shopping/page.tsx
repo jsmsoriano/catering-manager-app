@@ -19,7 +19,15 @@ import type {
   ShoppingListItemCategory,
   ShoppingListUnit,
 } from '@/lib/shoppingTypes';
-import { calculateShoppingListLineTotal, calculateShoppingListTotals } from '@/lib/shoppingUtils';
+import {
+  calculateShoppingListLineTotal,
+  calculateShoppingListTotals,
+  getQtyRequiredLbs,
+} from '@/lib/shoppingUtils';
+import {
+  generateShoppingListFromMenu,
+  clearAllOverrides,
+} from '@/lib/shoppingListGenerate';
 import { loadShoppingPresets } from '@/lib/shoppingStorage';
 import type { ShoppingPreset } from '@/lib/shoppingStorage';
 
@@ -101,6 +109,7 @@ function EventShoppingListContent() {
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [presets, setPresets] = useState<ShoppingPreset[]>([]);
+  const [keepPackageInfoWhenRegenerating, setKeepPackageInfoWhenRegenerating] = useState(true);
 
   useEffect(() => {
     if (!bookingId) {
@@ -178,6 +187,7 @@ function EventShoppingListContent() {
       category: itemForm.category,
       plannedQty,
       plannedUnit: itemForm.plannedUnit,
+      source: 'manual',
       actualQty: parseOptionalNumber(itemForm.actualQty),
       actualUnitCost: parseOptionalNumber(itemForm.actualUnitCost),
       purchased: false,
@@ -218,6 +228,27 @@ function EventShoppingListContent() {
       updatedAt: new Date().toISOString(),
     });
   };
+
+  const handleGenerateFromMenu = () => {
+    if (!shoppingList || !bookingId) return;
+    const next = generateShoppingListFromMenu(
+      bookingId,
+      shoppingList,
+      keepPackageInfoWhenRegenerating
+    );
+    updateShoppingList(next);
+  };
+
+  const handleClearPackageInfo = () => {
+    if (!shoppingList) return;
+    if (!confirm('Clear package price/weight for all menu-generated items? Portions and oz/portion will stay.')) return;
+    updateShoppingList(clearAllOverrides(shoppingList));
+  };
+
+  const hasAnyPackageInfo = useMemo(
+    () => shoppingList?.items.some((i) => i.source === 'menu' && (i.packagePrice != null || i.packageWeightLbs != null || (i.unitRequired ?? '').trim() !== '')) ?? false,
+    [shoppingList]
+  );
 
   const handleSave = () => {
     if (!shoppingList) return;
@@ -388,6 +419,11 @@ function EventShoppingListContent() {
           <div className="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-400">
             {totals.purchasedCount} / {totals.lineCount}
           </div>
+          {totals.purchasedCount > 0 && (
+            <div className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              Qty purchased (lbs): {totals.purchasedQtyTotal.toFixed(2)}
+            </div>
+          )}
         </div>
       </div>
 
@@ -513,13 +549,40 @@ function EventShoppingListContent() {
       <div className="rounded-lg border border-border bg-card ">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-6 py-4">
           <h2 className="text-lg font-semibold text-text-primary">Shopping List Items</h2>
-          <button
-            type="button"
-            onClick={handleSyncToExpenses}
-            className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
-          >
-            Sync Totals to Expenses
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGenerateFromMenu}
+              className="rounded-md border border-accent/40 bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent/20"
+            >
+              Generate From Menu
+            </button>
+            <label className="flex items-center gap-2 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                checked={keepPackageInfoWhenRegenerating}
+                onChange={(e) => setKeepPackageInfoWhenRegenerating(e.target.checked)}
+                className="rounded border-border"
+              />
+              Keep package info when regenerating
+            </label>
+            {hasAnyPackageInfo && (
+              <button
+                type="button"
+                onClick={handleClearPackageInfo}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-card-elevated"
+              >
+                Clear package info
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSyncToExpenses}
+              className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+            >
+              Sync Totals to Expenses
+            </button>
+          </div>
         </div>
 
         {shoppingList.items.length === 0 ? (
@@ -533,96 +596,151 @@ function EventShoppingListContent() {
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-text-secondary">Item</th>
                   <th className="px-4 py-3 text-left font-medium text-text-secondary">Category</th>
-                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Planned</th>
-                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Actual Qty</th>
-                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Unit Cost</th>
+                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Portions</th>
+                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Oz/portion</th>
+                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Qty required (lbs)</th>
+                  <th className="px-4 py-3 text-left font-medium text-text-secondary">Unit required</th>
+                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Pkg $</th>
+                  <th className="px-4 py-3 text-right font-medium text-text-secondary">Pkg weight (lbs)</th>
                   <th className="px-4 py-3 text-right font-medium text-text-secondary">Line Total</th>
                   <th className="px-4 py-3 text-center font-medium text-text-secondary">Purchased</th>
                   <th className="px-4 py-3 text-right font-medium text-text-secondary">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {shoppingList.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-4 py-3 text-text-primary">
-                      <div className="font-medium">{item.name}</div>
-                      {item.notes && (
-                        <div className="text-xs text-text-muted">{item.notes}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <select
-                        value={item.category}
-                        disabled={false}
-                        onChange={(event) =>
-                          handleItemChange(
-                            item.id,
-                            'category',
-                            event.target.value as ShoppingListItemCategory
-                          )
-                        }
-                        className="rounded border border-border px-2 py-1 text-xs text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
-                      >
-                        <option value="food">Food</option>
-                        <option value="supplies">Supplies</option>
-                      </select>
-                    </td>
-                    <td className="px-4 py-3 text-right text-text-secondary">
-                      {item.plannedQty} {item.plannedUnit}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.actualQty ?? ''}
-                        disabled={false}
-                        onChange={(event) =>
-                          handleItemChange(item.id, 'actualQty', parseOptionalNumber(event.target.value))
-                        }
-                        className="w-24 rounded border border-border px-2 py-1 text-right text-xs text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.actualUnitCost ?? ''}
-                        disabled={false}
-                        onChange={(event) =>
-                          handleItemChange(
-                            item.id,
-                            'actualUnitCost',
-                            parseOptionalNumber(event.target.value)
-                          )
-                        }
-                        className="w-24 rounded border border-border px-2 py-1 text-right text-xs text-text-primary disabled:cursor-not-allowed disabled:opacity-60 bg-card-elevated"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-text-primary">
-                      {formatCurrency(calculateShoppingListLineTotal(item))}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(item.purchased)}
-                        disabled={false}
-                        onChange={(event) => handleItemChange(item.id, 'purchased', event.target.checked)}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        disabled={false}
-                        onClick={() => handleRemoveItem(item.id)}
-                        className="text-xs font-medium text-red-600 hover:text-red-700 disabled:cursor-not-allowed disabled:text-text-muted dark:text-red-400 dark:hover:text-red-300"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {shoppingList.items.map((item) => {
+                  const isGenerated = item.source === 'menu' && item.isGenerated;
+                  const qtyRequiredLbs = getQtyRequiredLbs(item);
+                  return (
+                    <tr key={item.id}>
+                      <td className="px-4 py-3 text-text-primary">
+                        <div className="font-medium">{item.name}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={item.category}
+                          onChange={(e) =>
+                            handleItemChange(item.id, 'category', e.target.value as ShoppingListItemCategory)
+                          }
+                          className="rounded border border-border px-2 py-1 text-xs text-text-primary bg-card-elevated"
+                        >
+                          <option value="food">Food</option>
+                          <option value="supplies">Supplies</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3 text-right text-text-muted">
+                        {isGenerated && item.calculatedQty != null ? item.calculatedQty : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {isGenerated ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.25"
+                            value={item.ozPerPortion ?? ''}
+                            onChange={(e) =>
+                              handleItemChange(item.id, 'ozPerPortion', parseOptionalNumber(e.target.value))
+                            }
+                            placeholder="5"
+                            className="w-16 rounded border border-border px-2 py-1 text-right text-xs text-text-primary bg-card-elevated"
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium text-text-primary">
+                        {Number.isFinite(qtyRequiredLbs) ? qtyRequiredLbs.toFixed(2) : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        {isGenerated ? (
+                          <input
+                            type="text"
+                            value={item.unitRequired ?? ''}
+                            onChange={(e) =>
+                              handleItemChange(item.id, 'unitRequired', e.target.value.trim() || undefined)
+                            }
+                            placeholder="e.g. 5 lb bag"
+                            className="w-full min-w-[100px] rounded border border-border px-2 py-1 text-xs text-text-primary bg-card-elevated"
+                          />
+                        ) : (
+                          <input
+                            type="text"
+                            value={item.plannedUnit}
+                            onChange={(e) =>
+                              handleItemChange(item.id, 'plannedUnit', e.target.value as ShoppingListUnit)
+                            }
+                            placeholder="Unit"
+                            className="w-20 rounded border border-border px-2 py-1 text-xs text-text-primary bg-card-elevated"
+                          />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {isGenerated ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.packagePrice ?? ''}
+                            onChange={(e) =>
+                              handleItemChange(item.id, 'packagePrice', parseOptionalNumber(e.target.value))
+                            }
+                            placeholder="Price"
+                            className="w-20 rounded border border-border px-2 py-1 text-right text-xs text-text-primary bg-card-elevated"
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.actualUnitCost ?? ''}
+                            onChange={(e) =>
+                              handleItemChange(item.id, 'actualUnitCost', parseOptionalNumber(e.target.value))
+                            }
+                            placeholder="Cost"
+                            className="w-20 rounded border border-border px-2 py-1 text-right text-xs text-text-primary bg-card-elevated"
+                          />
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {isGenerated ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.packageWeightLbs ?? ''}
+                            onChange={(e) =>
+                              handleItemChange(item.id, 'packageWeightLbs', parseOptionalNumber(e.target.value))
+                            }
+                            placeholder="lbs"
+                            className="w-16 rounded border border-border px-2 py-1 text-right text-xs text-text-primary bg-card-elevated"
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-text-primary">
+                        {formatCurrency(calculateShoppingListLineTotal(item))}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(item.purchased)}
+                          onChange={(e) => handleItemChange(item.id, 'purchased', e.target.checked)}
+                          className="rounded border-border"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.id)}
+                          className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

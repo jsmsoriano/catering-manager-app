@@ -25,7 +25,27 @@ export interface ProposalSnapshot {
   notes?: string;
   menuSummary?: string;    // Plain-text summary built from EventMenu / CateringEventMenu
   businessName: string;
+  logoUrl?: string;
   sentAt: string;          // ISO timestamp
+  quoteVersion?: number;
+  quoteRevisionReason?: string;
+  guestChangeCutoffAt?: string;
+  guestCountLockedAt?: string;
+  finalAdults?: number;
+  finalChildren?: number;
+  guestCountLastClientEditAt?: string;
+  guestChangeLockedReason?: string;
+  requiresReview?: boolean;
+  menuChangeCutoffAt?: string;
+  menuChangeLockedAt?: string;
+  menuChangeLockedReason?: string;
+  menuChangeRequestStatus?: 'none' | 'pending' | 'approved' | 'declined';
+  menuChangeRequestNote?: string;
+  menuChangeRequestedAt?: string;
+  menuChangeRequestLate?: boolean;
+  menuChangeResolutionNote?: string;
+  menuChangeResolvedAt?: string;
+  menuChangeResolvedBy?: string;
 }
 
 export type ProposalStatus = 'pending' | 'accepted' | 'expired';

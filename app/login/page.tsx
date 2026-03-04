@@ -2,8 +2,9 @@
 
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -21,25 +22,40 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
-  const router = useRouter();
+  const allowSignup = process.env.NEXT_PUBLIC_BETA_ALLOW_SIGNUP === 'true';
   const searchParams = useSearchParams();
-  const next = searchParams.get('next') ?? '/';
+  const nextParam = searchParams.get('next') ?? '/';
+  const next = nextParam.startsWith('/') ? nextParam : '/';
   const errorParam = searchParams.get('error');
 
-  const [email, setEmail] = useState('');
+  // If NEXT_PUBLIC_USERNAME_DOMAIN is set (e.g. "hibachi.app"), short usernames
+  // like "chef" are converted to "chef@hibachi.app" before sign-in.
+  const usernameDomain = process.env.NEXT_PUBLIC_USERNAME_DOMAIN?.trim();
+  const usernameMode = Boolean(usernameDomain);
+
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(errorParam === 'auth' ? 'Authentication failed. Please try again.' : null);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+
+  function resolveEmail(value: string): string {
+    const trimmed = value.trim();
+    if (!usernameDomain || trimmed.includes('@')) return trimmed;
+    return `${trimmed}@${usernameDomain}`;
+  }
 
   async function handleGoogleSignIn() {
     const supabase = createClient();
     if (!supabase) return;
     setOauthLoading(true);
     setError(null);
+    const callbackUrl = new URL('/auth/callback', window.location.origin);
+    callbackUrl.searchParams.set('next', next);
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callbackUrl.toString() },
     });
     setOauthLoading(false);
     if (oauthError) setError(oauthError.message);
@@ -55,14 +71,14 @@ function LoginContent() {
       setLoading(false);
       return;
     }
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: resolveEmail(login), password });
     setLoading(false);
     if (signInError) {
       setError(signInError.message);
       return;
     }
-    router.push(next);
-    router.refresh();
+    // Force a full navigation so middleware reads the freshly persisted auth cookies.
+    window.location.assign(next);
   }
 
   return (
@@ -89,35 +105,52 @@ function LoginContent() {
           )}
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-text-secondary">
-                Email
+              <label htmlFor="login" className="block text-sm font-medium text-text-secondary">
+                {usernameMode ? 'Username or email' : 'Email'}
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="login"
+                name="login"
+                type={usernameMode ? 'text' : 'email'}
+                autoComplete="username"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
                 className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-                placeholder="you@example.com"
+                placeholder={usernameMode ? `e.g. chef  or  chef@${usernameDomain}` : 'you@example.com'}
               />
+              {usernameMode && (
+                <p className="mt-1 text-xs text-text-muted">
+                  Enter your username or full email address
+                </p>
+              )}
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-text-secondary">
                 Password
               </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-              />
+              <div className="relative mt-1">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-md border border-border bg-card-elevated px-3 py-2 pr-10 text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-text-muted hover:text-text-primary"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword
+                    ? <EyeSlashIcon className="h-5 w-5" />
+                    : <EyeIcon className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-3">
@@ -144,12 +177,18 @@ function LoginContent() {
             >
               {oauthLoading ? 'Redirecting…' : 'Sign in with Google'}
             </button>
-            <p className="text-center text-sm text-text-muted">
-              Don’t have an account?{' '}
-              <Link href="/signup" className="font-medium text-accent hover:text-accent-hover">
-                Sign up
-              </Link>
-            </p>
+            {allowSignup ? (
+              <p className="text-center text-sm text-text-muted">
+                Don’t have an account?{' '}
+                <Link href="/signup" className="font-medium text-accent hover:text-accent-hover">
+                  Sign up
+                </Link>
+              </p>
+            ) : (
+              <p className="text-center text-sm text-text-muted">
+                Invite-only beta. Contact admin for account access.
+              </p>
+            )}
           </div>
         </form>
       </div>

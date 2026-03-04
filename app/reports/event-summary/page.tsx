@@ -8,6 +8,8 @@ import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import { getBookingServiceStatus } from '@/lib/bookingWorkflow';
+import { useAuth } from '@/components/AuthProvider';
+import { getCurrentChefStaffId, bookingHasStaff } from '@/lib/chefIdentity';
 import type { Booking } from '@/lib/bookingTypes';
 import type { StaffMember as StaffRecord } from '@/lib/staffTypes';
 import { CHEF_ROLE_TO_STAFF_ROLE } from '@/lib/staffTypes';
@@ -69,6 +71,7 @@ interface EventSummaryRow {
 }
 
 export default function EventSummaryReportPage() {
+  const { user } = useAuth();
   const rules = useMoneyRules();
   const printRef = useRef<HTMLDivElement>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -77,6 +80,8 @@ export default function EventSummaryReportPage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [summaryDropdownId, setSummaryDropdownId] = useState<string | null>(null);
   const summaryDropdownRef = useRef<HTMLDivElement>(null);
+
+  const chefStaffId = useMemo(() => getCurrentChefStaffId(user, staffRecords), [user, staffRecords]);
 
   useEffect(() => {
     if (summaryDropdownId === null) return;
@@ -136,8 +141,12 @@ export default function EventSummaryReportPage() {
   }, [staffRecords]);
 
   const completedBookings = useMemo(() => {
-    return bookings.filter((b) => getBookingServiceStatus(b) === 'completed');
-  }, [bookings]);
+    let list = bookings.filter((b) => getBookingServiceStatus(b) === 'completed');
+    if (chefStaffId) {
+      list = list.filter((b) => bookingHasStaff(b.staffAssignments, chefStaffId));
+    }
+    return list;
+  }, [bookings, chefStaffId]);
 
   const eventRows: EventSummaryRow[] = useMemo(() => {
     const rows: EventSummaryRow[] = [];
@@ -410,7 +419,9 @@ ${row.staff.map((s) => `<tr><td>${s.name}</td><td>${s.roleLabel}</td><td>${forma
 
       {eventRows.length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-8 text-center text-text-muted">
-          No completed events. Complete events in Bookings to see them here.
+          {chefStaffId
+            ? 'No completed events you worked on. Complete events you’re assigned to in Bookings to see them here.'
+            : 'No completed events. Complete events in Bookings to see them here.'}
         </div>
       ) : selectedEventRow ? (
         <div className="space-y-4">

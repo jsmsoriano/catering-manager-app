@@ -8,6 +8,7 @@ import {
   BanknotesIcon,
   UsersIcon,
   ClipboardDocumentListIcon,
+  ShoppingBagIcon,
 } from '@heroicons/react/24/outline';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,6 +25,15 @@ interface ReportDef {
 // ─── Report definitions ───────────────────────────────────────────────────────
 
 const REPORTS: ReportDef[] = [
+  {
+    id: 'sales-funnel',
+    name: 'Sales Funnel',
+    description:
+      'Lead-stage counts and conversion rates from inquiry through booking.',
+    href: '/reports/sales-funnel',
+    icon: ChartBarIcon,
+    iconClass: 'bg-cyan-500/10 text-cyan-500',
+  },
   {
     id: 'event-summary',
     name: 'Event Summary',
@@ -68,6 +78,15 @@ const REPORTS: ReportDef[] = [
     href: '/reports/menus-and-shopping',
     icon: ClipboardDocumentListIcon,
     iconClass: 'bg-teal-500/10 text-teal-500',
+  },
+  {
+    id: 'orders',
+    name: 'Orders',
+    description:
+      'Online ordering totals, fulfillment mix, and average order value.',
+    href: '/reports/orders',
+    icon: ShoppingBagIcon,
+    iconClass: 'bg-rose-500/10 text-rose-500',
   },
 ];
 

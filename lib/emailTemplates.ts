@@ -6,9 +6,25 @@
 
 import type { Booking } from './bookingTypes';
 import type { ProposalSnapshot } from './proposalTypes';
+import type { ProposalWriterConfig } from './proposalWriter';
 
 function fmt(amount: number) {
   return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+
+/** Escape user-controlled text before embedding in HTML. */
+function esc(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Escape and preserve newlines as <br> for multi-line user text. */
+function escLines(text: string): string {
+  return esc(text).replace(/\n/g, '<br>');
 }
 
 const baseStyle = `
@@ -55,7 +71,7 @@ export function bookingConfirmationEmail(
   const notesRow = booking.notes
     ? `<tr>
         <td style="${tdLabelStyle}">Notes</td>
-        <td style="${tdValueStyle}">${booking.notes.replace(/\n/g, '<br>')}</td>
+        <td style="${tdValueStyle}">${escLines(booking.notes)}</td>
       </tr>`
     : '';
 
@@ -275,7 +291,9 @@ export function inquiryAckEmail(
 
 export function proposalEmail(
   snapshot: ProposalSnapshot,
-  proposalUrl: string
+  proposalUrl: string,
+  logoUrl?: string,
+  proposalContent?: ProposalWriterConfig
 ): { subject: string; html: string } {
   const subject = `Your Event Quote — ${snapshot.businessName}`;
 
@@ -300,30 +318,63 @@ export function proposalEmail(
   const menuRow = snapshot.menuSummary
     ? `<tr>
         <td style="${tdLabelStyle}">Menu</td>
-        <td style="${tdValueStyle}">${snapshot.menuSummary.replace(/\n/g, '<br>')}</td>
+        <td style="${tdValueStyle}">${escLines(snapshot.menuSummary)}</td>
       </tr>`
     : '';
 
   const notesRow = snapshot.notes
     ? `<tr>
         <td style="${tdLabelStyle}">Notes</td>
-        <td style="${tdValueStyle}">${snapshot.notes.replace(/\n/g, '<br>')}</td>
+        <td style="${tdValueStyle}">${escLines(snapshot.notes)}</td>
       </tr>`
     : '';
 
+  const resolvedLogoUrl = logoUrl || snapshot.logoUrl;
+  const logoBlock = resolvedLogoUrl
+    ? `<div style="text-align:center;margin:0 0 16px;">
+         <img src="${resolvedLogoUrl}" alt="${snapshot.businessName} logo" style="max-height:56px;max-width:220px;object-fit:contain;" />
+       </div>`
+    : '';
+
+  const introText =
+    proposalContent?.intro?.trim() ||
+    'Thank you for your inquiry. Your personalized quote is ready. Review the details below and confirm online when you are ready.';
+  const highlightsTitle = proposalContent?.highlightsTitle?.trim() || '';
+  const highlightsBody = proposalContent?.highlightsBody?.trim() || '';
+  const termsTitle = proposalContent?.termsTitle?.trim() || '';
+  const termsBody = proposalContent?.termsBody?.trim() || '';
+  const closingText =
+    proposalContent?.closing?.trim() || 'Questions? Simply reply to this email - we are happy to help.';
+  const ctaLabel = proposalContent?.ctaLabel?.trim() || 'View &amp; Accept Quote';
+
+  const highlightsBlock =
+    highlightsTitle && highlightsBody
+      ? `<div style="margin:20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#ffffff;">
+           <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#111827;">${esc(highlightsTitle)}</p>
+           <p style="margin:0;font-size:13px;color:#374151;white-space:pre-wrap;">${esc(highlightsBody)}</p>
+         </div>`
+      : '';
+  const termsBlock =
+    termsTitle && termsBody
+      ? `<div style="margin:20px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#ffffff;">
+           <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#111827;">${esc(termsTitle)}</p>
+           <p style="margin:0;font-size:13px;color:#374151;white-space:pre-wrap;">${esc(termsBody)}</p>
+         </div>`
+      : '';
+
   const html = `
 <div style="${baseStyle}">
-  <div style="background:#0ea5e9;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0;">
-    <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${snapshot.businessName}</h1>
-    <p style="margin:8px 0 0;color:#e0f2fe;font-size:14px;">Event Quote</p>
+  <div style="background:linear-gradient(135deg,#0ea5e9,#0284c7);padding:28px 24px;text-align:center;border-radius:12px 12px 0 0;">
+    ${logoBlock}
+    <h1 style="margin:0;color:#fff;font-size:24px;font-weight:700;letter-spacing:.2px;">${snapshot.businessName}</h1>
+    <p style="margin:8px 0 0;color:#e0f2fe;font-size:14px;">Your Event Quote</p>
   </div>
-  <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
+  <div style="padding:28px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;">
     <p style="font-size:16px;margin:0 0 16px;">Hi ${snapshot.customerName},</p>
     <p style="font-size:14px;color:#374151;margin:0 0 24px;">
-      Thank you for your interest! Here is your personalized quote. Review the details below
-      and click the button to accept online.
+      ${introText}
     </p>
-    <table style="${tableStyle}">
+    <table style="${tableStyle};background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;">
       <tr>
         <td style="${tdLabelStyle}">Event Date</td>
         <td style="${tdValueStyle}"><strong>${snapshot.eventDate}</strong></td>
@@ -340,7 +391,8 @@ export function proposalEmail(
       </tr>
       ${menuRow}
     </table>
-    <table style="${tableStyle}">
+    ${highlightsBlock}
+    <table style="${tableStyle};background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;">
       <tr>
         <td style="${tdLabelStyle}">Subtotal</td>
         <td style="${tdValueStyle}">${fmt(snapshot.subtotal)}</td>
@@ -355,18 +407,19 @@ export function proposalEmail(
       ${balanceRow}
     </table>
     ${notesRow ? `<table style="${tableStyle}">${notesRow}</table>` : ''}
+    ${termsBlock}
     <div style="text-align:center;margin:32px 0;">
       <a href="${proposalUrl}"
          style="display:inline-block;background:#0ea5e9;color:#fff;font-size:16px;font-weight:700;
-                padding:14px 32px;border-radius:8px;text-decoration:none;">
-        View &amp; Accept Quote
+                padding:14px 32px;border-radius:999px;text-decoration:none;">
+        ${ctaLabel}
       </a>
     </div>
     <p style="font-size:13px;color:#6b7280;text-align:center;margin:0;">
       Or copy this link: <a href="${proposalUrl}" style="color:#0ea5e9;">${proposalUrl}</a>
     </p>
     <p style="font-size:14px;color:#374151;margin:24px 0 0;">
-      Questions? Simply reply to this email — we're happy to help.
+      ${closingText}
     </p>
     <p style="font-size:14px;color:#374151;margin:8px 0 0;">— ${snapshot.businessName}</p>
   </div>

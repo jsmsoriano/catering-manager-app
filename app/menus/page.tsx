@@ -377,6 +377,7 @@ function MenuTemplateTab() {
 // ─── Item Catalog Tab — two-panel (category tree + item list + detail) ───────
 
 function ItemCatalogTab() {
+  const router = useRouter();
   // ── Menu items ────────────────────────────────────────────────────────────
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
@@ -391,6 +392,8 @@ function ItemCatalogTab() {
 
   // ── Search ────────────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'archived'>('all');
+  const [photoFilter, setPhotoFilter] = useState<'all' | 'has' | 'none'>('all');
 
   // ── Item detail panel ─────────────────────────────────────────────────────
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null); // '__new__' for unsaved
@@ -459,8 +462,16 @@ function ItemCatalogTab() {
         (i) => i.name.toLowerCase().includes(q) || (i.description ?? '').toLowerCase().includes(q)
       );
     }
+    if (statusFilter !== 'all') {
+      result = result.filter((i) => (i.status ?? 'active') === statusFilter);
+    }
+    if (photoFilter === 'has') {
+      result = result.filter((i) => !!i.photoBase64);
+    } else if (photoFilter === 'none') {
+      result = result.filter((i) => !i.photoBase64);
+    }
     return result;
-  }, [menuItems, selectedCategoryId, categories, searchQuery]);
+  }, [menuItems, selectedCategoryId, categories, searchQuery, statusFilter, photoFilter]);
 
   function countInCategory(catId: string): number {
     const descendants = new Set(getDescendantIds(categories, catId));
@@ -671,6 +682,27 @@ function ItemCatalogTab() {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="min-w-0 flex-1 rounded-md border border-border bg-card-elevated px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
           />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'archived')}
+            className="shrink-0 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-xs text-text-secondary"
+            title="Filter by status"
+          >
+            <option value="all">All status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="archived">Archived</option>
+          </select>
+          <select
+            value={photoFilter}
+            onChange={(e) => setPhotoFilter(e.target.value as 'all' | 'has' | 'none')}
+            className="shrink-0 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-xs text-text-secondary"
+            title="Filter by photo"
+          >
+            <option value="all">All photos</option>
+            <option value="has">Has photo</option>
+            <option value="none">No photo</option>
+          </select>
           <button
             onClick={openNewItem}
             className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90"
@@ -718,6 +750,7 @@ function ItemCatalogTab() {
                     <tr
                       key={item.id}
                       onClick={() => selectItem(item)}
+                      onDoubleClick={() => router.push(`/menus/items/${item.id}`)}
                       className={`cursor-pointer transition-colors ${
                         isSelected ? 'bg-accent/5' : 'hover:bg-card-elevated/50'
                       }`}
@@ -1055,6 +1088,14 @@ function ItemCatalogTab() {
                 )}
 
                 <div className="mt-auto space-y-2">
+                  {selectedItemId !== '__new__' && (
+                    <Link
+                      href={`/menus/items/${editDraft.id}`}
+                      className="block w-full rounded-md border border-border px-3 py-1.5 text-center text-xs font-medium text-text-secondary hover:bg-card"
+                    >
+                      Open Full Editor
+                    </Link>
+                  )}
                   <button
                     onClick={handleSaveItem}
                     disabled={!editDraft.name.trim()}

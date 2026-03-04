@@ -1,13 +1,15 @@
 /**
  * Event wizard steps: each event has its own page with a step-based flow.
- * Steps: Contact → Event details → Menu creation → Staff assignments.
+ * Steps: Contact → Event details → Payment terms → Menu → Staff → Review & Confirm.
  */
 
 export const BOOKING_WIZARD_STEPS = [
   { id: 'contact', label: 'Contact', shortLabel: 'Contact' },
   { id: 'details', label: 'Event details', shortLabel: 'Event details' },
+  { id: 'payment', label: 'Payment terms', shortLabel: 'Payment' },
   { id: 'menu', label: 'Menu creation', shortLabel: 'Menu' },
   { id: 'staff', label: 'Staff assignments', shortLabel: 'Staff' },
+  { id: 'review', label: 'Review & Confirm', shortLabel: 'Review' },
 ] as const;
 
 export type BookingWizardStepId = (typeof BOOKING_WIZARD_STEPS)[number]['id'];

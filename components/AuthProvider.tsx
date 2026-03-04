@@ -4,13 +4,16 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
-import { initSync, setupWriteListeners } from '@/lib/db/sync';
+import { initSync } from '@/lib/db/sync';
+import { isAdminUser } from '@/lib/auth/admin';
 
 type AuthContextType = {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
   signOut: () => Promise<void>;
+  syncErrors: string[];
+  dismissSyncErrors: () => void;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,6 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncErrors, setSyncErrors] = useState<string[]>([]);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -44,22 +48,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.refresh();
   }
 
-  // Supabase data sync — runs once after auth state is resolved
+  function dismissSyncErrors() {
+    setSyncErrors([]);
+  }
+
+  // One-time localStorage→Supabase migration — runs once after auth resolves.
+  // React Query hooks (useBookingsQuery, etc.) own the live read/write path.
   useEffect(() => {
     if (!supabase || loading) return;
-    let cleanup: (() => void) | undefined;
+    // In BYPASS_AUTH mode or any unauthenticated state, skip DB sync.
+    // This prevents noisy RLS errors while running local-only workflows.
+    if (!user) {
+      setSyncErrors([]);
+      return;
+    }
     initSync(supabase)
-      .then(() => {
-        cleanup = setupWriteListeners(supabase);
+      .then((failed) => {
+        if (failed.length > 0) setSyncErrors(failed);
       })
-      .catch(console.error);
-    return () => cleanup?.();
-  }, [supabase, loading]);
+      .catch((err) => {
+        console.error('[sync] initSync threw:', err);
+        setSyncErrors(['data sync']);
+      });
+  }, [supabase, loading, user]);
 
-  const isAdmin = user?.app_metadata?.role === 'admin';
+  const isAdmin = isAdminUser(user);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, signOut }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, signOut, syncErrors, dismissSyncErrors }}>
       {children}
     </AuthContext.Provider>
   );

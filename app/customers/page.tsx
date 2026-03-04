@@ -218,14 +218,14 @@ export default function CustomersPage() {
     setSelectedId(id);
   };
 
-  const handleBookAgain = (customer: DerivedCustomer) => {
+  const handleCreateNewEvent = (customer: DerivedCustomer) => {
     const prefill: BookingPrefill = {
       customerName: customer.name,
       customerPhone: customer.phone,
       customerEmail: customer.email,
     };
     sessionStorage.setItem('bookingPrefill', JSON.stringify(prefill));
-    router.push('/bookings');
+    router.push('/bookings/new');
   };
 
   const formatDate = (iso: string | null) => {
@@ -353,11 +353,11 @@ export default function CustomersPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleBookAgain(selectedCustomer)}
+                  onClick={() => handleCreateNewEvent(selectedCustomer)}
                   className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
                 >
                   <CalendarDaysIcon className="h-4 w-4" />
-                  Book Again
+                  New Event
                 </button>
               </div>
 

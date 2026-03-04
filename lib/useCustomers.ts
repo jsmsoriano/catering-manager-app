@@ -8,24 +8,17 @@ import type {
   CustomerProfileMeta,
   DerivedCustomer,
 } from './customerTypes';
+import { normalizeCustomerId as normalizeCustomerIdShared } from './customerIdentity';
 import {
   CUSTOMER_PROFILES_KEY,
   CUSTOMER_PROFILES_EVENT,
 } from './customerTypes';
+import { useBookingsQuery } from './hooks/useBookingsQuery';
 
 // ─── Identity helpers ─────────────────────────────────────────────────────────
 
-function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, '');
-  // Normalize to last 10 digits for US numbers; keep as-is for shorter inputs
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
-
 export function normalizeCustomerId(phone: string, email: string): CustomerId {
-  const p = normalizePhone(phone ?? '');
-  if (p.length >= 7) return `phone:${p}`;
-  const e = (email ?? '').trim().toLowerCase();
-  return e ? `email:${e}` : 'unknown';
+  return normalizeCustomerIdShared(phone, email);
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -35,25 +28,14 @@ export function useCustomers(): {
   profileMeta: Record<CustomerId, CustomerProfileMeta>;
   updateProfileMeta: (id: CustomerId, patch: Partial<CustomerProfileMeta>) => void;
 } {
-  const [bookings, setBookings] = useState<Booking[]>(() =>
-    loadFromStorage<Booking[]>('bookings', [])
-  );
+  // Bookings come from Supabase via React Query (Supabase is primary)
+  const { bookings } = useBookingsQuery();
+
   const [profileMeta, setProfileMeta] = useState<Record<CustomerId, CustomerProfileMeta>>(() =>
     loadFromStorage<Record<CustomerId, CustomerProfileMeta>>(CUSTOMER_PROFILES_KEY, {})
   );
 
-  // Sync bookings from localStorage
-  useEffect(() => {
-    const reload = () => setBookings(loadFromStorage<Booking[]>('bookings', []));
-    window.addEventListener('bookingsUpdated', reload);
-    window.addEventListener('storage', reload);
-    return () => {
-      window.removeEventListener('bookingsUpdated', reload);
-      window.removeEventListener('storage', reload);
-    };
-  }, []);
-
-  // Sync profileMeta from localStorage
+  // Sync profileMeta from localStorage (stays localStorage — no Supabase table yet)
   useEffect(() => {
     const reload = () =>
       setProfileMeta(
@@ -72,7 +54,10 @@ export function useCustomers(): {
     const map = new Map<CustomerId, Booking[]>();
 
     for (const booking of bookings) {
-      const id = normalizeCustomerId(booking.customerPhone, booking.customerEmail);
+      const id =
+        booking.customerId && booking.customerId !== 'unknown'
+          ? booking.customerId
+          : normalizeCustomerId(booking.customerPhone, booking.customerEmail);
       if (id === 'unknown') continue;
       if (!map.has(id)) map.set(id, []);
       map.get(id)!.push(booking);
@@ -91,6 +76,7 @@ export function useCustomers(): {
 
       const totalRevenue = nonCancelled.reduce((sum, b) => sum + (b.total ?? 0), 0);
       const totalPaid = nonCancelled.reduce((sum, b) => sum + (b.amountPaid ?? 0), 0);
+      const averageEventValue = nonCancelled.length > 0 ? totalRevenue / nonCancelled.length : 0;
 
       const meta = profileMeta[id] ?? { tags: [], notes: '', updatedAt: '' };
 
@@ -103,7 +89,11 @@ export function useCustomers(): {
         totalRevenue,
         totalPaid,
         bookingCount: sorted.length,
+        eventCount: sorted.length,
         completedCount: completed.length,
+        averageEventValue,
+        lifetimeRevenue: totalRevenue,
+        lifetimePaid: totalPaid,
         lastEventDate: sorted[0]?.eventDate ?? null,
         firstEventDate: sorted[sorted.length - 1]?.eventDate ?? null,
         tags: meta.tags,
@@ -123,7 +113,11 @@ export function useCustomers(): {
           totalRevenue: 0,
           totalPaid: 0,
           bookingCount: 0,
+          eventCount: 0,
           completedCount: 0,
+          averageEventValue: 0,
+          lifetimeRevenue: 0,
+          lifetimePaid: 0,
           lastEventDate: null,
           firstEventDate: null,
           tags: meta.tags,

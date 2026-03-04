@@ -1,10 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { DEFAULT_RULES, loadRules } from '@/lib/moneyRules';
+import { DEFAULT_RULES } from '@/lib/moneyRules';
 import { useTemplateConfig } from '@/lib/useTemplateConfig';
+import { getHibachiStaffingRecommendation } from '@/lib/hibachiService';
 import type { MoneyRules, StaffingProfile, StaffingRoleEntry } from '@/lib/types';
+import { useMoneyRulesQuery } from '@/lib/hooks/useMoneyRulesQuery';
 
 /** Currency input: $ prefix, step 0.01, round to 2 decimals on blur */
 function CurrencyInput({
@@ -78,6 +81,7 @@ function PercentInput({
 }
 
 export function BusinessRulesContent() {
+  const { rules: savedRules, saveRules: persistRules } = useMoneyRulesQuery();
   const [rules, setRules] = useState<MoneyRules>(DEFAULT_RULES);
   const { config: templateConfig } = useTemplateConfig();
   const [hasChanges, setHasChanges] = useState(false);
@@ -94,25 +98,40 @@ export function BusinessRulesContent() {
     { id: 'profit', name: 'Profit' },
   ];
 
-  // Load saved rules from localStorage on mount (using safe deep merge)
+  // Sync local editing state when saved rules load from Supabase
   useEffect(() => {
-    setRules(loadRules());
-  }, []);
+    if (!hasChanges) {
+      setRules(savedRules);
+    }
+  }, [savedRules]);
 
-  const handleSave = () => {
-    localStorage.setItem('moneyRules', JSON.stringify(rules));
-    window.dispatchEvent(new Event('moneyRulesUpdated'));
+  const handleSave = async () => {
+    await persistRules(rules);
     setHasChanges(false);
     setShowSaveSuccess(true);
     setTimeout(() => setShowSaveSuccess(false), 3000);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (confirm('Reset all values to defaults? This cannot be undone.')) {
       setRules(DEFAULT_RULES);
-      localStorage.removeItem('moneyRules');
+      await persistRules(DEFAULT_RULES);
       setHasChanges(false);
     }
+  };
+
+  const handleResetPricingToHibachiDefaults = () => {
+    setRules((prev) => ({
+      ...prev,
+      pricing: {
+        ...prev.pricing,
+        primaryBasePrice: 65,
+        secondaryBasePrice: 32,
+        premiumAddOnMin: 0,
+        premiumAddOnMax: 0,
+      },
+    }));
+    setHasChanges(true);
   };
 
   const updateRules = (path: string[], value: any) => {
@@ -200,6 +219,12 @@ export function BusinessRulesContent() {
     setEditingProfile({ ...editingProfile, roles });
   };
 
+  const getHibachiPreview = (guestCount: number, format: 'private_dinner' | 'buffet') => {
+    const rec = getHibachiStaffingRecommendation(guestCount, format, rules.hibachiOps);
+    if (!rec) return null;
+    return `${rec.chefs} chef${rec.chefs === 1 ? '' : 's'} • ${rec.grills} grill${rec.grills === 1 ? '' : 's'}${rec.assistants > 0 ? ` • ${rec.assistants} assistant` : ''}${rec.showIncluded ? ' • show included' : ' • no show'}`;
+  };
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Header */}
@@ -237,9 +262,18 @@ export function BusinessRulesContent() {
         <>
         {/* PRICING SECTION */}
         <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
-          <h2 className="mb-6 text-xl font-semibold text-text-primary">
-            Pricing
-          </h2>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold text-text-primary">Pricing</h2>
+            {templateConfig.businessType === 'hibachi' && (
+              <button
+                type="button"
+                onClick={handleResetPricingToHibachiDefaults}
+                className="rounded-md border border-border bg-card-elevated px-3 py-2 text-xs font-medium text-text-secondary hover:bg-card"
+              >
+                Reset pricing to Hibachi defaults
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-4">
               <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
@@ -267,29 +301,13 @@ export function BusinessRulesContent() {
               </div>
             </div>
             )}
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
-                Premium Add-on Min ($/person)
-              </label>
-              <div className="w-28">
-                <CurrencyInput
-                  value={rules.pricing.premiumAddOnMin}
-                  path={['pricing', 'premiumAddOnMin']}
-                  updateRules={updateRules}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
-                Premium Add-on Max ($/person)
-              </label>
-              <div className="w-28">
-                <CurrencyInput
-                  value={rules.pricing.premiumAddOnMax}
-                  path={['pricing', 'premiumAddOnMax']}
-                  updateRules={updateRules}
-                />
-              </div>
+            <div className="rounded-md border border-border bg-card-elevated px-3 py-2 text-xs text-text-muted">
+              Add-on pricing is managed from menu selections (protein add-ons), not from a global premium add-on range.
+              {' '}
+              <Link href="/menus" className="font-medium text-accent hover:underline">
+                Open Menu Settings
+              </Link>
+              .
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
@@ -389,6 +407,106 @@ export function BusinessRulesContent() {
             </div>
           </div>
         </section>
+
+        {templateConfig.businessType === 'hibachi' && (
+          <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+            <h2 className="mb-2 text-xl font-semibold text-text-primary">
+              Hibachi Service Mode Rules
+            </h2>
+            <p className="mb-6 text-sm text-text-muted">
+              Controls auto staffing recommendations for Private Dinner (chef show) and Hibachi Buffet (no show).
+            </p>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Private Dinner guests per chef
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={rules.hibachiOps.privateDinnerGuestsPerChef}
+                  onChange={(e) =>
+                    updateRules(['hibachiOps', 'privateDinnerGuestsPerChef'], parseInt(e.target.value) || 1)
+                  }
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Private Dinner assistant threshold (guests)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={rules.hibachiOps.privateDinnerAssistantThreshold}
+                  onChange={(e) =>
+                    updateRules(['hibachiOps', 'privateDinnerAssistantThreshold'], parseInt(e.target.value) || 1)
+                  }
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Buffet guests per chef
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={rules.hibachiOps.buffetGuestsPerChef}
+                  onChange={(e) =>
+                    updateRules(['hibachiOps', 'buffetGuestsPerChef'], parseInt(e.target.value) || 1)
+                  }
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Buffet large-party threshold (guests)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={rules.hibachiOps.buffetLargePartyThreshold}
+                  onChange={(e) =>
+                    updateRules(['hibachiOps', 'buffetLargePartyThreshold'], parseInt(e.target.value) || 1)
+                  }
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-text-secondary">
+                  Minimum buffet chefs at large-party threshold
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={rules.hibachiOps.buffetMinChefsAtThreshold}
+                  onChange={(e) =>
+                    updateRules(['hibachiOps', 'buffetMinChefsAtThreshold'], parseInt(e.target.value) || 1)
+                  }
+                  className="mt-1 w-full max-w-sm rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary"
+                />
+              </div>
+            </div>
+            <div className="mt-6 rounded-lg border border-border bg-card-elevated p-4">
+              <p className="mb-3 text-sm font-semibold text-text-primary">Live preview</p>
+              <div className="space-y-2 text-sm text-text-secondary">
+                <p>
+                  15 guests (Private Dinner):{' '}
+                  <span className="font-medium text-text-primary">{getHibachiPreview(15, 'private_dinner')}</span>
+                </p>
+                <p>
+                  35 guests (Private Dinner):{' '}
+                  <span className="font-medium text-text-primary">{getHibachiPreview(35, 'private_dinner')}</span>
+                </p>
+                <p>
+                  50 guests (Buffet):{' '}
+                  <span className="font-medium text-text-primary">{getHibachiPreview(50, 'buffet')}</span>
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* STAFFING PROFILES SECTION */}
         <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">

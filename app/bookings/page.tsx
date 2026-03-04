@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   BanknotesIcon,
   CalendarDaysIcon,
@@ -13,6 +13,7 @@ import {
   LockOpenIcon,
   PencilSquareIcon,
   ShoppingCartIcon,
+  TrashIcon,
   TableCellsIcon,
   UsersIcon,
   ViewColumnsIcon,
@@ -34,11 +35,11 @@ import type {
   LaborPaymentRecord,
 } from '@/lib/financeTypes';
 import {
-  loadCustomerPayments,
   loadLaborPayments,
-  saveCustomerPayments,
   saveLaborPayments,
 } from '@/lib/financeStorage';
+import { useBookingsQuery } from '@/lib/hooks/useBookingsQuery';
+import { useCustomerPaymentsQuery } from '@/lib/hooks/useCustomerPaymentsQuery';
 import {
   applyConfirmationPaymentTerms,
   applyPaymentToBooking,
@@ -207,19 +208,22 @@ function getAssignmentForPosition(
 
 export default function BookingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const openedBookingFromQueryRef = useRef<string | null>(null);
   const rules = useMoneyRules();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const { bookings, saveBooking, removeBooking } = useBookingsQuery();
+  const { customerPayments, savePayment } = useCustomerPaymentsQuery();
   const [filterStatuses, setFilterStatuses] = useState<BookingStatus[]>([]);
   const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [eventTypeFilter, setEventTypeFilter] = useState('all');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'calendar' | 'pipeline'>('table');
+  const [simpleTableMode, setSimpleTableMode] = useState(true);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [sortField, setSortField] = useState<'eventDate' | 'customerName' | 'eventType' | 'guests' | 'total' | 'status'>('eventDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
-  const [customerPayments, setCustomerPayments] = useState<CustomerPaymentRecord[]>([]);
   const [shoppingLists, setShoppingLists] = useState<ReturnType<typeof loadShoppingLists>>([]);
   const [actionsOpenForBookingId, setActionsOpenForBookingId] = useState<string | null>(null);
   const [eventSummaryBooking, setEventSummaryBooking] = useState<Booking | null>(null);
@@ -243,6 +247,25 @@ export default function BookingsPage() {
 
   const { config: templateConfig } = useTemplateConfig();
 
+  const eventTypeLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    templateConfig.eventTypes.forEach((type) => map.set(type.id, type.label));
+    if (!map.has('catering-dropoff')) map.set('catering-dropoff', 'Catering Drop-off');
+    if (!map.has('catering-full-service')) map.set('catering-full-service', 'Catering Full Service');
+    return map;
+  }, [templateConfig.eventTypes]);
+
+  const eventTypeOptions = useMemo(() => {
+    const ids = new Set<string>();
+    templateConfig.eventTypes.forEach((type) => ids.add(type.id));
+    bookings.forEach((booking) => ids.add(booking.eventType));
+    return Array.from(ids).sort((a, b) => {
+      const aLabel = eventTypeLabelMap.get(a) ?? a;
+      const bLabel = eventTypeLabelMap.get(b) ?? b;
+      return aLabel.localeCompare(bLabel);
+    });
+  }, [templateConfig.eventTypes, bookings, eventTypeLabelMap]);
+
   // Redirect to new event page when "Book Again" prefill is present (from customers page)
   useEffect(() => {
     const raw = sessionStorage.getItem('bookingPrefill');
@@ -254,47 +277,6 @@ export default function BookingsPage() {
       sessionStorage.removeItem('bookingPrefill');
     }
   }, [router]);
-
-  // Load bookings
-  useEffect(() => {
-    const loadBookings = () => {
-      const saved = localStorage.getItem('bookings');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved) as Booking[];
-          const normalized = parsed
-            .filter((b) => b.source !== 'inquiry' && b.source !== 'menu-template')
-            .map((booking) => normalizeBookingWorkflowFields(booking));
-          console.log('📅 Bookings: Loaded', normalized.length, 'bookings from localStorage');
-          setBookings(normalized);
-        } catch (e) {
-          console.error('Failed to load bookings:', e);
-        }
-      }
-    };
-
-    loadBookings();
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'bookings') {
-        console.log('📅 Bookings: Detected storage change (cross-tab)');
-        loadBookings();
-      }
-    };
-
-    const handleCustomStorageChange = () => {
-      console.log('📅 Bookings: Detected bookingsUpdated event (same-tab)');
-      loadBookings();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('bookingsUpdated', handleCustomStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('bookingsUpdated', handleCustomStorageChange);
-    };
-  }, []);
 
   // Load staff records
   useEffect(() => {
@@ -322,28 +304,6 @@ export default function BookingsPage() {
     return () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('staffUpdated', handleCustom);
-    };
-  }, []);
-
-  // Load customer payment records
-  useEffect(() => {
-    const loadPayments = () => {
-      setCustomerPayments(loadCustomerPayments());
-    };
-
-    loadPayments();
-
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'customerPayments') loadPayments();
-    };
-    const handleCustom = () => loadPayments();
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('customerPaymentsUpdated', handleCustom);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('customerPaymentsUpdated', handleCustom);
     };
   }, []);
 
@@ -439,14 +399,6 @@ export default function BookingsPage() {
     return conflicts;
   };
 
-  const saveBookings = (newBookings: Booking[]) => {
-    const normalized = newBookings.map((booking) => normalizeBookingWorkflowFields(booking));
-    console.log('📅 Bookings: Saving', normalized.length, 'bookings to localStorage');
-    setBookings(normalized);
-    localStorage.setItem('bookings', JSON.stringify(normalized));
-    console.log('📅 Bookings: Dispatching bookingsUpdated event');
-    window.dispatchEvent(new Event('bookingsUpdated'));
-  };
 
   // Debounce search so filteredBookings useMemo doesn't re-run on every keystroke
   useEffect(() => {
@@ -469,6 +421,10 @@ export default function BookingsPage() {
           b.customerEmail.toLowerCase().includes(query) ||
           b.location.toLowerCase().includes(query)
       );
+    }
+
+    if (eventTypeFilter !== 'all') {
+      result = result.filter((b) => b.eventType === eventTypeFilter);
     }
 
     // Pre-cache timestamps for eventDate sort to avoid creating new Date() per comparison
@@ -499,7 +455,7 @@ export default function BookingsPage() {
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [bookings, filterStatuses, debouncedSearch, sortField, sortDirection]);
+  }, [bookings, filterStatuses, debouncedSearch, eventTypeFilter, sortField, sortDirection]);
 
   // Single-pass stats calculation instead of 4 separate filter passes
   const stats = useMemo(() => {
@@ -655,13 +611,7 @@ export default function BookingsPage() {
       ensureShoppingListForBooking(booking.id);
     }
 
-    saveBookings(
-      bookings.map((b) =>
-        b.id === booking.id
-          ? nextBooking
-          : b
-      )
-    );
+    void saveBooking(nextBooking);
 
   };
 
@@ -671,11 +621,25 @@ export default function BookingsPage() {
 
   const unlockBooking = (booking: Booking) => {
     const now = new Date().toISOString();
-    saveBookings(
-      bookings.map((b) =>
-        b.id === booking.id ? { ...b, locked: false, updatedAt: now } : b
-      )
+    void saveBooking({ ...booking, locked: false, updatedAt: now });
+  };
+
+  const deleteEvent = async (booking: Booking) => {
+    const confirmed = window.confirm(
+      `Delete event for ${booking.customerName} on ${booking.eventDate}? This cannot be undone.`
     );
+    if (!confirmed) return;
+
+    try {
+      await removeBooking(booking.id);
+      removeShoppingListForBooking(booking.id);
+      setEventSummaryBooking((current) => (current?.id === booking.id ? null : current));
+      setPaymentModalBooking((current) => (current?.id === booking.id ? null : current));
+      closeActionsDropdown();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete event';
+      alert(message);
+    }
   };
 
   // Payment column: user-facing labels (Deposit Pending, Deposit Received, Balance Outstanding, Paid in Full, Refunded)
@@ -740,6 +704,23 @@ export default function BookingsPage() {
     setPaymentFormError(null);
   };
 
+  // Open Record Payment modal when navigating from wizard with ?openPayment=bookingId
+  useEffect(() => {
+    const bookingId = searchParams.get('openPayment');
+    if (!bookingId) {
+      openedBookingFromQueryRef.current = null;
+      return;
+    }
+    if (bookings.length === 0) return;
+    if (openedBookingFromQueryRef.current === bookingId) return;
+    const booking = bookings.find((b) => b.id === bookingId);
+    if (booking) {
+      openedBookingFromQueryRef.current = bookingId;
+      openPaymentModal(booking);
+      router.replace('/bookings', { scroll: false });
+    }
+  }, [searchParams, bookings, router]);
+
   const showEmailFeedback = (status: 'sent' | 'error') => {
     setEmailToast(status);
     setTimeout(() => setEmailToast(null), 3000);
@@ -778,7 +759,7 @@ export default function BookingsPage() {
     }
   };
 
-  const handleSubmitPayment = () => {
+  const handleSubmitPayment = async () => {
     if (!paymentModalBooking) return;
     const amount = parseFloat(paymentForm.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -806,12 +787,24 @@ export default function BookingsPage() {
       notes: paymentForm.notes || undefined,
       recordedAt: now,
     };
-    saveCustomerPayments([...loadCustomerPayments(), paymentRecord]);
+    await savePayment(paymentRecord);
     let updatedBooking: Booking;
     if (isRefund) {
       updatedBooking = applyRefundToBooking(paymentModalBooking, amount, paymentForm.date);
     } else {
       updatedBooking = applyPaymentToBooking(paymentModalBooking, amount, paymentForm.date);
+      const hasCoveredDeposit =
+        (updatedBooking.amountPaid ?? 0) + 0.009 >= (updatedBooking.depositAmount ?? 0);
+      if (
+        hasCoveredDeposit &&
+        getBookingServiceStatus(updatedBooking) !== 'cancelled'
+      ) {
+        updatedBooking = {
+          ...updatedBooking,
+          pipeline_status: 'booked',
+          pipeline_status_updated_at: now,
+        };
+      }
       if (
         (updatedBooking.paymentStatus === 'paid-in-full') &&
         (getBookingServiceStatus(paymentModalBooking) === 'pending')
@@ -825,13 +818,7 @@ export default function BookingsPage() {
         updatedBooking = normalizeBookingWorkflowFields(updatedBooking, paymentForm.date);
       }
     }
-    saveBookings(
-      bookings.map((b) =>
-        b.id === paymentModalBooking.id
-          ? { ...updatedBooking, updatedAt: now }
-          : b
-      )
-    );
+    await saveBooking({ ...updatedBooking, updatedAt: now });
     setPaymentModalBooking(null);
     // Show verification popup before sending receipt (payment only, not refunds)
     if (!isRefund && updatedBooking.customerEmail) {
@@ -1066,6 +1053,32 @@ export default function BookingsPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1 rounded-md border border-border px-4 py-2 text-sm text-text-primary bg-card-elevated"
         />
+        <select
+          value={eventTypeFilter}
+          onChange={(e) => setEventTypeFilter(e.target.value)}
+          className="min-w-[200px] rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-primary"
+          title="Filter by event type"
+        >
+          <option value="all">All Event Types</option>
+          {eventTypeOptions.map((eventTypeId) => (
+            <option key={eventTypeId} value={eventTypeId}>
+              {eventTypeLabelMap.get(eventTypeId) ?? eventTypeId}
+            </option>
+          ))}
+        </select>
+        {viewMode === 'table' && (
+          <button
+            type="button"
+            onClick={() => setSimpleTableMode((prev) => !prev)}
+            className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
+              simpleTableMode
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-border bg-card-elevated text-text-secondary hover:bg-card hover:text-text-primary'
+            }`}
+          >
+            {simpleTableMode ? 'Simple table' : 'Full table'}
+          </button>
+        )}
       </div>
 
       {/* Calendar View */}
@@ -1275,14 +1288,23 @@ export default function BookingsPage() {
           <table className="w-full">
             <thead className="border-b border-border bg-card-elevated">
               <tr>
-                {([
-                  ['eventDate', 'Event Date', false],
-                  ['customerName', 'Customer', false],
-                  ['eventType', 'Type', true],
-                  ['guests', getTemplateLabel(templateConfig.labels, 'guests', 'Guests'), true],
-                  ['total', 'Total', false],
-                  ['status', 'Status', false],
-                ] as const).map(([field, label, mobileHide]) => (
+                {(simpleTableMode
+                  ? ([
+                      ['eventDate', 'Event Date', false],
+                      ['customerName', 'Customer', false],
+                      ['guests', getTemplateLabel(templateConfig.labels, 'guests', 'Guests'), false],
+                      ['status', 'Status', false],
+                      ['total', 'Total', false],
+                    ] as const)
+                  : ([
+                      ['eventDate', 'Event Date', false],
+                      ['customerName', 'Customer', false],
+                      ['eventType', 'Type', true],
+                      ['guests', getTemplateLabel(templateConfig.labels, 'guests', 'Guests'), true],
+                      ['total', 'Total', false],
+                      ['status', 'Status', false],
+                    ] as const)
+                ).map(([field, label, mobileHide]) => (
                   <th
                     key={field}
                     onClick={() => handleSort(field)}
@@ -1291,14 +1313,18 @@ export default function BookingsPage() {
                     {label} {sortField === field && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
                 ))}
-                <th className="hidden px-4 py-3 text-left text-sm font-semibold text-text-primary md:table-cell">
-                  Payment
-                </th>
-                <th className="hidden px-4 py-3 text-left text-sm font-semibold text-text-primary md:table-cell">
-                  Staff
-                </th>
+                {!simpleTableMode && (
+                  <>
+                    <th className="hidden px-4 py-3 text-left text-sm font-semibold text-text-primary md:table-cell">
+                      Payment
+                    </th>
+                    <th className="hidden px-4 py-3 text-left text-sm font-semibold text-text-primary md:table-cell">
+                      Staff
+                    </th>
+                  </>
+                )}
                 <th className="px-4 py-3 text-right text-sm font-semibold text-text-primary">
-                  Actions
+                  {simpleTableMode ? 'Open' : 'Actions'}
                 </th>
               </tr>
             </thead>
@@ -1306,7 +1332,7 @@ export default function BookingsPage() {
               {filteredBookings.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={simpleTableMode ? 6 : 9}
                     className="px-4 py-12 text-center text-text-muted"
                   >
                     {searchQuery || filterStatuses.length > 0
@@ -1323,6 +1349,12 @@ export default function BookingsPage() {
                   <tr
                     key={booking.id}
                     className="hover:bg-card-elevated /50"
+                    onDoubleClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target.closest('a,button,input,select,textarea,[role="menuitem"]')) return;
+                      router.push(`/bookings/${booking.id}`);
+                    }}
+                    title="Double-click to edit booking"
                   >
                     <td className="px-4 py-4 text-sm text-text-primary">
                       {format(new Date(booking.eventDate), 'MMM dd, yyyy')}
@@ -1341,10 +1373,12 @@ export default function BookingsPage() {
                         {templateConfig.eventTypes.find(e => e.id === booking.eventType)?.label ?? booking.eventType} · {booking.adults + booking.children} guests
                       </div>
                     </td>
-                    <td className="hidden px-4 py-4 text-sm text-text-secondary md:table-cell">
-                      {templateConfig.eventTypes.find(e => e.id === booking.eventType)?.label ?? booking.eventType}
-                    </td>
-                    <td className="hidden px-4 py-4 text-sm text-text-secondary md:table-cell">
+                    {!simpleTableMode && (
+                      <td className="hidden px-4 py-4 text-sm text-text-secondary md:table-cell">
+                        {templateConfig.eventTypes.find(e => e.id === booking.eventType)?.label ?? booking.eventType}
+                      </td>
+                    )}
+                    <td className={`${simpleTableMode ? '' : 'hidden md:table-cell'} px-4 py-4 text-sm text-text-secondary`}>
                       {booking.adults + booking.children}
                       <div className="text-xs text-text-muted">
                         ({booking.adults}A + {booking.children}C)
@@ -1352,12 +1386,18 @@ export default function BookingsPage() {
                     </td>
                     <td className="px-4 py-4 text-sm font-medium text-text-primary">
                       {formatCurrency(booking.total)}
-                      <div className="text-xs text-text-muted">
-                        {booking.menuPricingSnapshot ? 'menu pricing' : 'rules pricing'}
-                      </div>
+                      {!simpleTableMode && (
+                        <div className="text-xs text-text-muted">
+                          {booking.menuPricingSnapshot ? 'menu pricing' : 'rules pricing'}
+                        </div>
+                      )}
                     </td>
                     <td className="pl-3 px-4 py-4 text-sm">
-                      {isBookingLocked(booking) ? (
+                      {simpleTableMode ? (
+                        <span className={`text-xs font-medium ${statusTextColors[getBookingServiceStatus(booking)]}`}>
+                          {getBookingServiceStatus(booking).charAt(0).toUpperCase() + getBookingServiceStatus(booking).slice(1)}
+                        </span>
+                      ) : isBookingLocked(booking) ? (
                         <div className="flex items-center gap-1.5">
                           <span className={`text-xs font-medium ${statusTextColors[getBookingServiceStatus(booking)]}`}>
                             {getBookingServiceStatus(booking).charAt(0).toUpperCase() + getBookingServiceStatus(booking).slice(1)}
@@ -1379,52 +1419,65 @@ export default function BookingsPage() {
                         </select>
                       )}
                     </td>
-                    <td className="hidden pl-3 px-4 py-4 text-sm md:table-cell">
-                      <div className="flex flex-col gap-1">
-                        <span
-                          className={`text-xs font-medium ${
-                            (() => {
-                              const label = paymentDisplayLabelForBooking(booking);
-                              if (label === 'Balance Outstanding' && isBalanceOverdue(booking)) return 'text-red-700 dark:text-red-300';
-                              return paymentTextColors[label] ?? 'text-text-secondary';
-                            })()
-                          }`}
-                        >
-                          {paymentDisplayLabelForBooking(booking)}
-                        </span>
-                        <span className="text-xs text-text-muted">
-                          Paid {formatCurrency(booking.amountPaid ?? 0)} · Due{' '}
-                          {formatCurrency(
-                            booking.balanceDueAmount ?? Math.max(0, booking.total - (booking.amountPaid ?? 0))
+                    {!simpleTableMode && (
+                      <>
+                        <td className="hidden pl-3 px-4 py-4 text-sm md:table-cell">
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`text-xs font-medium ${
+                                (() => {
+                                  const label = paymentDisplayLabelForBooking(booking);
+                                  if (label === 'Balance Outstanding' && isBalanceOverdue(booking)) return 'text-red-700 dark:text-red-300';
+                                  return paymentTextColors[label] ?? 'text-text-secondary';
+                                })()
+                              }`}
+                            >
+                              {paymentDisplayLabelForBooking(booking)}
+                            </span>
+                            <span className="text-xs text-text-muted">
+                              Paid {formatCurrency(booking.amountPaid ?? 0)} · Due{' '}
+                              {formatCurrency(
+                                booking.balanceDueAmount ?? Math.max(0, booking.total - (booking.amountPaid ?? 0))
+                              )}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="hidden px-4 py-4 text-sm md:table-cell">
+                          {booking.staffAssignments && booking.staffAssignments.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {booking.staffAssignments.map((a, i) => {
+                                const member = staffById.get(a.staffId);
+                                const initials = member ? getStaffInitials(member.name) : '?';
+                                const color = staffColorMap.get(a.staffId) ?? 'bg-gray-400';
+                                const roleLabel = STAFF_ROLE_LABELS[a.role] ?? a.role;
+                                const title = member ? `${member.name} · ${roleLabel}` : roleLabel;
+                                return (
+                                  <span
+                                    key={a.staffId ?? i}
+                                    title={title}
+                                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white ${color}`}
+                                  >
+                                    {initials}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-text-muted">—</span>
                           )}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="hidden px-4 py-4 text-sm md:table-cell">
-                      {booking.staffAssignments && booking.staffAssignments.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {booking.staffAssignments.map((a, i) => {
-                            const member = staffById.get(a.staffId);
-                            const initials = member ? getStaffInitials(member.name) : '?';
-                            const color = staffColorMap.get(a.staffId) ?? 'bg-gray-400';
-                            const roleLabel = STAFF_ROLE_LABELS[a.role] ?? a.role;
-                            const title = member ? `${member.name} · ${roleLabel}` : roleLabel;
-                            return (
-                              <span
-                                key={a.staffId ?? i}
-                                title={title}
-                                className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white ${color}`}
-                              >
-                                {initials}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-text-muted">—</span>
-                      )}
-                    </td>
+                        </td>
+                      </>
+                    )}
                     <td className="px-4 py-4 text-right text-sm">
+                      {simpleTableMode ? (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/bookings/${booking.id}`)}
+                          className="inline-flex items-center gap-1 rounded border border-border bg-card px-2 py-1.5 text-sm font-medium text-text-primary hover:bg-card-elevated"
+                        >
+                          Open
+                        </button>
+                      ) : (
                       <div className="flex items-center justify-end gap-2">
                         {/* Icons when menu or shopping list exists */}
                         {booking.eventType === 'private-dinner' && booking.menuId && (
@@ -1577,6 +1630,16 @@ export default function BookingsPage() {
                                     <PencilSquareIcon className="h-4 w-4 shrink-0" />
                                     Edit Booking
                                   </button>
+                                  <div className="my-1 border-t border-border" />
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteEvent(booking)}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger hover:bg-danger/10"
+                                    role="menuitem"
+                                  >
+                                    <TrashIcon className="h-4 w-4 shrink-0" />
+                                    Delete Event
+                                  </button>
                                 </>
                               )}
 
@@ -1602,6 +1665,7 @@ export default function BookingsPage() {
                           )}
                         </div>
                       </div>
+                      )}
                     </td>
                   </tr>
                   );

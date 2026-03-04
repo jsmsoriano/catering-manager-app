@@ -1,14 +1,16 @@
-import type { MoneyRules, EventInput, EventFinancials, StaffingPlan, StaffMember, LaborCompensation, ChefRole, StaffPayOverride, StaffingProfile, EventType } from './types';
+import type { MoneyRules, EventInput, EventFinancials, PricingResult, CostsResult, ProfitResult, StaffingPlan, StaffMember, LaborCompensation, ChefRole, StaffPayOverride, StaffingProfile, EventType } from './types';
+import { getHibachiServiceFormat, getHibachiStaffingRecommendation } from './hibachiService';
+import { StorageEvent } from './storageEvents';
 
 export const STORAGE_KEY_RULES = "catering.moneyRules.v1";
 const LEGACY_STORAGE_KEY_RULES = "hibachi.moneyRules.v1";
 
 export const DEFAULT_RULES: MoneyRules = {
   pricing: {
-    primaryBasePrice: 60,
+    primaryBasePrice: 65,
     secondaryBasePrice: 32,
-    premiumAddOnMin: 5,
-    premiumAddOnMax: 20,
+    premiumAddOnMin: 0,
+    premiumAddOnMax: 0,
     proteinAddOns: [
       { protein: 'chicken', label: 'Chicken', pricePerPerson: 6 },
       { protein: 'filet-mignon', label: 'Filet Mignon', pricePerPerson: 10 },
@@ -23,6 +25,13 @@ export const DEFAULT_RULES: MoneyRules = {
     maxGuestsPerChefSecondary: 25,
     assistantRequired: true,
     profiles: [],
+  },
+  hibachiOps: {
+    privateDinnerGuestsPerChef: 15,
+    privateDinnerAssistantThreshold: 30,
+    buffetGuestsPerChef: 25,
+    buffetMinChefsAtThreshold: 2,
+    buffetLargePartyThreshold: 50,
   },
   privateLabor: {
     leadChefBasePercent: 15,
@@ -174,6 +183,7 @@ export function loadRules(): MoneyRules {
       const merged = {
         pricing: { ...DEFAULT_RULES.pricing, ...stripInvalid(parsed.pricing) },
         staffing: { ...DEFAULT_RULES.staffing, ...stripInvalid(parsed.staffing) },
+        hibachiOps: { ...DEFAULT_RULES.hibachiOps, ...stripInvalid(parsed.hibachiOps) },
         privateLabor: { ...DEFAULT_RULES.privateLabor, ...stripInvalid(parsed.privateLabor) },
         buffetLabor: { ...DEFAULT_RULES.buffetLabor, ...stripInvalid(parsed.buffetLabor) },
         costs: { ...DEFAULT_RULES.costs, ...stripInvalid(parsed.costs) },
@@ -219,6 +229,7 @@ export function mergeRulesOverrides(
       ...stripInvalid(o.staffing),
       profiles: Array.isArray((o.staffing as any)?.profiles) ? (o.staffing as any).profiles : rules.staffing.profiles,
     },
+    hibachiOps: { ...rules.hibachiOps, ...stripInvalid(o.hibachiOps) },
     privateLabor: { ...rules.privateLabor, ...stripInvalid(o.privateLabor) },
     buffetLabor: { ...rules.buffetLabor, ...stripInvalid(o.buffetLabor) },
     costs: { ...rules.costs, ...stripInvalid(o.costs) },
@@ -231,37 +242,25 @@ export function mergeRulesOverrides(
 export function saveRules(rules: MoneyRules): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem('moneyRules', JSON.stringify(rules));
-  window.dispatchEvent(new Event('moneyRulesUpdated'));
+  window.dispatchEvent(new Event(StorageEvent.MoneyRules));
 }
 
-// Calculate event financials based on input and money rules
-export function calculateEventFinancials(
-  input: EventInput,
-  rules: MoneyRules
-): EventFinancials {
-  const {
-    adults,
-    children,
-    eventType,
-    distanceMiles,
-    premiumAddOn = 0,
-    subtotalOverride,
-    foodCostOverride,
-  } = input;
+// ─── Sub-calculators (independently testable) ────────────────────────────────
+
+/** Calculate revenue subtotal, gratuity, and distance fee from event input. */
+export function calculatePricing(input: EventInput, rules: MoneyRules): PricingResult {
+  const { adults, children, eventType, distanceMiles, premiumAddOn = 0, subtotalOverride } = input;
   const guestCount = adults + children;
 
-  // Pricing calculations — use pricingSlot from input if provided, else fall back to
-  // legacy 'private-dinner' detection so existing hibachi bookings keep correct pricing.
+  // Use pricingSlot from input if provided, else fall back to legacy 'private-dinner'
+  // detection so existing hibachi bookings keep correct pricing.
   const slot = input.pricingSlot ?? (eventType === 'private-dinner' ? 'primary' : 'secondary');
   const basePrice = slot === 'primary'
     ? rules.pricing.primaryBasePrice
     : rules.pricing.secondaryBasePrice;
 
   const childPrice = basePrice * (1 - rules.pricing.childDiscountPercent / 100);
-  const adultTotal = adults * basePrice;
-  const childTotal = children * childPrice;
-  const premiumTotal = guestCount * premiumAddOn;
-  const computedSubtotal = adultTotal + childTotal + premiumTotal;
+  const computedSubtotal = adults * basePrice + children * childPrice + guestCount * premiumAddOn;
   const normalizedSubtotalOverride =
     typeof subtotalOverride === 'number' && Number.isFinite(subtotalOverride) && subtotalOverride >= 0
       ? subtotalOverride
@@ -271,7 +270,6 @@ export function calculateEventFinancials(
   const gratuityPercent = rules.pricing.defaultGratuityPercent;
   const gratuity = subtotal * (gratuityPercent / 100);
 
-  // Distance fee calculation
   let distanceFee = 0;
   if (distanceMiles > rules.distance.freeDistanceMiles) {
     distanceFee = rules.distance.baseDistanceFee;
@@ -280,9 +278,16 @@ export function calculateEventFinancials(
     distanceFee += increments * rules.distance.additionalFeePerIncrement;
   }
 
-  const totalCharged = subtotal + gratuity + distanceFee;
+  return { slot, basePrice, subtotal, gratuity, gratuityPercent, distanceFee, totalCharged: subtotal + gratuity + distanceFee };
+}
 
-  // Cost calculations
+/** Calculate food, supplies, and transportation costs from a known subtotal. */
+export function calculateCosts(
+  subtotal: number,
+  slot: 'primary' | 'secondary',
+  foodCostOverride: number | undefined,
+  rules: MoneyRules
+): CostsResult {
   const configuredFoodCostPercent = slot === 'primary'
     ? rules.costs.primaryFoodCostPercent
     : rules.costs.secondaryFoodCostPercent;
@@ -294,36 +299,24 @@ export function calculateEventFinancials(
   const foodCostPercent = subtotal > 0 ? (foodCost / subtotal) * 100 : 0;
   const suppliesCost = subtotal * (rules.costs.suppliesCostPercent / 100);
   const transportationCost = rules.costs.transportationStipend;
-  const totalCosts = foodCost + suppliesCost + transportationCost;
+  return { foodCost, foodCostPercent, suppliesCost, transportationCost, totalCosts: foodCost + suppliesCost + transportationCost };
+}
 
-  // Staffing determination
-  const staffingPlan = determineStaffing(guestCount, eventType, rules, input.staffingProfileId);
-
-  // Labor compensation calculations
-  const laborCompensation = calculateLabor(
-    subtotal,
-    gratuity,
-    eventType,
-    staffingPlan,
-    rules,
-    input.staffPayOverrides
-  );
-
-  const totalLaborBase = laborCompensation.reduce((sum, comp) => sum + comp.basePay, 0);
-  const totalLaborWithGratuity = laborCompensation.reduce((sum, comp) => sum + comp.totalCalculated, 0);
-  const totalLaborPaid = laborCompensation.reduce((sum, comp) => sum + comp.finalPay, 0);
-  const totalExcessToProfit = laborCompensation.reduce((sum, comp) => sum + comp.excessToProfit, 0);
-  const totalRevenue = subtotal + gratuity;
-  const laborAsPercentOfRevenue = totalRevenue > 0 ? (totalLaborPaid / totalRevenue) * 100 : 0;
-
-  // Profit calculations
+/** Calculate gross profit and owner distributions from revenue, costs, and labor. */
+export function calculateProfit(
+  subtotal: number,
+  gratuity: number,
+  totalCosts: number,
+  totalLaborPaid: number,
+  rules: MoneyRules
+): ProfitResult {
   const grossProfit = subtotal + gratuity - totalCosts - totalLaborPaid;
   const retainedPercent = rules.profitDistribution.businessRetainedPercent;
   const distributionPercent = rules.profitDistribution.ownerDistributionPercent;
   const retainedAmount = grossProfit * (retainedPercent / 100);
   const distributionAmount = grossProfit * (distributionPercent / 100);
 
-  const ownersList = rules.profitDistribution.owners && rules.profitDistribution.owners.length > 0
+  const ownersList = rules.profitDistribution.owners?.length
     ? rules.profitDistribution.owners
     : [
         { id: 'owner-a', name: 'Owner A', equityPercent: rules.profitDistribution.ownerAEquityPercent },
@@ -334,17 +327,57 @@ export function calculateEventFinancials(
     ownerName: o.name,
     amount: distributionAmount * (o.equityPercent / 100),
   }));
-  const ownerADistribution = ownerDistributions[0]?.amount ?? 0;
-  const ownerBDistribution = ownerDistributions[1]?.amount ?? 0;
 
-  // Warnings
+  return {
+    grossProfit,
+    retainedAmount,
+    retainedPercent,
+    distributionAmount,
+    distributionPercent,
+    ownerDistributions,
+    ownerADistribution: ownerDistributions[0]?.amount ?? 0,
+    ownerBDistribution: ownerDistributions[1]?.amount ?? 0,
+  };
+}
+
+// ─── Orchestrator ─────────────────────────────────────────────────────────────
+
+/** Calculate all event financials by composing the four sub-calculators. */
+export function calculateEventFinancials(
+  input: EventInput,
+  rules: MoneyRules
+): EventFinancials {
+  const { adults, children } = input;
+  const guestCount = adults + children;
+
+  const pricing = calculatePricing(input, rules);
+  const costs = calculateCosts(pricing.subtotal, pricing.slot, input.foodCostOverride, rules);
+  const staffingPlan = calculateStaffing(guestCount, input.eventType, rules, input.staffingProfileId);
+  const laborCompensation = calculateLaborCompensation(
+    pricing.subtotal,
+    pricing.gratuity,
+    input.eventType,
+    staffingPlan,
+    rules,
+    input.staffPayOverrides
+  );
+
+  const totalLaborBase = laborCompensation.reduce((sum, c) => sum + c.basePay, 0);
+  const totalLaborWithGratuity = laborCompensation.reduce((sum, c) => sum + c.totalCalculated, 0);
+  const totalLaborPaid = laborCompensation.reduce((sum, c) => sum + c.finalPay, 0);
+  const totalExcessToProfit = laborCompensation.reduce((sum, c) => sum + c.excessToProfit, 0);
+  const totalRevenue = pricing.subtotal + pricing.gratuity;
+  const laborAsPercentOfRevenue = totalRevenue > 0 ? (totalLaborPaid / totalRevenue) * 100 : 0;
+
+  const profit = calculateProfit(pricing.subtotal, pricing.gratuity, costs.totalCosts, totalLaborPaid, rules);
+
   const warnings: string[] = [];
   if (rules.safetyLimits.warnWhenExceeded) {
     if (laborAsPercentOfRevenue > rules.safetyLimits.maxTotalLaborPercent) {
       warnings.push(`Labor cost (${laborAsPercentOfRevenue.toFixed(1)}%) exceeds maximum (${rules.safetyLimits.maxTotalLaborPercent}%) of total revenue`);
     }
-    if (foodCostPercent > rules.safetyLimits.maxFoodCostPercent) {
-      warnings.push(`Food cost (${foodCostPercent.toFixed(1)}%) exceeds maximum (${rules.safetyLimits.maxFoodCostPercent}%)`);
+    if (costs.foodCostPercent > rules.safetyLimits.maxFoodCostPercent) {
+      warnings.push(`Food cost (${costs.foodCostPercent.toFixed(1)}%) exceeds maximum (${rules.safetyLimits.maxFoodCostPercent}%)`);
     }
   }
 
@@ -353,20 +386,16 @@ export function calculateEventFinancials(
     guestCount,
     adultCount: adults,
     childCount: children,
-    basePrice,
-    premiumAddOn,
-    subtotal,
-    gratuity,
-    gratuityPercent,
-    distanceFee,
-    totalCharged,
+    basePrice: pricing.basePrice,
+    premiumAddOn: input.premiumAddOn ?? 0,
+    subtotal: pricing.subtotal,
+    gratuity: pricing.gratuity,
+    gratuityPercent: pricing.gratuityPercent,
+    distanceFee: pricing.distanceFee,
+    totalCharged: pricing.totalCharged,
 
     // Costs
-    foodCost,
-    foodCostPercent,
-    suppliesCost,
-    transportationCost,
-    totalCosts,
+    ...costs,
 
     // Labor
     staffingPlan,
@@ -378,14 +407,7 @@ export function calculateEventFinancials(
     laborAsPercentOfRevenue,
 
     // Profit
-    grossProfit,
-    retainedAmount,
-    retainedPercent,
-    distributionAmount,
-    distributionPercent,
-    ownerDistributions,
-    ownerADistribution,
-    ownerBDistribution,
+    ...profit,
 
     // Warnings
     warnings,
@@ -485,7 +507,7 @@ function buildStaffingPlanFromProfile(
 }
 
 // Helper: Determine staffing needs
-function determineStaffing(
+export function calculateStaffing(
   guestCount: number,
   eventType: EventType,
   rules: MoneyRules,
@@ -501,6 +523,57 @@ function determineStaffing(
 
   if (matchedProfile) {
     return buildStaffingPlanFromProfile(matchedProfile, rules);
+  }
+
+  const hibachiFormat = getHibachiServiceFormat(eventType);
+  const hibachiRecommendation = getHibachiStaffingRecommendation(guestCount, hibachiFormat, rules.hibachiOps);
+  if (hibachiRecommendation) {
+    if (hibachiFormat === 'buffet') {
+      const chefRoles: ChefRole[] = Array(hibachiRecommendation.chefs).fill('buffet');
+      return {
+        chefRoles,
+        assistantNeeded: false,
+        totalStaffCount: chefRoles.length,
+        recommendedGrills: hibachiRecommendation.grills,
+        showIncluded: hibachiRecommendation.showIncluded,
+        serviceStyleLabel: 'Hibachi Buffet',
+        staff: chefRoles.map((role) => ({
+          role,
+          basePayPercent: rules.buffetLabor.chefBasePercent,
+          capPercent: rules.buffetLabor.chefCapPercent,
+          isOwner: false,
+        })),
+      };
+    }
+
+    const chefRoles: ChefRole[] = ['lead'];
+    for (let i = 1; i < hibachiRecommendation.chefs; i++) chefRoles.push('full');
+    const assistantNeeded = hibachiRecommendation.assistants > 0;
+    const staff: StaffMember[] = [
+      ...chefRoles.map((role) => ({
+        role,
+        basePayPercent: role === 'lead' ? rules.privateLabor.leadChefBasePercent : rules.privateLabor.fullChefBasePercent,
+        capPercent: role === 'lead' ? rules.privateLabor.leadChefCapPercent : rules.privateLabor.fullChefCapPercent,
+        isOwner: false,
+      })),
+    ];
+    if (assistantNeeded) {
+      staff.push({
+        role: 'assistant',
+        basePayPercent: rules.privateLabor.assistantBasePercent,
+        capPercent: rules.privateLabor.assistantCapPercent,
+        isOwner: false,
+      });
+    }
+    return {
+      chefRoles,
+      assistantNeeded,
+      totalStaffCount: staff.length,
+      recommendedGrills: hibachiRecommendation.grills,
+      showIncluded: hibachiRecommendation.showIncluded,
+      serviceStyleLabel: 'Hibachi Private Dinner',
+      staff,
+    };
   }
 
   // Fallback: rule-based logic — secondary event type uses simpler chef-only staffing
@@ -584,7 +657,7 @@ function determineStaffing(
 }
 
 // Helper: Calculate labor compensation
-function calculateLabor(
+export function calculateLaborCompensation(
   subtotal: number,
   gratuity: number,
   eventType: string,
@@ -606,7 +679,7 @@ function calculateLabor(
     return totalRevenue * (capPercent / 100);
   };
 
-  if (eventType === 'buffet') {
+  if (eventType === 'buffet' || eventType.includes('buffet')) {
     // Buffet: split gratuity equally among all staff (or use overrides)
     const staffCount = staffingPlan.staff.length;
 

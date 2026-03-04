@@ -73,6 +73,15 @@ export interface MoneyRules {
     profiles: StaffingProfile[]; // Named staffing compositions
   };
 
+  // Hibachi-specific service mode staffing rules
+  hibachiOps: {
+    privateDinnerGuestsPerChef: number;
+    privateDinnerAssistantThreshold: number;
+    buffetGuestsPerChef: number;
+    buffetMinChefsAtThreshold: number;
+    buffetLargePartyThreshold: number;
+  };
+
   // Private Event Labor
   privateLabor: {
     leadChefBasePercent: number; // % of subtotal
@@ -143,6 +152,9 @@ export interface StaffingPlan {
   assistantNeeded: boolean;
   totalStaffCount: number;
   staff: StaffMember[];
+  recommendedGrills?: number;
+  showIncluded?: boolean;
+  serviceStyleLabel?: string;
   matchedProfileId?: string;
   matchedProfileName?: string;
 }
@@ -170,6 +182,39 @@ export interface LaborCompensation {
   excessToProfit: number;
   isOwner: boolean;
   ownerRole?: OwnerRole;
+}
+
+// ----------------------------------------------------------------------------
+// Intermediate results from sub-calculators (compose into EventFinancials)
+// ----------------------------------------------------------------------------
+
+export interface PricingResult {
+  slot: 'primary' | 'secondary';
+  basePrice: number;
+  subtotal: number;
+  gratuity: number;
+  gratuityPercent: number;
+  distanceFee: number;
+  totalCharged: number;
+}
+
+export interface CostsResult {
+  foodCost: number;
+  foodCostPercent: number;
+  suppliesCost: number;
+  transportationCost: number;
+  totalCosts: number;
+}
+
+export interface ProfitResult {
+  grossProfit: number;
+  retainedAmount: number;
+  retainedPercent: number;
+  distributionAmount: number;
+  distributionPercent: number;
+  ownerDistributions: { ownerId: string; ownerName: string; amount: number }[];
+  ownerADistribution: number;
+  ownerBDistribution: number;
 }
 
 // ----------------------------------------------------------------------------

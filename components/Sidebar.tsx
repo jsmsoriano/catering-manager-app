@@ -1,61 +1,115 @@
 'use client';
 
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, type ReactNode, type ComponentType } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   HomeIcon,
   CogIcon,
-  DocumentChartBarIcon,
-  DocumentTextIcon,
   CalendarDaysIcon,
   ReceiptPercentIcon,
-  UsersIcon,
-  UserGroupIcon,
-  CalculatorIcon,
   ArrowRightOnRectangleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Bars3Icon,
   XMarkIcon,
-  BookOpenIcon,
-  InboxIcon,
   ViewColumnsIcon,
+  LinkIcon,
   ClipboardDocumentListIcon,
-  Squares2X2Icon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from './AuthProvider';
 import { useFeatureFlags } from '@/lib/useFeatureFlags';
-import type { FeatureFlags } from '@/lib/featureFlags';
+import type { FeatureFlags, ProductProfile } from '@/lib/featureFlags';
 import { loadFromStorage } from '@/lib/storage';
 import { normalizeBookingWorkflowFields, getBookingServiceStatus, toLocalDateISO } from '@/lib/bookingWorkflow';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import type { Booking } from '@/lib/bookingTypes';
+import { CRM_UPDATED_EVENT, loadCrmTasks } from '@/lib/crmStorage';
 
-const navigation = [
-  { name: 'Home', href: '/', icon: HomeIcon, featureKey: 'home' as const },
-  { name: 'Events', href: '/bookings', icon: CalendarDaysIcon, featureKey: 'events' as const },
-  { name: 'Pipeline', href: '/pipeline', icon: ViewColumnsIcon, featureKey: 'pipeline' as const },
-  { name: 'Inbox', href: '/inquiries', icon: InboxIcon, featureKey: 'inbox' as const },
-  { name: 'Customers', href: '/customers', icon: UserGroupIcon, featureKey: 'customers' as const },
+type NavFeatureKey = keyof FeatureFlags;
+type NavChild = {
+  name: string;
+  href: string;
+  featureKey?: NavFeatureKey;
+  profiles?: ProductProfile[];
+  adminOnly?: boolean;
+};
+type NavItem = {
+  name: string;
+  icon: ComponentType<{ className?: string }>;
+  children: NavChild[];
+  asDirect?: boolean;
+};
+
+const navigation: NavItem[] = [
   {
-    name: 'Staff',
-    icon: UsersIcon,
-    featureKey: 'staff' as const,
+    name: 'Home',
+    icon: HomeIcon,
+    children: [{ name: 'Home', href: '/', featureKey: 'home' }],
+    asDirect: true,
+  },
+  {
+    // Events is the core product — surfaces above all groups for instant access
+    name: 'Events',
+    icon: CalendarDaysIcon,
+    children: [{ name: 'Events', href: '/bookings', featureKey: 'events' }],
+    asDirect: true,
+  },
+  {
+    name: 'Clients',
+    icon: ViewColumnsIcon,
     children: [
-      { name: 'Team', href: '/staff' },
-      { name: 'Team Calendar', href: '/staff/availability' },
+      { name: 'Inquiries', href: '/pipeline', featureKey: 'pipeline' },
+      { name: 'Follow-ups', href: '/follow-ups', featureKey: 'inbox' },
+      { name: 'Contacts', href: '/customers', featureKey: 'customers' },
+      { name: 'Price Calculator', href: '/calculator', featureKey: 'calculator' },
+      { name: 'Proposal Writer', href: '/proposal-writer', featureKey: 'settings', profiles: ['catering_pro'] },
     ],
   },
-  { name: 'Menu Builder', href: '/menus/builder', icon: ClipboardDocumentListIcon, featureKey: 'menuBuilder' as const },
-  { name: 'Menu Settings', href: '/menus', icon: Squares2X2Icon, featureKey: 'menuBuilder' as const },
-  { name: 'Calculator', href: '/calculator', icon: CalculatorIcon, featureKey: 'calculator' as const },
-  { name: 'Expenses', href: '/expenses', icon: ReceiptPercentIcon, featureKey: 'expenses' as const },
-  { name: 'Invoices', href: '/invoices', icon: DocumentTextIcon, featureKey: 'invoices' as const },
-  { name: 'Reports', href: '/reports', icon: DocumentChartBarIcon, featureKey: 'reports' as const },
-  { name: 'Wiki', href: '/wiki', icon: BookOpenIcon, featureKey: 'wiki' as const },
-  { name: 'Settings', href: '/settings', icon: CogIcon, featureKey: 'settings' as const },
+  {
+    name: 'Planning',
+    icon: ClipboardDocumentListIcon,
+    children: [
+      { name: 'Orders', href: '/orders', featureKey: 'events' },
+      { name: 'Packing Checklists', href: '/bookings/packing', featureKey: 'events' },
+      { name: 'Staff', href: '/staff', featureKey: 'staff' },
+      { name: 'Staff Calendar', href: '/staff/availability', featureKey: 'staff' },
+      { name: 'Menus', href: '/menus', featureKey: 'menuBuilder' },
+    ],
+  },
+  {
+    name: 'Money',
+    icon: ReceiptPercentIcon,
+    children: [
+      { name: 'Costs', href: '/expenses', featureKey: 'expenses' },
+      { name: 'Invoices & Payments', href: '/invoices', featureKey: 'invoices' },
+      { name: 'Insights', href: '/reports', featureKey: 'reports' },
+      { name: 'Pricing Rules', href: '/business-rules', featureKey: 'settings' },
+    ],
+  },
+  {
+    name: 'App',
+    icon: CogIcon,
+    children: [
+      { name: 'Permissions', href: '/admin/permissions', featureKey: 'settings', adminOnly: true },
+      { name: 'Agreements', href: '/contracts', featureKey: 'settings', profiles: ['catering_pro'] },
+      { name: 'Help Guide', href: '/wiki', featureKey: 'wiki' },
+    ],
+  },
+];
+
+const testingNavigation: NavItem[] = [
+  {
+    name: 'Testing',
+    icon: LinkIcon,
+    children: [
+      { name: 'Chef Calculator', href: '/calculator', featureKey: 'settings' },
+      { name: 'Inquiry form', href: '/inquiry', featureKey: 'settings' },
+      { name: 'Inquiry form (Q&A)', href: '/inquiry-chat', featureKey: 'settings' },
+      { name: 'Client Pages', href: '/testing/client-pages', featureKey: 'settings' },
+    ],
+  },
 ];
 
 function SidebarLogo({ collapsed }: { collapsed: boolean }) {
@@ -83,20 +137,13 @@ function classNames(...classes: (string | boolean | undefined)[]) {
   return classes.filter((c): c is string => typeof c === 'string').join(' ');
 }
 
-function getAccordionNames(nav: typeof navigation) {
-  return nav
-    .filter((i): i is typeof i & { children: { name: string; href: string }[] } => 'children' in i)
-    .map((i) => i.name);
-}
-function getDirectLinkHrefs(nav: typeof navigation) {
-  return nav
-    .filter((i): i is typeof i & { href: string } => !('children' in i))
-    .map((i) => i.href);
+function getAccordionNames(nav: NavItem[]) {
+  return nav.filter((i) => !i.asDirect).map((i) => i.name);
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebarCollapsed';
 
-type FlyoutItem = (typeof navigation)[number] & { children: { name: string; href: string }[] };
+type FlyoutItem = NavItem;
 
 function SidebarFlyout({
   flyoutItem,
@@ -152,21 +199,44 @@ function SidebarFlyout({
 
 export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void }) {
   const pathname = usePathname();
-  const { user, signOut, isAdmin } = useAuth();
-  const { flags } = useFeatureFlags();
-  const visibleNav = useMemo(
-    () =>
-      navigation.filter((item) => {
-        const key = (item as { featureKey?: keyof FeatureFlags }).featureKey;
-        return key === 'settings' || !key || !!flags[key];
-      }),
-    [flags]
-  );
-  const accordionNames = useMemo(() => getAccordionNames(visibleNav), [visibleNav]);
-  const directLinkHrefs = useMemo(() => getDirectLinkHrefs(visibleNav), [visibleNav]);
+  const { user, signOut } = useAuth();
+  const { flags, productProfile } = useFeatureFlags();
+  const role = String((user?.app_metadata as { role?: string } | undefined)?.role ?? '').toLowerCase();
+  const isChef = role === 'chef';
+  const isAdmin =
+    role === 'admin' ||
+    String(user?.email ?? '').toLowerCase() === 'djet.soriano@gmail.com';
+  const filterByVisibility = (items: NavItem[]) =>
+    items
+      .map((item) => ({
+        ...item,
+        children: item.children
+          .filter((child) => {
+            if (child.adminOnly && !isAdmin) return false;
+            if (child.profiles && !child.profiles.includes(productProfile)) return false;
+            if (!child.featureKey || child.featureKey === 'settings') return true;
+            return !!flags[child.featureKey];
+          })
+          .map((child) => {
+            if (isChef && child.href === '/reports') {
+              return { ...child, name: 'Event Summary', href: '/reports/event-summary' };
+            }
+            return child;
+          }),
+      }))
+      .filter((item) => item.children.length > 0);
 
-  // Live inbox badge: unreviewed inquiries + critical alerts (overdue deposits/balances)
-  const inboxBadgeCount = useMemo(() => {
+  const primaryVisibleNav = useMemo(() => filterByVisibility(navigation), [flags, productProfile, isChef, isAdmin]);
+  const testingVisibleNav = useMemo(() => filterByVisibility(testingNavigation), [flags, productProfile]);
+  const visibleNav = useMemo(() => [...primaryVisibleNav, ...testingVisibleNav], [primaryVisibleNav, testingVisibleNav]);
+  const accordionNames = useMemo(() => getAccordionNames(visibleNav), [visibleNav]);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [flyoutTop, setFlyoutTop] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
+  const [badgeTick, setBadgeTick] = useState(0);
+
+  // Notifications badge: unreviewed inquiries + critical alerts (overdue deposits/balances)
+  const notificationBadgeCount = useMemo(() => {
     const bookings = loadFromStorage<Booking[]>('bookings', []);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -188,12 +258,7 @@ export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void 
       ) count++;
     }
     return count;
-  }, []);
-
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const [activeDirectHref, setActiveDirectHref] = useState<string | null>(null);
-  const [flyoutTop, setFlyoutTop] = useState(0);
-  const [collapsed, setCollapsed] = useState(false);
+  }, [badgeTick]);
 
   // Read persisted collapsed state after hydration to avoid server/client mismatch
   useEffect(() => {
@@ -214,23 +279,28 @@ export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void 
   }, [collapsed]);
 
   useEffect(() => {
-    if (directLinkHrefs.includes(pathname)) {
-      setActiveDirectHref(pathname);
-    } else {
-      setActiveDirectHref(null);
-    }
-    // Close flyout/accordion when navigating to any page
-    setExpandedSections(Object.fromEntries(accordionNames.map((name) => [name, false])));
-  }, [pathname, directLinkHrefs, accordionNames]);
+    const refresh = () => setBadgeTick((n) => n + 1);
+    window.addEventListener('bookingsUpdated', refresh);
+    window.addEventListener(CRM_UPDATED_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('bookingsUpdated', refresh);
+      window.removeEventListener(CRM_UPDATED_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+
+  useEffect(() => {
+    setExpandedSections((prev) =>
+      Object.fromEntries(accordionNames.map((name) => [name, prev[name] ?? false]))
+    );
+  }, [pathname, accordionNames]);
 
   const closeAllSections = () => {
-    setExpandedSections((prev) =>
-      Object.fromEntries(accordionNames.map((name) => [name, false]))
-    );
+    setExpandedSections(Object.fromEntries(accordionNames.map((name) => [name, false])));
   };
 
   const toggleSection = (name: string, buttonTop?: number) => {
-    setActiveDirectHref(null);
     if (buttonTop !== undefined) setFlyoutTop(buttonTop);
     setExpandedSections((prev) => {
       const next: Record<string, boolean> = {};
@@ -245,129 +315,148 @@ export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void 
     ? (accordionNames.find((n) => expandedSections[n]) ?? null)
     : null;
   const expandedNavItem = expandedSectionWhenCollapsed
-    ? visibleNav.find((i) => 'children' in i && i.name === expandedSectionWhenCollapsed)
+    ? visibleNav.find((i) => i.name === expandedSectionWhenCollapsed)
     : null;
   const flyoutItem =
-    collapsed && expandedNavItem && 'children' in expandedNavItem
-      ? (expandedNavItem as (typeof navigation)[number] & { children: { name: string; href: string }[] })
+    collapsed && expandedNavItem
+      ? expandedNavItem
       : null;
 
-  const navContent = (() => {
-    const anyAccordionExpanded = visibleNav.some((i) => {
-      const children = 'children' in i ? i.children : undefined;
-      if (!children) return false;
-      const parentActive = children.some(
-        (c) => 'href' in c && (pathname === c.href || pathname.startsWith(c.href + '/'))
-      );
-      return expandedSections[i.name] ?? parentActive;
-    });
-    return visibleNav.map((item) => {
-      if (item.children) {
-        const parentActive = item.children.some(
-          (c) => 'href' in c && (pathname === c.href || pathname.startsWith(c.href + '/'))
-        );
-        const isExpanded = expandedSections[item.name] ?? parentActive;
-        const parentHighlight = parentActive || isExpanded;
+  const crmTaskBadgeCount = useMemo(() => {
+    const tasks = loadCrmTasks();
+    const today = new Date().toISOString().slice(0, 10);
+    return tasks.filter((t) => t.status === 'open' && (!t.dueDate || t.dueDate <= today)).length;
+  }, [badgeTick]);
+
+  const renderNavItems = (items: NavItem[]) => {
+    return items.map((item) => {
+      if (item.asDirect) {
+        const target = item.children[0];
+        const isActive = pathname === target.href || pathname.startsWith(target.href + '/');
         return (
-          <div key={item.name} className="space-y-0.5">
-            <button
-              type="button"
-              onClick={(e) => toggleSection(item.name, (e.currentTarget as HTMLElement).getBoundingClientRect().top)}
-              title={collapsed ? item.name : undefined}
-              className={classNames(
-                'group relative flex w-full items-center rounded-lg text-sm font-semibold transition-colors',
-                collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2 text-left',
-                parentHighlight
-                  ? 'bg-accent-soft-bg text-accent'
-                  : 'text-text-secondary hover:bg-card hover:text-text-primary'
-              )}
-            >
-              {parentHighlight && (
-                <div className="absolute inset-y-0 left-0 w-1 rounded-r-full bg-accent" />
-              )}
-              <item.icon className={classNames('relative h-5 w-5 shrink-0', !collapsed ? 'mr-3' : '', parentHighlight ? 'text-accent' : 'text-text-muted')} />
-              {!collapsed && <span className="relative flex-1">{item.name}</span>}
-              {!collapsed && (isExpanded ? (
-                <ChevronDownIcon className="relative h-4 w-4 shrink-0 text-text-muted" />
-              ) : (
-                <ChevronRightIcon className="relative h-4 w-4 shrink-0 text-text-muted" />
-              ))}
-            </button>
-            {isExpanded && !collapsed && (
-              <div className="ml-8 space-y-0.5">
-                {(() => {
-                  const withHref = item.children.filter((c): c is typeof c & { href: string } => 'href' in c);
-                  const activeChildHref =
-                    withHref
-                      .slice()
-                      .sort((a, b) => b.href.length - a.href.length)
-                      .find((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
-                      ?.href ?? null;
-                  return item.children.map((child) => {
-                    const isActive = 'href' in child && child.href === activeChildHref;
-                    return (
-                      <Link
-                        key={child.name}
-                        href={child.href}
-                        onClick={onMobileClose}
-                        className={classNames(
-                          isActive
-                            ? 'bg-card text-text-primary'
-                            : 'text-text-secondary hover:bg-card hover:text-text-primary',
-                          'group relative block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200'
-                        )}
-                      >
-                        {isActive && (
-                          <div className="absolute inset-y-0 left-0 w-1 rounded-r-full bg-accent" />
-                        )}
-                        <span className="relative">{child.name}</span>
-                      </Link>
-                    );
-                  });
-                })()}
-              </div>
+          <Link
+            key={item.name}
+            href={target.href}
+            title={collapsed ? item.name : undefined}
+            onClick={() => {
+              closeAllSections();
+              onMobileClose?.();
+            }}
+            className={classNames(
+              isActive
+                ? 'bg-accent-soft-bg text-accent'
+                : 'text-text-secondary hover:bg-card hover:text-text-primary',
+              'group relative flex items-center rounded-lg py-2 text-sm font-medium transition-all duration-200',
+              collapsed ? 'justify-center px-0' : 'px-3'
             )}
-          </div>
+          >
+            {isActive && (
+              <div className="absolute inset-y-0 left-0 w-1 rounded-r-full bg-accent" />
+            )}
+            <item.icon
+              className={classNames(
+                isActive ? 'text-accent' : 'text-text-muted group-hover:text-text-primary',
+                'h-5 w-5 transition-colors shrink-0',
+                !collapsed ? 'mr-3' : ''
+              )}
+            />
+            {!collapsed && (
+              <span className="relative flex flex-1 items-center gap-1.5">
+                {item.name}
+                {item.name === 'Events' && notificationBadgeCount > 0 && (
+                  <span className="rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                    {notificationBadgeCount}
+                  </span>
+                )}
+              </span>
+            )}
+          </Link>
         );
       }
 
-      const isActive = activeDirectHref === item.href && !anyAccordionExpanded;
+      const parentActive = item.children.some((c) => pathname === c.href || pathname.startsWith(c.href + '/'));
+      const isExpanded = !!expandedSections[item.name] || parentActive;
+      const parentHighlight = parentActive || isExpanded;
       return (
-        <Link
-          key={item.name}
-          href={item.href}
-          title={collapsed ? item.name : undefined}
-          onClick={() => {
-            closeAllSections();
-            setActiveDirectHref(item.href);
-            onMobileClose?.();
-          }}
-          className={classNames(
-            isActive
-              ? 'bg-accent-soft-bg text-accent'
-              : 'text-text-secondary hover:bg-card hover:text-text-primary',
-            'group relative flex items-center rounded-lg py-2 text-sm font-medium transition-all duration-200',
-            collapsed ? 'justify-center px-0' : 'px-3'
+        <div key={item.name} className="space-y-0.5">
+          <button
+            type="button"
+            onClick={(e) => toggleSection(item.name, (e.currentTarget as HTMLElement).getBoundingClientRect().top)}
+            title={collapsed ? item.name : undefined}
+            className={classNames(
+              'group relative flex w-full items-center rounded-lg text-sm font-semibold transition-colors',
+              collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2 text-left',
+              parentHighlight
+                ? 'bg-accent-soft-bg text-accent'
+                : 'text-text-secondary hover:bg-card hover:text-text-primary'
+            )}
+          >
+            {parentHighlight && (
+              <div className="absolute inset-y-0 left-0 w-1 rounded-r-full bg-accent" />
+            )}
+            <item.icon className={classNames('relative h-5 w-5 shrink-0', !collapsed ? 'mr-3' : '', parentHighlight ? 'text-accent' : 'text-text-muted')} />
+            {!collapsed && <span className="relative flex-1">{item.name}</span>}
+            {!collapsed && (isExpanded ? (
+              <ChevronDownIcon className="relative h-4 w-4 shrink-0 text-text-muted" />
+            ) : (
+              <ChevronRightIcon className="relative h-4 w-4 shrink-0 text-text-muted" />
+            ))}
+          </button>
+          {isExpanded && !collapsed && (
+            <div className="ml-8 space-y-0.5">
+              {(() => {
+                const activeChildHref =
+                  item.children
+                    .slice()
+                    .sort((a, b) => b.href.length - a.href.length)
+                    .find((c) => pathname === c.href || pathname.startsWith(c.href + '/'))
+                    ?.href ?? null;
+                return item.children.map((child) => {
+                  const isActive = child.href === activeChildHref;
+                  return (
+                    <Link
+                      key={child.name}
+                      href={child.href}
+                      onClick={onMobileClose}
+                      className={classNames(
+                        isActive
+                          ? 'bg-card text-text-primary'
+                          : 'text-text-secondary hover:bg-card hover:text-text-primary',
+                        'group relative block rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200'
+                      )}
+                    >
+                      {isActive && (
+                        <div className="absolute inset-y-0 left-0 w-1 rounded-r-full bg-accent" />
+                      )}
+                      <span className="relative flex items-center gap-1.5">
+                        {child.name}
+                        {child.href === '/inquiries' && notificationBadgeCount > 0 && (
+                          <span className="rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                            {notificationBadgeCount}
+                          </span>
+                        )}
+                        {child.href === '/follow-ups' && crmTaskBadgeCount > 0 && (
+                          <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                            {crmTaskBadgeCount}
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                  );
+                });
+              })()}
+            </div>
           )}
-        >
-          {isActive && (
-            <div className="absolute inset-y-0 left-0 w-1 rounded-r-full bg-accent" />
-          )}
-          <item.icon className={classNames(
-            isActive ? 'text-accent' : 'text-text-muted group-hover:text-text-primary',
-            'h-5 w-5 transition-colors shrink-0',
-            !collapsed ? 'mr-3' : ''
-          )} />
-          {!collapsed && <span className="relative flex-1">{item.name}</span>}
-          {!collapsed && item.href === '/inquiries' && inboxBadgeCount > 0 && (
-            <span className="relative ml-auto rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-              {inboxBadgeCount}
-            </span>
-          )}
-        </Link>
+        </div>
       );
     });
-  })();
+  };
+  const navContent = renderNavItems(primaryVisibleNav);
+  const testingNavContent = renderNavItems(testingVisibleNav);
+  const profileLabel =
+    productProfile === 'catering_pro'
+      ? 'Caterer Pro'
+      : 'Hibachi Chef Pro';
 
   return (
     <SidebarInner
@@ -375,6 +464,8 @@ export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void 
       setCollapsed={setCollapsed}
       pathname={pathname}
       navContent={navContent}
+      testingNavContent={testingNavContent}
+      profileLabel={profileLabel}
       flyoutItem={flyoutItem}
       flyoutTop={flyoutTop}
       closeAllSections={closeAllSections}
@@ -391,6 +482,8 @@ function SidebarInner(props: {
   setCollapsed: (v: boolean) => void;
   pathname: string;
   navContent: ReactNode;
+  testingNavContent: ReactNode;
+  profileLabel: string;
   flyoutItem: FlyoutItem | null;
   flyoutTop: number;
   closeAllSections: () => void;
@@ -404,6 +497,8 @@ function SidebarInner(props: {
     setCollapsed,
     pathname,
     navContent,
+    testingNavContent,
+    profileLabel,
     flyoutItem,
     flyoutTop,
     closeAllSections,
@@ -441,7 +536,22 @@ function SidebarInner(props: {
 
       {/* Navigation */}
       <nav className={`flex-1 space-y-1 overflow-y-auto py-6 ${collapsed ? 'px-3' : 'px-3'}`}>
-        {navContent}
+        <div className="flex min-h-full flex-col">
+          <div className="space-y-1">{navContent}</div>
+          <div className="mt-auto border-t border-border pt-4">
+            {!collapsed && (
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                {profileLabel}
+              </p>
+            )}
+            {!collapsed && (
+              <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                Testing only
+              </p>
+            )}
+            <div className="space-y-1">{testingNavContent}</div>
+          </div>
+        </div>
       </nav>
 
       {/* Footer */}
@@ -518,4 +628,3 @@ function SidebarInner(props: {
     </div>
   );
 }
-

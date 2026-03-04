@@ -1,11 +1,17 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { calculateEventFinancials, formatCurrency } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import type { MoneyRules } from '@/lib/types';
 import { useBookingsQuery } from '@/lib/hooks/useBookingsQuery';
-import { PlusIcon, XMarkIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
+import { useStaffQuery } from '@/lib/hooks/useStaffQuery';
+import { useAuth } from '@/components/AuthProvider';
+import { getCurrentChefStaffId, bookingHasStaff } from '@/lib/chefIdentity';
+import { loadRetainedEarningsTransactions } from '@/lib/financeStorage';
+import type { RetainedEarningsTransaction } from '@/lib/financeTypes';
+import { PlusIcon, XMarkIcon, QuestionMarkCircleIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 
 const ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
@@ -37,28 +43,39 @@ function fmtEventDate(iso: string): string {
   });
 }
 
-function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct }: { rules: MoneyRules; perEventExpense: number; salesTaxPct: number; seTaxPct: number }) {
+function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct, incomeTaxPct }: { rules: MoneyRules; perEventExpense: number; salesTaxPct: number; seTaxPct: number; incomeTaxPct: number }) {
+  const { user } = useAuth();
   const { bookings } = useBookingsQuery();
+  const { staff } = useStaffQuery();
   const [selectedId, setSelectedId] = useState<string>('');
 
-  const eventOptions = useMemo(() =>
-    bookings
-      .filter((b) => b.status !== 'cancelled')
-      .sort((a, b) => {
-        const now = Date.now();
-        const aMs = new Date(a.eventDate).getTime();
-        const bMs = new Date(b.eventDate).getTime();
-        const aUp = aMs >= now;
-        const bUp = bMs >= now;
-        if (aUp && !bUp) return -1;
-        if (!aUp && bUp) return 1;
-        return aUp ? aMs - bMs : bMs - aMs;
-      }),
-    [bookings]
-  );
+  const chefStaffId = useMemo(() => getCurrentChefStaffId(user, staff), [user, staff]);
+
+  const eventOptions = useMemo(() => {
+    let list = bookings.filter((b) => b.status !== 'cancelled');
+    if (chefStaffId) {
+      list = list.filter((b) => bookingHasStaff(b.staffAssignments, chefStaffId));
+    }
+    return list.sort((a, b) => {
+      const now = Date.now();
+      const aMs = new Date(a.eventDate).getTime();
+      const bMs = new Date(b.eventDate).getTime();
+      const aUp = aMs >= now;
+      const bUp = bMs >= now;
+      if (aUp && !bUp) return -1;
+      if (!aUp && bUp) return 1;
+      return aUp ? aMs - bMs : bMs - aMs;
+    });
+  }, [bookings, chefStaffId]);
 
   useEffect(() => {
     if (!selectedId && eventOptions.length > 0) setSelectedId(eventOptions[0].id);
+  }, [eventOptions, selectedId]);
+
+  useEffect(() => {
+    if (selectedId && eventOptions.length > 0 && !eventOptions.some((b) => b.id === selectedId)) {
+      setSelectedId(eventOptions[0].id);
+    }
   }, [eventOptions, selectedId]);
 
   const selected = useMemo(
@@ -108,7 +125,8 @@ function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct }: { r
   const adjustedProfit = fin ? fin.grossProfit - perEventExpense : 0;
   const salesTaxReserve = adjustedProfit > 0 ? adjustedProfit * salesTaxPct / 100 : 0;
   const seTaxReserve = adjustedProfit > 0 ? adjustedProfit * seTaxPct / 100 : 0;
-  const afterTaxReserves = adjustedProfit - salesTaxReserve - seTaxReserve;
+  const incomeTaxReserve = adjustedProfit > 0 ? adjustedProfit * incomeTaxPct / 100 : 0;
+  const afterTaxReserves = adjustedProfit - salesTaxReserve - seTaxReserve - incomeTaxReserve;
   const adjustedRetained = afterTaxReserves > 0 ? afterTaxReserves * (rules.profitDistribution.businessRetainedPercent / 100) : 0;
   const adjustedDistributable = afterTaxReserves > 0 ? afterTaxReserves * (rules.profitDistribution.ownerDistributionPercent / 100) : 0;
   const ownersList = rules.profitDistribution.owners?.length
@@ -128,7 +146,11 @@ function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct }: { r
       <div className="rounded-lg border border-border bg-card p-5">
         <label className="mb-2 block text-sm font-semibold text-text-secondary">Select Event</label>
         {eventOptions.length === 0 ? (
-          <p className="text-sm text-text-muted">No events found. Create a booking first.</p>
+          <p className="text-sm text-text-muted">
+            {chefStaffId
+              ? 'No events assigned to you yet. Events you work on will appear here.'
+              : 'No events found. Create a booking first.'}
+          </p>
         ) : (
           <select
             value={selectedId}
@@ -404,7 +426,7 @@ function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct }: { r
                 </div>
               </div>
             )}
-            {(salesTaxPct > 0 || seTaxPct > 0) && (
+            {(salesTaxPct > 0 || seTaxPct > 0 || incomeTaxPct > 0) && (
               <div className="mb-3 space-y-2 text-sm">
                 {salesTaxPct > 0 && (
                   <div className="flex items-center justify-between text-warning">
@@ -416,6 +438,12 @@ function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct }: { r
                   <div className="flex items-center justify-between text-warning">
                     <span>Self-employment tax ({seTaxPct}%)</span>
                     <span className="font-medium">−{formatCurrency(seTaxReserve)}</span>
+                  </div>
+                )}
+                {incomeTaxPct > 0 && (
+                  <div className="flex items-center justify-between text-warning">
+                    <span>Income tax reserve ({incomeTaxPct}%)</span>
+                    <span className="font-medium">−{formatCurrency(incomeTaxReserve)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-border pt-2">
@@ -435,6 +463,7 @@ function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct }: { r
                 <div className="flex items-center gap-2">
                   <div className="h-2.5 w-2.5 rounded-full bg-violet-500" />
                   <span className="text-text-secondary">Business Retained ({rules.profitDistribution.businessRetainedPercent}%)</span>
+                  <InfoTooltip text="Portion of profit (after tax reserves) kept in the business for working capital, reinvestment, and contingency—not paid out to owners." />
                 </div>
                 <span className="font-medium text-text-primary">{formatCurrency(adjustedRetained)}</span>
               </div>
@@ -468,6 +497,10 @@ function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct }: { r
               <div className="flex justify-between">
                 <span>SE tax reserve</span>
                 <span>{seTaxPct}% of adjusted profit</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Income tax reserve</span>
+                <span>{incomeTaxPct}% of adjusted profit</span>
               </div>
             </div>
           </div>
@@ -537,6 +570,26 @@ export default function CalculatorPage() {
   const [eventsPerMonth, setEventsPerMonth] = useState(4);
   const [salesTaxPct, setSalesTaxPct] = useState(8);
   const [seTaxPct, setSeTaxPct] = useState(15.3);
+  const [incomeTaxPct, setIncomeTaxPct] = useState(15);
+  const [retainedTransactions, setRetainedTransactions] = useState<RetainedEarningsTransaction[]>([]);
+
+  const retainedEarningsBalance = useMemo(
+    () => retainedTransactions.reduce((sum, tx) => sum + (tx.type === 'deposit' ? tx.amount : -tx.amount), 0),
+    [retainedTransactions]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const load = () => setRetainedTransactions(loadRetainedEarningsTransactions());
+    load();
+    const onStorage = (e: StorageEvent) => { if (e.key === 'retainedEarningsTransactions') load(); };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('retainedEarningsUpdated', load);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('retainedEarningsUpdated', load);
+    };
+  }, []);
 
   // Inputs
   const [guests, setGuests] = useState(15);
@@ -603,7 +656,7 @@ export default function CalculatorPage() {
             <p className="mt-1 text-sm text-text-secondary">Adjust guests and price to see live pay breakdown</p>
           </div>
           <div className="flex rounded-lg border border-border bg-card-elevated p-1">
-            {([['calculator', 'Calculator'], ['chef', 'Event Summary'], ['expenses', 'Monthly Expenses']] as const).map(([id, label]) => (
+            {([['calculator', 'Calculator'], ['chef', 'Event Summary'], ['expenses', 'Overhead & Reserves']] as const).map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
@@ -617,7 +670,7 @@ export default function CalculatorPage() {
           </div>
         </div>
 
-        {activeTab === 'chef' && <ChefBreakdownTab rules={rules} perEventExpense={perEventExpense} salesTaxPct={salesTaxPct} seTaxPct={seTaxPct} />}
+        {activeTab === 'chef' && <ChefBreakdownTab rules={rules} perEventExpense={perEventExpense} salesTaxPct={salesTaxPct} seTaxPct={seTaxPct} incomeTaxPct={incomeTaxPct} />}
 
         {activeTab === 'expenses' && (
           <div className="mx-auto max-w-3xl space-y-5">
@@ -707,7 +760,7 @@ export default function CalculatorPage() {
             <div className="rounded-lg border border-border bg-card p-5">
               <div className="mb-1 flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-text-primary">Tax Reserves</h2>
-                <InfoTooltip text="Tax reserves are set aside from adjusted profit (after overhead) before owner splits. Sales tax covers state sales tax obligations. Self-employment tax (SE) covers the owner's Social Security + Medicare (typically 15.3% on net earnings)." />
+                <InfoTooltip text="Tax reserves are set aside from adjusted profit (after overhead) before owner splits. Sales tax: state sales tax obligations. Self-employment tax (SE): Social Security + Medicare (~15.3%). Income tax: federal and state tax on profit (estimate based on your bracket)." />
               </div>
               <p className="mb-5 text-sm text-text-muted">Reserved before owner profit splits — set aside for tax obligations.</p>
               <div className="space-y-6">
@@ -741,9 +794,24 @@ export default function CalculatorPage() {
                   <Slider value={seTaxPct} min={0} max={30} step={0.1} onChange={setSeTaxPct} />
                   <div className="flex justify-between text-xs text-text-muted"><span>0%</span><span>30%</span></div>
                 </div>
-                {(salesTaxPct > 0 || seTaxPct > 0) && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-text-secondary">Income Tax Reserve</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number" min="0" max="40" step="0.5" value={incomeTaxPct}
+                        onChange={(e) => setIncomeTaxPct(parseFloat(e.target.value) || 0)}
+                        className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
+                      />
+                      <span className="text-lg font-semibold text-text-muted">%</span>
+                    </div>
+                  </div>
+                  <Slider value={incomeTaxPct} min={0} max={40} step={0.5} onChange={setIncomeTaxPct} />
+                  <div className="flex justify-between text-xs text-text-muted"><span>0%</span><span>40%</span></div>
+                </div>
+                {(salesTaxPct > 0 || seTaxPct > 0 || incomeTaxPct > 0) && (
                   <div className="rounded-lg bg-card-elevated p-3 text-xs text-text-muted">
-                    Combined reserve: <strong className="text-text-primary">{(salesTaxPct + seTaxPct).toFixed(1)}%</strong> deducted from adjusted profit before owner distributions.
+                    Combined reserve: <strong className="text-text-primary">{(salesTaxPct + seTaxPct + incomeTaxPct).toFixed(1)}%</strong> deducted from adjusted profit before owner distributions.
                   </div>
                 )}
               </div>
@@ -770,6 +838,33 @@ export default function CalculatorPage() {
                 <p className="mt-3 text-xs text-text-muted">This amount is deducted from gross profit before calculating retained earnings and owner distributions in the Calculator and Event Summary tabs.</p>
               </div>
             )}
+
+            {/* Retained earnings balance */}
+            <div className="rounded-lg border-2 border-violet-500/30 bg-violet-500/5 p-5">
+              <div className="mb-1 flex items-center gap-2">
+                <BanknotesIcon className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                <h2 className="text-lg font-semibold text-text-primary">Retained Earnings Balance</h2>
+                <InfoTooltip text="Running balance of money kept in the business (deposits from event distributions minus withdrawals). Updated when you record transactions in Reports → Owner Monthly." />
+              </div>
+              <p className="mb-4 text-sm text-text-muted">Current balance from your retained earnings transaction log.</p>
+              <div className="flex flex-wrap items-baseline justify-between gap-4">
+                <div>
+                  <span className="text-sm font-medium text-text-secondary">Balance</span>
+                  <p className={`text-2xl font-bold ${retainedEarningsBalance >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {formatCurrency(retainedEarningsBalance)}
+                  </p>
+                </div>
+                <Link
+                  href="/reports/owner-monthly"
+                  className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm font-medium text-text-secondary hover:bg-card hover:text-text-primary"
+                >
+                  View full log →
+                </Link>
+              </div>
+              {retainedTransactions.length === 0 && (
+                <p className="mt-3 text-xs text-text-muted">No retained earnings transactions yet. Record distributions in Reports → Owner Monthly to see a balance here.</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -779,11 +874,30 @@ export default function CalculatorPage() {
           const foodCost = subtotal * foodCostPct / 100;
           const suppliesCost = subtotal * suppliesCostPct / 100;
           const totalCosts = foodCost + suppliesCost;
-          const grossProfit = totalCharged - totalCosts - totalStaffPay;
+          const scenarioFin = calculateEventFinancials(
+            {
+              adults: guests,
+              children: 0,
+              eventType: 'private-dinner',
+              eventDate: new Date(),
+              distanceMiles: 0,
+              premiumAddOn: 0,
+              subtotalOverride: subtotal,
+            },
+            rules
+          );
+          const scale = scenarioFin.totalCharged > 0 ? totalCharged / scenarioFin.totalCharged : 1;
+          const chefComp = scenarioFin.laborCompensation.find((c) => c.role === 'lead');
+          const asstComp = scenarioFin.laborCompensation.find((c) => c.role === 'assistant');
+          const chefPay = (chefComp?.finalPay ?? 0) * scale;
+          const asstPay = (asstComp?.finalPay ?? 0) * scale;
+          const totalLaborFromScenario = chefPay + asstPay;
+          const grossProfit = totalCharged - totalCosts - totalLaborFromScenario;
           const adjustedGross = grossProfit - perEventExpense;
           const calcSalesTaxReserve = adjustedGross > 0 ? adjustedGross * salesTaxPct / 100 : 0;
           const calcSeTaxReserve = adjustedGross > 0 ? adjustedGross * seTaxPct / 100 : 0;
-          const afterTaxReservesCalc = adjustedGross - calcSalesTaxReserve - calcSeTaxReserve;
+          const calcIncomeTaxReserve = adjustedGross > 0 ? adjustedGross * incomeTaxPct / 100 : 0;
+          const afterTaxReservesCalc = adjustedGross - calcSalesTaxReserve - calcSeTaxReserve - calcIncomeTaxReserve;
           const retainedPct = rules.profitDistribution.businessRetainedPercent;
           const retainedAmt = afterTaxReservesCalc > 0 ? afterTaxReservesCalc * retainedPct / 100 : 0;
           const distributablePct = rules.profitDistribution.ownerDistributionPercent;
@@ -804,10 +918,8 @@ export default function CalculatorPage() {
           const ownerB = calcOwnerRows[1];
           const ownerAAmount = ownerA?.amount ?? 0;
           const ownerBAmount = ownerB?.amount ?? 0;
-          const aStaffPay = staff[0]?.pay ?? 0;
-          const jStaffPay = staff[1]?.pay ?? 0;
-          const aSorianoTotal = aStaffPay + ownerAAmount;
-          const jSorianoTotal = jStaffPay + ownerBAmount;
+          const aSorianoTotal = chefPay + ownerAAmount;
+          const jSorianoTotal = asstPay + ownerBAmount;
           const aSorianoPct = totalCharged > 0 ? (aSorianoTotal / totalCharged) * 100 : 0;
           const jSorianoPct = totalCharged > 0 ? (jSorianoTotal / totalCharged) * 100 : 0;
 
@@ -910,14 +1022,23 @@ export default function CalculatorPage() {
                   <p className="text-3xl font-bold text-text-primary">{formatCurrency(aSorianoTotal)}</p>
                   <p className="mb-3 text-lg font-bold text-accent">{aSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-accent/20 pt-3 text-xs">
-                    {staff[0] && (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-text-secondary">{staff[0].role}</span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-text-muted">{pct(aStaffPay)}%</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(aStaffPay)}</span>
-                        </span>
-                      </div>
+                    {chefComp && (
+                      <>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-text-secondary">Base pay</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-text-muted">{pct(chefComp.basePay * scale)}%</span>
+                            <span className="font-medium text-text-primary">{formatCurrency(chefComp.basePay * scale)}</span>
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-text-secondary">Gratuity share</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-text-muted">{pct(chefComp.gratuityShare * scale)}%</span>
+                            <span className="font-medium text-text-primary">{formatCurrency(chefComp.gratuityShare * scale)}</span>
+                          </span>
+                        </div>
+                      </>
                     )}
                     {ownerA && (
                       <div className="flex justify-between gap-2">
@@ -937,14 +1058,23 @@ export default function CalculatorPage() {
                   <p className="text-3xl font-bold text-text-primary">{formatCurrency(jSorianoTotal)}</p>
                   <p className="mb-3 text-lg font-bold text-text-secondary">{jSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-border pt-3 text-xs">
-                    {staff[1] && (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-text-secondary">{staff[1].role}</span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-text-muted">{pct(jStaffPay)}%</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(jStaffPay)}</span>
-                        </span>
-                      </div>
+                    {asstComp && (
+                      <>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-text-secondary">Base pay</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-text-muted">{pct(asstComp.basePay * scale)}%</span>
+                            <span className="font-medium text-text-primary">{formatCurrency(asstComp.basePay * scale)}</span>
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-text-secondary">Gratuity share</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-text-muted">{pct(asstComp.gratuityShare * scale)}%</span>
+                            <span className="font-medium text-text-primary">{formatCurrency(asstComp.gratuityShare * scale)}</span>
+                          </span>
+                        </div>
+                      </>
                     )}
                     {ownerB && (
                       <div className="flex justify-between gap-2">
@@ -958,58 +1088,6 @@ export default function CalculatorPage() {
                   </div>
                 </div>
               </div>
-
-              {/* ── Monthly Projection ── */}
-              {eventsPerMonth > 1 && (
-                <div className="rounded-lg border-2 border-accent/30 bg-accent/5 p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-text-primary">Monthly Projection</h2>
-                    <span className="rounded-full bg-accent/20 px-3 py-1 text-xs font-bold text-accent">{eventsPerMonth} events/mo</span>
-                  </div>
-                  {/* Per-person monthly totals */}
-                  <div className="mb-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-lg bg-accent/10 p-3 text-center">
-                      <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-accent">A Soriano</p>
-                      <p className="text-2xl font-bold text-text-primary">{formatCurrency(aSorianoTotal * eventsPerMonth)}</p>
-                      <p className="text-xs text-text-muted">{formatCurrency(aSorianoTotal)}/event × {eventsPerMonth}</p>
-                    </div>
-                    <div className="rounded-lg bg-card-elevated p-3 text-center">
-                      <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">J Soriano</p>
-                      <p className="text-2xl font-bold text-text-primary">{formatCurrency(jSorianoTotal * eventsPerMonth)}</p>
-                      <p className="text-xs text-text-muted">{formatCurrency(jSorianoTotal)}/event × {eventsPerMonth}</p>
-                    </div>
-                  </div>
-                  {/* Key monthly financials */}
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-text-secondary">Total revenue</span>
-                      <span className="font-medium text-text-primary">{formatCurrency(totalCharged * eventsPerMonth)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-text-secondary">Total costs + labor</span>
-                      <span className="font-medium text-danger">−{formatCurrency((totalCosts + totalStaffPay) * eventsPerMonth)}</span>
-                    </div>
-                    {totalMonthlyExpenses > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-text-secondary">Monthly overhead</span>
-                        <span className="font-medium text-danger">−{formatCurrency(totalMonthlyExpenses)}</span>
-                      </div>
-                    )}
-                    {(salesTaxPct > 0 || seTaxPct > 0) && (
-                      <div className="flex justify-between">
-                        <span className="text-text-secondary">Tax reserves ({(salesTaxPct + seTaxPct).toFixed(1)}%)</span>
-                        <span className="font-medium text-warning">−{formatCurrency((calcSalesTaxReserve + calcSeTaxReserve) * eventsPerMonth)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between border-t border-border pt-2">
-                      <span className="font-semibold text-text-primary">Monthly net profit</span>
-                      <span className={`text-lg font-bold ${afterTaxReservesCalc * eventsPerMonth >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {formatCurrency(afterTaxReservesCalc * eventsPerMonth)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* ── Revenue ── */}
               <div className="rounded-lg border border-border bg-card p-5">
@@ -1053,20 +1131,29 @@ export default function CalculatorPage() {
               <div className="rounded-lg border border-border bg-card p-5">
                 <h2 className="mb-4 text-lg font-semibold text-text-primary">Labor Pay</h2>
                 <div className="space-y-3">
-                  {staff.map((s) => (
-                    <div key={s.id} className="rounded-lg bg-card-elevated p-4">
+                  {chefComp && (
+                    <div className="rounded-lg bg-card-elevated p-4">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-text-primary">{s.role}</span>
-                        <span className="text-xl font-bold text-text-primary">{formatCurrency(s.pay)}</span>
+                        <span className="font-medium text-text-primary">Lead Chef</span>
+                        <span className="text-xl font-bold text-text-primary">{formatCurrency(chefPay)}</span>
                       </div>
-                      <p className="mt-1 text-xs text-text-muted">{pct(s.pay)}% of total revenue</p>
+                      <p className="mt-1 text-xs text-text-muted">Base {formatCurrency(chefComp.basePay * scale)} + Gratuity share {formatCurrency(chefComp.gratuityShare * scale)} · {pct(chefPay)}% of revenue</p>
                     </div>
-                  ))}
+                  )}
+                  {asstComp && (
+                    <div className="rounded-lg bg-card-elevated p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-text-primary">Assistant</span>
+                        <span className="text-xl font-bold text-text-primary">{formatCurrency(asstPay)}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-text-muted">Base {formatCurrency(asstComp.basePay * scale)} + Gratuity share {formatCurrency(asstComp.gratuityShare * scale)} · {pct(asstPay)}% of revenue</p>
+                    </div>
+                  )}
                   <div className="flex justify-between border-t border-border pt-3">
                     <span className="font-semibold text-text-primary">Total Labor</span>
-                    <span className="font-bold text-warning">{formatCurrency(totalStaffPay)}</span>
+                    <span className="font-bold text-warning">{formatCurrency(totalLaborFromScenario)}</span>
                   </div>
-                  <p className="text-xs text-text-muted">{pct(totalStaffPay)}% of total revenue</p>
+                  <p className="text-xs text-text-muted">{pct(totalLaborFromScenario)}% of total revenue</p>
                 </div>
               </div>
 
@@ -1093,7 +1180,7 @@ export default function CalculatorPage() {
                     </div>
                   </div>
                 )}
-                {(salesTaxPct > 0 || seTaxPct > 0) && (
+                {(salesTaxPct > 0 || seTaxPct > 0 || incomeTaxPct > 0) && (
                   <div className="mb-3 space-y-2 text-sm">
                     {salesTaxPct > 0 && (
                       <div className="flex justify-between text-warning">
@@ -1105,6 +1192,12 @@ export default function CalculatorPage() {
                       <div className="flex justify-between text-warning">
                         <span>Self-employment tax ({seTaxPct}%)</span>
                         <span className="font-medium">−{formatCurrency(calcSeTaxReserve)}</span>
+                      </div>
+                    )}
+                    {incomeTaxPct > 0 && (
+                      <div className="flex justify-between text-warning">
+                        <span>Income tax reserve ({incomeTaxPct}%)</span>
+                        <span className="font-medium">−{formatCurrency(calcIncomeTaxReserve)}</span>
                       </div>
                     )}
                     <div className="flex justify-between border-t border-border pt-2">
@@ -1124,6 +1217,7 @@ export default function CalculatorPage() {
                     <div className="flex items-center gap-2">
                       <div className="h-2.5 w-2.5 rounded-full bg-violet-500" />
                       <span className="text-text-secondary">Business Retained ({retainedPct}%)</span>
+                      <InfoTooltip text="Portion of profit (after tax reserves) kept in the business for working capital, reinvestment, and contingency—not paid out to owners." />
                     </div>
                     <span className="font-medium text-text-primary">{formatCurrency(retainedAmt)}</span>
                   </div>

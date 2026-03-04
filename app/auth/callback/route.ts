@@ -4,14 +4,18 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
-  const next = requestUrl.searchParams.get('next') ?? '/';
+  const nextParam = requestUrl.searchParams.get('next') ?? '/';
+  const next = nextParam.startsWith('/') ? nextParam : '/';
 
   if (code) {
     const supabase = await createClient();
     if (supabase) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (!error) {
-        return NextResponse.redirect(new URL(next, requestUrl.origin));
+        const { data: { user } } = await supabase.auth.getUser();
+        const role = (user?.app_metadata as { role?: string } | undefined)?.role;
+        const redirectTo = role === 'chef' ? '/calculator' : next;
+        return NextResponse.redirect(new URL(redirectTo, requestUrl.origin));
       }
     }
   }

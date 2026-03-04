@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { DEFAULT_TEMPLATE, normalizeTemplateConfig, type BusinessTemplateConfig } from './templateConfig';
+import { StorageEvent } from './storageEvents';
 
 const STORAGE_KEY = 'templateConfig';
 
@@ -23,7 +24,7 @@ function saveToStorage(config: BusinessTemplateConfig): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    window.dispatchEvent(new Event('templateConfigUpdated'));
+    window.dispatchEvent(new Event(StorageEvent.TemplateConfig));
   } catch {
     // ignore
   }
@@ -63,8 +64,8 @@ export function useTemplateConfig(): {
 
   useEffect(() => {
     const onUpdate = () => setConfig(loadFromStorage());
-    window.addEventListener('templateConfigUpdated', onUpdate);
-    return () => window.removeEventListener('templateConfigUpdated', onUpdate);
+    window.addEventListener(StorageEvent.TemplateConfig, onUpdate);
+    return () => window.removeEventListener(StorageEvent.TemplateConfig, onUpdate);
   }, []);
 
   const saveTemplateConfig = useCallback(

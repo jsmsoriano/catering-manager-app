@@ -4,40 +4,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { EllipsisVerticalIcon } from '@heroicons/react/24/outline';
 import { formatCurrency } from '@/lib/moneyRules';
-import type { Booking } from '@/lib/bookingTypes';
 import type { Expense, ExpenseCategory, ExpenseFormData } from '@/lib/expenseTypes';
-import { normalizeBookingWorkflowFields } from '@/lib/bookingWorkflow';
 import {
   appendItemToShoppingList,
   loadShoppingListForBooking,
 } from '@/lib/shoppingStorage';
 import type { ShoppingListItem, ShoppingListItemCategory } from '@/lib/shoppingTypes';
-
-const EXPENSES_KEY = 'expenses';
-const BOOKINGS_KEY = 'bookings';
+import { useBookingsQuery } from '@/lib/hooks/useBookingsQuery';
+import { useExpensesQuery } from '@/lib/hooks/useExpensesQuery';
 
 function parseLocalDate(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
   return new Date(year, month - 1, day);
-}
-
-function safeParseList<T>(raw: string | null): T[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as T[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function loadInitialList<T>(key: string): T[] {
-  if (typeof window === 'undefined') return [];
-  return safeParseList<T>(window.localStorage.getItem(key));
-}
-
-function loadInitialBookings(): Booking[] {
-  return loadInitialList<Booking>(BOOKINGS_KEY).map((booking) => normalizeBookingWorkflowFields(booking));
 }
 
 function getDefaultExpenseFormData(): ExpenseFormData {
@@ -98,47 +76,15 @@ function addExpenseAsShoppingListItem(
 }
 
 export default function ExpensesPage() {
+  const { expenses, saveExpense, saveExpenses } = useExpensesQuery();
+  const { bookings } = useBookingsQuery();
   const [filterByBookingId, setFilterByBookingId] = useState<string>('');
-  const [expenses, setExpenses] = useState<Expense[]>(() => loadInitialList<Expense>(EXPENSES_KEY));
-  const [bookings, setBookings] = useState<Booking[]>(loadInitialBookings);
 
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expenseFormData, setExpenseFormData] = useState<ExpenseFormData>(getDefaultExpenseFormData);
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
-
-  const loadExpenses = () => {
-    setExpenses(safeParseList<Expense>(localStorage.getItem(EXPENSES_KEY)));
-  };
-
-  const loadBookings = () => {
-    setBookings(
-      safeParseList<Booking>(localStorage.getItem(BOOKINGS_KEY)).map((booking) =>
-        normalizeBookingWorkflowFields(booking)
-      )
-    );
-  };
-
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === EXPENSES_KEY) loadExpenses();
-      if (e.key === BOOKINGS_KEY) loadBookings();
-    };
-
-    const handleBookingsUpdated = () => loadBookings();
-    const handleExpensesUpdated = () => loadExpenses();
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('bookingsUpdated', handleBookingsUpdated);
-    window.addEventListener('expensesUpdated', handleExpensesUpdated);
-
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('bookingsUpdated', handleBookingsUpdated);
-      window.removeEventListener('expensesUpdated', handleExpensesUpdated);
-    };
-  }, []);
 
   useEffect(() => {
     if (openActionsId === null) return;
@@ -152,18 +98,12 @@ export default function ExpensesPage() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [openActionsId]);
 
-  const saveExpenses = (newExpenses: Expense[]) => {
-    setExpenses(newExpenses);
-    localStorage.setItem(EXPENSES_KEY, JSON.stringify(newExpenses));
-    window.dispatchEvent(new Event('expensesUpdated'));
-  };
-
   const resetExpenseForm = () => {
     setEditingExpenseId(null);
     setExpenseFormData(getDefaultExpenseFormData());
   };
 
-  const handleExpenseSubmit = (e: React.FormEvent) => {
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(expenseFormData.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -181,10 +121,8 @@ export default function ExpensesPage() {
       notes: expenseFormData.notes?.trim() || undefined,
     };
 
-    if (editingExpenseId) {
-      saveExpenses(expenses.map((expense) => (expense.id === editingExpenseId ? nextExpense : expense)));
-    } else {
-      saveExpenses([...expenses, nextExpense]);
+    await saveExpense(nextExpense);
+    if (!editingExpenseId) {
       const linkedBookingId = (expenseFormData.bookingId || '').trim();
       if (linkedBookingId) {
         addExpenseAsShoppingListItem(linkedBookingId, {

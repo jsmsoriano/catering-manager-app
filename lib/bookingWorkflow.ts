@@ -1,4 +1,5 @@
 import type { Booking, BookingStatus, PaymentStatus, PipelineStatus } from './bookingTypes';
+import { normalizeCustomerId } from './customerIdentity';
 
 export const DEFAULT_DEPOSIT_PERCENT = 30;
 export const DEFAULT_PURCHASE_LEAD_DAYS = 2;
@@ -39,9 +40,9 @@ export function getDefaultPipelineStatus(booking: Booking): PipelineStatus {
     case 'confirmed':
       return 'booked';
     case 'pending':
-      return 'quote_sent';
+      return 'qualified';
     case 'cancelled':
-      return 'booked';
+      return 'declined';
     default:
       return 'inquiry';
   }
@@ -127,6 +128,10 @@ export function normalizeBookingWorkflowFields(
 
   return {
     ...booking,
+    customerId:
+      booking.customerId && booking.customerId !== 'unknown'
+        ? booking.customerId
+        : normalizeCustomerId(booking.customerPhone ?? '', booking.customerEmail ?? ''),
     status: serviceStatus,
     serviceStatus,
     paymentStatus,

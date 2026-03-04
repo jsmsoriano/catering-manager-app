@@ -1,4 +1,5 @@
 import type { ShoppingList, ShoppingListItem, ShoppingListItemCategory, ShoppingListUnit } from './shoppingTypes';
+import { StorageEvent } from './storageEvents';
 
 // ─── Shopping Presets (catalog of common items for shopping lists) ─────────────
 
@@ -23,7 +24,7 @@ export function loadShoppingPresets(): ShoppingPreset[] {
 
 export function saveShoppingPresets(presets: ShoppingPreset[]): void {
   localStorage.setItem(SHOPPING_PRESETS_KEY, JSON.stringify(presets));
-  window.dispatchEvent(new Event('shoppingPresetsUpdated'));
+  window.dispatchEvent(new Event(StorageEvent.ShoppingPresets));
 }
 
 export const SHOPPING_LISTS_KEY = 'shoppingLists';
@@ -48,7 +49,7 @@ export function loadShoppingLists(): ShoppingList[] {
 export function saveShoppingLists(value: ShoppingList[]) {
   if (!canUseBrowserStorage()) return;
   localStorage.setItem(SHOPPING_LISTS_KEY, JSON.stringify(value));
-  window.dispatchEvent(new Event('shoppingListsUpdated'));
+  window.dispatchEvent(new Event(StorageEvent.ShoppingLists));
 }
 
 export function loadShoppingListForBooking(bookingId: string): ShoppingList | null {

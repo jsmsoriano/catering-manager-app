@@ -20,6 +20,10 @@ export interface EventTypeConfig {
 export interface BusinessTemplateConfig {
   businessType: BusinessType;
   businessName: string;           // displayed in app header / mobile bar
+  businessAddress?: string;
+  businessPhone?: string;
+  businessEmail?: string;
+  logoUrl?: string;               // used in invoices/BEO/proposals
   pricingModeDefault: PricingMode;
   enabledModules: string[];
   eventTypes: EventTypeConfig[];  // replaces hardcoded 'private-dinner' | 'buffet'
@@ -67,7 +71,7 @@ export const HIBACHI_TEMPLATE: BusinessTemplateConfig = {
   ],
   eventTypes: [
     { id: 'private-dinner', label: 'Hibachi Private Event', customerLabel: 'Hibachi Private Event', pricingSlot: 'primary' },
-    { id: 'buffet',         label: 'Catering',               customerLabel: 'Catering', pricingSlot: 'secondary' },
+    { id: 'buffet',         label: 'Hibachi Buffet (No Show)', customerLabel: 'Hibachi Buffet (No Show)', pricingSlot: 'secondary' },
   ],
   occasions: [
     'Birthday Party', 'Corporate Event', 'Wedding', 'Anniversary',
@@ -280,6 +284,10 @@ export function normalizeTemplateConfig(raw: unknown): BusinessTemplateConfig {
       businessName: typeof o.businessName === 'string' && o.businessName.length > 0
         ? o.businessName
         : DEFAULT_TEMPLATE.businessName,
+      businessAddress: typeof o.businessAddress === 'string' ? o.businessAddress : undefined,
+      businessPhone: typeof o.businessPhone === 'string' ? o.businessPhone : undefined,
+      businessEmail: typeof o.businessEmail === 'string' ? o.businessEmail : undefined,
+      logoUrl: typeof o.logoUrl === 'string' ? o.logoUrl : undefined,
       pricingModeDefault: PRICING_MODES.includes((o.pricingModeDefault as PricingMode) ?? '')
         ? (o.pricingModeDefault as PricingMode)
         : 'per_guest',

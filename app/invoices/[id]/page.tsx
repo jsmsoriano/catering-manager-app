@@ -231,15 +231,31 @@ export default function InvoicePage() {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-8 pb-6 pt-8 sm:px-10">
           <div className="flex items-center gap-4">
-            <Image
-              src="/logo.png"
-              alt={config.businessName || 'Catering Co.'}
-              width={72}
-              height={72}
-              className="object-contain"
-              priority
-            />
-            <p className="text-lg font-bold text-gray-900">{config.businessName || 'Catering Co.'}</p>
+            {config.logoUrl ? (
+              <img
+                src={config.logoUrl}
+                alt={config.businessName || 'Catering Co.'}
+                className="h-[72px] w-[72px] rounded-md object-contain"
+              />
+            ) : (
+              <Image
+                src="/logo.png"
+                alt={config.businessName || 'Catering Co.'}
+                width={72}
+                height={72}
+                className="object-contain"
+                priority
+              />
+            )}
+            <div>
+              <p className="text-lg font-bold text-gray-900">{config.businessName || 'Catering Co.'}</p>
+              {config.businessAddress && <p className="text-xs text-gray-500">{config.businessAddress}</p>}
+              {(config.businessPhone || config.businessEmail) && (
+                <p className="text-xs text-gray-500">
+                  {[config.businessPhone, config.businessEmail].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
           </div>
           <div className="text-right">
             <p className="text-3xl font-extrabold tracking-widest text-orange-500 uppercase sm:text-4xl">
