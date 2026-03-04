@@ -33,12 +33,17 @@ function LoginContent() {
   const usernameDomain = process.env.NEXT_PUBLIC_USERNAME_DOMAIN?.trim();
   const usernameMode = Boolean(usernameDomain);
 
+  const [view, setView] = useState<'login' | 'forgot'>('login');
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(errorParam === 'auth' ? 'Authentication failed. Please try again.' : null);
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
   function resolveEmail(value: string): string {
     const trimmed = value.trim();
@@ -79,6 +84,73 @@ function LoginContent() {
     }
     // Force a full navigation so middleware reads the freshly persisted auth cookies.
     window.location.assign(next);
+  }
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotError(null);
+    setForgotLoading(true);
+    const supabase = createClient();
+    if (!supabase) { setForgotError('Auth is not configured.'); setForgotLoading(false); return; }
+    const resetUrl = new URL('/auth/reset-password', window.location.origin).toString();
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim(), {
+      redirectTo: resetUrl,
+    });
+    setForgotLoading(false);
+    if (resetError) { setForgotError(resetError.message); return; }
+    setForgotSent(true);
+  }
+
+  if (view === 'forgot') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
+        <div className="w-full max-w-sm space-y-8">
+          <div className="flex flex-col items-center">
+            <Image src="/hibachisun.png" alt="Hibachi A Go Go" width={140} height={39} className="object-contain" priority />
+            <h1 className="mt-6 text-2xl font-bold text-text-primary">Reset password</h1>
+            <p className="mt-1 text-sm text-text-muted">Enter your email and we'll send a reset link</p>
+          </div>
+          {forgotSent ? (
+            <div className="rounded-lg border border-success/50 bg-success/10 px-4 py-4 text-sm text-success">
+              Check your email for a password reset link.
+            </div>
+          ) : (
+            <form className="mt-8 space-y-6" onSubmit={handleForgotPassword}>
+              {forgotError && (
+                <div className="rounded-lg border border-danger/50 bg-danger/10 px-4 py-3 text-sm text-danger">
+                  {forgotError}
+                </div>
+              )}
+              <div>
+                <label htmlFor="forgot-email" className="block text-sm font-medium text-text-secondary">Email</label>
+                <input
+                  id="forgot-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="you@example.com"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={forgotLoading}
+                className="w-full rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50"
+              >
+                {forgotLoading ? 'Sending…' : 'Send reset link'}
+              </button>
+            </form>
+          )}
+          <p className="text-center text-sm text-text-muted">
+            <button type="button" onClick={() => { setView('login'); setForgotSent(false); setForgotError(null); }} className="font-medium text-accent hover:text-accent-hover">
+              Back to sign in
+            </button>
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -152,6 +224,15 @@ function LoginContent() {
                 </button>
               </div>
             </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => { setView('forgot'); setForgotEmail(resolveEmail(login)); setForgotError(null); }}
+              className="text-sm text-accent hover:text-accent-hover"
+            >
+              Forgot password?
+            </button>
           </div>
           <div className="flex flex-col gap-3">
             <button
