@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -206,7 +206,7 @@ function getAssignmentForPosition(
   });
 }
 
-export default function BookingsPage() {
+function BookingsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const openedBookingFromQueryRef = useRef<string | null>(null);
@@ -2012,5 +2012,13 @@ export default function BookingsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BookingsPage() {
+  return (
+    <Suspense>
+      <BookingsPageInner />
+    </Suspense>
   );
 }
