@@ -224,10 +224,18 @@ function SettingsContent() {
   );
 }
 
-export default function SettingsPage() {
+function SettingsPageInner() {
   return (
     <Suspense fallback={<div className="p-8"><p className="text-text-muted">Loading settings…</p></div>}>
       <SettingsContent />
+    </Suspense>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsPageInner />
     </Suspense>
   );
 }

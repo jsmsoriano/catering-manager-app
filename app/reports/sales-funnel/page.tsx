@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { endOfMonth, isWithinInterval, startOfMonth, startOfYear } from 'date-fns';
@@ -67,7 +67,7 @@ function dateInRange(booking: Booking, range: { start: Date; end: Date } | null)
   return isWithinInterval(leadDate, range);
 }
 
-export default function SalesFunnelReportPage() {
+function SalesFunnelReportPageInner() {
   const params = useSearchParams();
   const period = params.get('period') ?? 'all';
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -311,5 +311,13 @@ export default function SalesFunnelReportPage() {
         Period filter comes from the Reports page dropdown ({period === 'all' ? 'All Time' : period === 'ytd' ? 'Year to Date' : period === 'month' ? 'This Month' : 'Custom'}).
       </p>
     </div>
+  );
+}
+
+export default function SalesFunnelReportPage() {
+  return (
+    <Suspense>
+      <SalesFunnelReportPageInner />
+    </Suspense>
   );
 }

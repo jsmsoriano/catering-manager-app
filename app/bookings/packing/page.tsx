@@ -31,7 +31,7 @@ function formatDate(iso: string) {
   return `${m}/${d}/${y}`;
 }
 
-export default function PackingPage() {
+function PackingPageInner() {
   return (
     <Suspense
       fallback={
@@ -427,5 +427,13 @@ function PackingContent() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PackingPage() {
+  return (
+    <Suspense>
+      <PackingPageInner />
+    </Suspense>
   );
 }

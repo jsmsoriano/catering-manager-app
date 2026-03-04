@@ -1215,7 +1215,7 @@ function NotificationsContent() {
 
 // ─── Page wrapper ─────────────────────────────────────────────────────────────
 
-export default function InquiriesPage() {
+function InquiriesPageInner() {
   return (
     <Suspense
       fallback={
@@ -1225,6 +1225,14 @@ export default function InquiriesPage() {
       }
     >
       <NotificationsContent />
+    </Suspense>
+  );
+}
+
+export default function InquiriesPage() {
+  return (
+    <Suspense>
+      <InquiriesPageInner />
     </Suspense>
   );
 }

@@ -265,10 +265,18 @@ function NewBookingContent() {
   );
 }
 
-export default function NewBookingPage() {
+function NewBookingPageInner() {
   return (
     <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
       <NewBookingContent />
+    </Suspense>
+  );
+}
+
+export default function NewBookingPage() {
+  return (
+    <Suspense>
+      <NewBookingPageInner />
     </Suspense>
   );
 }

@@ -1460,10 +1460,18 @@ function MenusContent() {
 }
 
 
-export default function MenusPage() {
+function MenusPageInner() {
   return (
     <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
       <MenusContent />
+    </Suspense>
+  );
+}
+
+export default function MenusPage() {
+  return (
+    <Suspense>
+      <MenusPageInner />
     </Suspense>
   );
 }

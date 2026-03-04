@@ -84,7 +84,7 @@ function categoryToExpenseCategory(category: ShoppingListItemCategory): 'food' |
   return category === 'food' ? 'food' : 'supplies';
 }
 
-export default function EventShoppingListPage() {
+function EventShoppingListPageInner() {
   return (
     <Suspense
       fallback={
@@ -747,5 +747,13 @@ function EventShoppingListContent() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function EventShoppingListPage() {
+  return (
+    <Suspense>
+      <EventShoppingListPageInner />
+    </Suspense>
   );
 }

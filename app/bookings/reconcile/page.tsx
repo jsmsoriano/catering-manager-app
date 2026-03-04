@@ -23,7 +23,7 @@ function parseLocalDate(dateString: string): Date {
   return new Date(year, month - 1, day);
 }
 
-export default function ReconcilePage() {
+function ReconcilePageInner() {
   return (
     <Suspense
       fallback={
@@ -1065,5 +1065,13 @@ function ReconcileContent() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ReconcilePage() {
+  return (
+    <Suspense>
+      <ReconcilePageInner />
+    </Suspense>
   );
 }

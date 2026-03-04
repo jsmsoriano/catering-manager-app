@@ -380,10 +380,18 @@ function BookingStaffContent() {
   );
 }
 
-export default function BookingStaffPage() {
+function BookingStaffPageInner() {
   return (
     <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
       <BookingStaffContent />
+    </Suspense>
+  );
+}
+
+export default function BookingStaffPage() {
+  return (
+    <Suspense>
+      <BookingStaffPageInner />
     </Suspense>
   );
 }

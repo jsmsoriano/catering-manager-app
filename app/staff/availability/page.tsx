@@ -435,7 +435,7 @@ function TeamCalendarContent() {
 
 // ─── Page export ──────────────────────────────────────────────────────────────
 
-export default function TeamCalendarPage() {
+function TeamCalendarPageInner() {
   return (
     <Suspense
       fallback={
@@ -443,6 +443,14 @@ export default function TeamCalendarPage() {
       }
     >
       <TeamCalendarContent />
+    </Suspense>
+  );
+}
+
+export default function TeamCalendarPage() {
+  return (
+    <Suspense>
+      <TeamCalendarPageInner />
     </Suspense>
   );
 }

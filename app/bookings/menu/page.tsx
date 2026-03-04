@@ -627,7 +627,7 @@ function CateringMenuBuilder({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function BookingMenuPage() {
+function BookingMenuPageInner() {
   return (
     <Suspense
       fallback={
@@ -1360,5 +1360,13 @@ function BookingMenuContent() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookingMenuPage() {
+  return (
+    <Suspense>
+      <BookingMenuPageInner />
+    </Suspense>
   );
 }

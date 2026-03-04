@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { createClient } from '@/lib/supabase/client';
 
-export default function LoginPage() {
+function LoginPageInner() {
   return (
     <Suspense
       fallback={
@@ -193,5 +193,13 @@ function LoginContent() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   );
 }

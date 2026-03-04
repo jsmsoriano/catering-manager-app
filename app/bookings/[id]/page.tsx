@@ -1056,10 +1056,18 @@ function EventDetailContent() {
   );
 }
 
-export default function EventDetailPage() {
+function EventDetailPageInner() {
   return (
     <Suspense fallback={<div className="flex h-full items-center justify-center"><p className="text-sm text-text-muted">Loading…</p></div>}>
       <EventDetailContent />
+    </Suspense>
+  );
+}
+
+export default function EventDetailPage() {
+  return (
+    <Suspense>
+      <EventDetailPageInner />
     </Suspense>
   );
 }
