@@ -1,6 +1,27 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Booking, PipelineStatus } from '@/lib/bookingTypes';
 
+// ─── Explicit column projection ───────────────────────────────────────────────
+// Listed here so that future DB columns are never accidentally fetched.
+// Update this list whenever BookingRow gains or loses a field.
+const BOOKING_COLUMNS = [
+  'app_id', 'event_type', 'event_date', 'event_time',
+  'customer_name', 'customer_email', 'customer_phone',
+  'adults', 'children', 'location', 'distance_miles', 'premium_add_on',
+  'subtotal', 'gratuity', 'distance_fee', 'total',
+  'status', 'service_status', 'payment_status',
+  'deposit_percent', 'deposit_amount', 'deposit_due_date', 'balance_due_date',
+  'amount_paid', 'balance_due_amount', 'confirmed_at', 'prep_purchase_by_date',
+  'notes', 'staff_assignments', 'staffing_profile_id',
+  'menu_id', 'menu_pricing_snapshot', 'pricing_snapshot',
+  'discount_type', 'discount_value', 'reconciliation_id',
+  'pricing_mode', 'business_type', 'locked', 'source',
+  'pipeline_status', 'pipeline_status_updated_at',
+  'inquiry_score', 'last_contacted_at', 'next_follow_up_at',
+  'lost_reason', 'source_channel',
+  'created_at', 'updated_at', 'created_by', 'updated_by',
+].join(', ');
+
 // ─── Row type (snake_case, matches Supabase bookings table) ──────────────────
 
 interface BookingRow {
@@ -46,8 +67,15 @@ interface BookingRow {
   source: string | null;
   pipeline_status: string | null;
   pipeline_status_updated_at: string | null;
+  inquiry_score: number | null;
+  last_contacted_at: string | null;
+  next_follow_up_at: string | null;
+  lost_reason: string | null;
+  source_channel: string | null;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 /** Derive default pipeline_status from source/status for backfill */
@@ -59,9 +87,9 @@ function defaultPipelineStatus(row: BookingRow): PipelineStatus {
     case 'confirmed':
       return 'booked';
     case 'pending':
-      return 'quote_sent';
+      return 'qualified';
     case 'cancelled':
-      return 'booked'; // show in booked for historical; or could use a 6th column
+      return 'declined';
     default:
       return 'inquiry';
   }
@@ -111,8 +139,15 @@ function toRow(b: Booking): BookingRow {
     source: b.source ?? null,
     pipeline_status: b.pipeline_status ?? null,
     pipeline_status_updated_at: b.pipeline_status_updated_at ?? null,
+    inquiry_score: b.inquiryScore ?? null,
+    last_contacted_at: b.lastContactedAt ?? null,
+    next_follow_up_at: b.nextFollowUpAt ?? null,
+    lost_reason: b.lostReason ?? null,
+    source_channel: b.sourceChannel ?? null,
     created_at: b.createdAt,
     updated_at: b.updatedAt,
+    created_by: null,
+    updated_by: null,
   };
 }
 
@@ -160,6 +195,11 @@ function fromRow(r: BookingRow): Booking {
     source: r.source ?? undefined,
     pipeline_status: (r.pipeline_status ?? defaultPipelineStatus(r)) as PipelineStatus,
     pipeline_status_updated_at: r.pipeline_status_updated_at ?? undefined,
+    inquiryScore: r.inquiry_score ?? undefined,
+    lastContactedAt: r.last_contacted_at ?? undefined,
+    nextFollowUpAt: r.next_follow_up_at ?? undefined,
+    lostReason: r.lost_reason ?? undefined,
+    sourceChannel: r.source_channel ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -167,23 +207,74 @@ function fromRow(r: BookingRow): Booking {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function fetchBookings(supabase: SupabaseClient): Promise<Booking[]> {
-  const { data, error } = await supabase
+export interface BookingFetchOptions {
+  /** Only return bookings on or after this ISO date string (YYYY-MM-DD).
+   *  Defaults to 6 months ago, covering recent history + all future events. */
+  fromDate?: string;
+  /** Only return bookings on or before this ISO date string (YYYY-MM-DD).
+   *  Omit to include all future events. */
+  toDate?: string;
+  /** Hard cap on rows returned. Default 500. Pass Infinity to disable. */
+  limit?: number;
+}
+
+/** Returns the ISO date string for N months before today. */
+export function monthsAgo(n: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return d.toISOString().split('T')[0];
+}
+
+export async function fetchBookings(
+  supabase: SupabaseClient,
+  options: BookingFetchOptions = {}
+): Promise<Booking[]> {
+  const { fromDate = monthsAgo(6), toDate, limit = 500 } = options;
+
+  let q = supabase
     .from('bookings')
-    .select('*')
+    .select(BOOKING_COLUMNS)
     .not('app_id', 'is', null)
     .order('event_date', { ascending: true });
 
+  if (fromDate) q = q.gte('event_date', fromDate);
+  if (toDate)   q = q.lte('event_date', toDate);
+  if (limit !== Infinity) q = q.limit(limit);
+
+  const { data, error } = await q;
   if (error) throw error;
-  return (data as BookingRow[]).map(fromRow);
+  return (data as unknown as BookingRow[]).map(fromRow);
+}
+
+export async function fetchBookingById(
+  supabase: SupabaseClient,
+  appId: string
+): Promise<Booking | null> {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(BOOKING_COLUMNS)
+    .eq('app_id', appId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return fromRow(data as unknown as BookingRow);
 }
 
 export async function upsertBookings(
   supabase: SupabaseClient,
-  bookings: Booking[]
+  bookings: Booking[],
+  userId?: string
 ): Promise<void> {
   if (bookings.length === 0) return;
-  const rows = bookings.map(toRow);
+  const uid = userId ?? null;
+  const rows = bookings.map((b) => ({
+    ...toRow(b),
+    updated_by: uid,
+    // Only set created_by when we have a userId so existing null values are
+    // not overwritten on resync by unauthenticated paths.
+    ...(uid ? { created_by: uid } : {}),
+  }));
   const { error } = await supabase
     .from('bookings')
     .upsert(rows, { onConflict: 'app_id' });

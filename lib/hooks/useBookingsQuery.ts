@@ -3,24 +3,32 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createClient } from '@/lib/supabase/client';
-import { fetchBookings, upsertBookings, deleteBooking } from '@/lib/db/bookings';
+import { fetchBookings, monthsAgo, upsertBookings, deleteBooking } from '@/lib/db/bookings';
 import { normalizeBookingWorkflowFields } from '@/lib/bookingWorkflow';
 import { loadFromStorage } from '@/lib/storage';
 import type { Booking } from '@/lib/bookingTypes';
 
 export const BOOKINGS_QK = ['bookings'] as const;
 
+/** Default fetch window: past 6 months + all future events.
+ *  Covers the main UI (upcoming events, recent history, active pipeline).
+ *  For reports spanning older data pass { fromDate: undefined, limit: Infinity }
+ *  directly to fetchBookings(). */
+const DEFAULT_FROM = monthsAgo(6);
+
 export function useBookingsQuery() {
   const supabase = useMemo(() => createClient(), []);
   const qc = useQueryClient();
 
   const query = useQuery({
-    queryKey: BOOKINGS_QK,
-    queryFn: () => fetchBookings(supabase!),
+    queryKey: [...BOOKINGS_QK, DEFAULT_FROM],
+    queryFn: () => fetchBookings(supabase!, { fromDate: DEFAULT_FROM }),
     enabled: !!supabase,
-    // Instant first paint from localStorage cache; immediately refetched from Supabase
+    // Serve localStorage cache instantly; treat it as stale after 30 s
+    // so Supabase refetch fires without waiting for user interaction.
     initialData: () => loadFromStorage<Booking[]>('bookings', []),
-    initialDataUpdatedAt: 0,
+    initialDataUpdatedAt: Date.now() - 30_000,
+    staleTime: 30_000,
   });
 
   const saveBooking = useMutation({
