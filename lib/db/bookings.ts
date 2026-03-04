@@ -242,7 +242,7 @@ export async function fetchBookings(
   if (limit !== Infinity) q = q.limit(limit);
 
   const { data, error } = await q;
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? JSON.stringify(error));
   return (data as unknown as BookingRow[]).map(fromRow);
 }
 
@@ -256,7 +256,7 @@ export async function fetchBookingById(
     .eq('app_id', appId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? JSON.stringify(error));
   if (!data) return null;
   return fromRow(data as unknown as BookingRow);
 }
@@ -278,7 +278,7 @@ export async function upsertBookings(
   const { error } = await supabase
     .from('bookings')
     .upsert(rows, { onConflict: 'app_id' });
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? JSON.stringify(error));
 }
 
 export async function deleteBooking(
@@ -289,5 +289,5 @@ export async function deleteBooking(
     .from('bookings')
     .delete()
     .eq('app_id', appId);
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? JSON.stringify(error));
 }
