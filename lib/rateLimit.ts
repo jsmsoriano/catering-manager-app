@@ -51,27 +51,31 @@ function getClientKey(req: NextRequest): string {
 // ─── Upstash implementation ───────────────────────────────────────────────────
 
 function createUpstashLimiter(windowMs: number, max: number) {
-  // Dynamic imports so the build doesn't fail if packages aren't installed
-  // and env vars are missing — the factory checks env vars before calling this.
-  const { Redis } = require('@upstash/redis') as typeof import('@upstash/redis');
-  const { Ratelimit } = require('@upstash/ratelimit') as typeof import('@upstash/ratelimit');
+  // Lazy-initialize on first request so the client is never constructed at
+  // build/module-evaluation time (which would fail with placeholder env vars).
+  let ratelimit: import('@upstash/ratelimit').Ratelimit | null = null;
 
-  const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-  });
-
-  const windowSecs = Math.ceil(windowMs / 1000);
-  const ratelimit = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(max, `${windowSecs} s`),
-    analytics: false,
-  });
+  function getRatelimit() {
+    if (ratelimit) return ratelimit;
+    const { Redis } = require('@upstash/redis') as typeof import('@upstash/redis');
+    const { Ratelimit } = require('@upstash/ratelimit') as typeof import('@upstash/ratelimit');
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    });
+    const windowSecs = Math.ceil(windowMs / 1000);
+    ratelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(max, `${windowSecs} s`),
+      analytics: false,
+    });
+    return ratelimit;
+  }
 
   return {
     async check(req: NextRequest): Promise<RateLimitResult> {
       const key = getClientKey(req);
-      const { success, remaining, reset } = await ratelimit.limit(key);
+      const { success, remaining, reset } = await getRatelimit().limit(key);
       return { ok: success, remaining, resetAt: reset };
     },
   };
