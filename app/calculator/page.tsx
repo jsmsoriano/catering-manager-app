@@ -1022,6 +1022,16 @@ export default function CalculatorPage() {
 
           const pctOf = (amt: number) => totalCharged > 0 ? ((amt / totalCharged) * 100).toFixed(1) : '0.0';
 
+          // Derive labor rates from computed amounts for accurate labels
+          const chefBasePay = (chefComp?.basePay ?? 0) * scale;
+          const chefGratPay = (chefComp?.gratuityShare ?? 0) * scale;
+          const asstBasePay = (asstComp?.basePay ?? 0) * scale;
+          const asstGratPay = (asstComp?.gratuityShare ?? 0) * scale;
+          const chefBaseRevPct = subtotal > 0 ? Math.round((chefBasePay / subtotal) * 100) : 0;
+          const chefGratSplitPct = gratuity > 0 ? Math.round((chefGratPay / gratuity) * 100) : 0;
+          const asstBaseRevPct = subtotal > 0 ? Math.round((asstBasePay / subtotal) * 100) : 0;
+          const asstGratSplitPct = gratuity > 0 ? Math.round((asstGratPay / gratuity) * 100) : 0;
+
           // Bar segment widths (% of totalCharged)
           const barLabor = totalCharged > 0 ? (totalLaborFromScenario / totalCharged) * 100 : 0;
           const barCosts = totalCharged > 0 ? (totalCosts / totalCharged) * 100 : 0;
@@ -1030,14 +1040,20 @@ export default function CalculatorPage() {
           const barOwnerB = totalCharged > 0 ? (ownerBAmount / totalCharged) * 100 : 0;
 
           // Waterfall rows
-          const waterfallRows: { label: string; value: number; indent: boolean; total: boolean; colorClass: string }[] = [
+          const waterfallRows: { label: string; value: number; indent: boolean; deep?: boolean; total: boolean; colorClass: string }[] = [
             { label: `${guests} guests × ${formatCurrency(pricePerGuest)}`, value: subtotal, indent: false, total: false, colorClass: 'text-text-primary' },
             { label: `Gratuity (${gratuityPct}%)`, value: gratuity, indent: true, total: false, colorClass: 'text-text-secondary' },
             { label: 'Total Collected', value: totalCharged, indent: false, total: true, colorClass: 'text-success' },
-            { label: `Food Cost (${foodCostPct}%)`, value: -foodCost, indent: true, total: false, colorClass: 'text-danger' },
-            { label: `Supplies (${suppliesCostPct}%)`, value: -suppliesCost, indent: true, total: false, colorClass: 'text-danger' },
-            ...(chefComp ? [{ label: `Chef Labor (base + grat)`, value: -chefPay, indent: true, total: false, colorClass: 'text-blue-400' }] : []),
-            ...(asstComp ? [{ label: `Assistant Labor (base + grat)`, value: -asstPay, indent: true, total: false, colorClass: 'text-blue-400' }] : []),
+            { label: `Food Cost (${foodCostPct}% of revenue)`, value: -foodCost, indent: true, total: false, colorClass: 'text-danger' },
+            { label: `Supplies (${suppliesCostPct}% of revenue)`, value: -suppliesCost, indent: true, total: false, colorClass: 'text-danger' },
+            ...(chefComp ? [
+              { label: `Lead Chef — ${chefBaseRevPct}% of revenue`, value: -chefBasePay, indent: true, total: false, colorClass: 'text-blue-400' },
+              { label: `Lead Chef — ${chefGratSplitPct}% of gratuity`, value: -chefGratPay, indent: true, deep: true, total: false, colorClass: 'text-blue-300' },
+            ] : []),
+            ...(asstComp ? [
+              { label: `Assistant — ${asstBaseRevPct}% of revenue`, value: -asstBasePay, indent: true, total: false, colorClass: 'text-blue-400' },
+              { label: `Assistant — ${asstGratSplitPct}% of gratuity`, value: -asstGratPay, indent: true, deep: true, total: false, colorClass: 'text-blue-300' },
+            ] : []),
             { label: 'Gross Profit', value: grossProfit, indent: false, total: true, colorClass: grossProfit >= 0 ? 'text-success' : 'text-danger' },
             { label: 'Business Retained (30%)', value: -retainedAmt, indent: true, total: false, colorClass: 'text-violet-400' },
             { label: 'Distributable (70%)', value: distributable, indent: false, total: true, colorClass: 'text-success' },
@@ -1154,12 +1170,12 @@ export default function CalculatorPage() {
                 {waterfallRows.map((row) => (
                   <div
                     key={row.label}
-                    className={`flex items-baseline justify-between border-b border-border last:border-b-0 py-2.5 ${
-                      row.indent ? 'pl-8 pr-4' : 'px-4'
-                    } ${row.total ? 'bg-card-elevated font-semibold' : ''}`}
+                    className={`flex items-baseline justify-between border-b border-border last:border-b-0 py-2 ${
+                      row.deep ? 'pl-12 pr-4' : row.indent ? 'pl-8 pr-4' : 'px-4'
+                    } ${row.total ? 'bg-card-elevated py-2.5 font-semibold' : ''}`}
                   >
-                    <span className={row.total ? 'text-text-primary' : 'text-text-secondary'}>{row.label}</span>
-                    <span className={`tabular-nums ${row.colorClass}`}>
+                    <span className={`${row.total ? 'text-text-primary' : 'text-text-secondary'} ${row.deep ? 'text-xs' : ''}`}>{row.label}</span>
+                    <span className={`tabular-nums ${row.colorClass} ${row.deep ? 'text-xs' : ''}`}>
                       {row.value < 0 ? `−${formatCurrency(Math.abs(row.value))}` : formatCurrency(row.value)}
                     </span>
                   </div>
@@ -1174,18 +1190,14 @@ export default function CalculatorPage() {
                   <p className="text-3xl font-bold text-text-primary">{formatCurrency(aSorianoTotal)}</p>
                   <p className="mb-3 text-base font-bold text-accent">{aSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-accent/20 pt-3 text-xs">
-                    {chefComp && (
-                      <>
-                        <div className="flex justify-between gap-2">
-                          <span className="text-text-secondary">Base pay</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(chefComp.basePay * scale)}</span>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                          <span className="text-text-secondary">Gratuity share</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(chefComp.gratuityShare * scale)}</span>
-                        </div>
-                      </>
-                    )}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-text-secondary">{chefBaseRevPct}% of revenue</span>
+                      <span className="font-medium text-blue-400">{formatCurrency(chefBasePay)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-text-secondary">{chefGratSplitPct}% of gratuity</span>
+                      <span className="font-medium text-blue-300">{formatCurrency(chefGratPay)}</span>
+                    </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-text-secondary">Profit split</span>
                       <span className="font-medium text-emerald-400">{formatCurrency(ownerAAmount)}</span>
@@ -1198,18 +1210,14 @@ export default function CalculatorPage() {
                   <p className="text-3xl font-bold text-text-primary">{formatCurrency(jSorianoTotal)}</p>
                   <p className="mb-3 text-base font-bold text-text-secondary">{jSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-border pt-3 text-xs">
-                    {asstComp && (
-                      <>
-                        <div className="flex justify-between gap-2">
-                          <span className="text-text-secondary">Base pay</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(asstComp.basePay * scale)}</span>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                          <span className="text-text-secondary">Gratuity share</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(asstComp.gratuityShare * scale)}</span>
-                        </div>
-                      </>
-                    )}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-text-secondary">{asstBaseRevPct}% of revenue</span>
+                      <span className="font-medium text-blue-400">{formatCurrency(asstBasePay)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-text-secondary">{asstGratSplitPct}% of gratuity</span>
+                      <span className="font-medium text-blue-300">{formatCurrency(asstGratPay)}</span>
+                    </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-text-secondary">Profit split</span>
                       <span className="font-medium text-emerald-500">{formatCurrency(ownerBAmount)}</span>
