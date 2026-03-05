@@ -987,15 +987,18 @@ export default function CalculatorPage() {
           const suppliesCost = subtotal * suppliesCostPct / 100;
           const totalCosts = foodCost + suppliesCost;
 
-          // Labor: hardcoded rates so the scenario always matches the stated model
+          // Gratuity is a pass-through: collected separately, paid directly to staff.
+          // All revenue-based calculations use subtotal only.
           const chefBasePay = subtotal * CHEF_REV_PCT / 100;
-          const chefGratPay = gratuity * CHEF_GRAT_PCT / 100;
           const asstBasePay = subtotal * ASST_REV_PCT / 100;
+          const totalBaseLaborPay = chefBasePay + asstBasePay;
+
+          // Gratuity split (pass-through, not revenue)
+          const chefGratPay = gratuity * CHEF_GRAT_PCT / 100;
           const asstGratPay = gratuity * ASST_GRAT_PCT / 100;
-          const chefPay = chefBasePay + chefGratPay;
-          const asstPay = asstBasePay + asstGratPay;
-          const totalLaborFromScenario = chefPay + asstPay;
-          const grossProfit = totalCharged - totalCosts - totalLaborFromScenario;
+
+          // Gross profit derived from revenue only (gratuity excluded)
+          const grossProfit = subtotal - totalCosts - totalBaseLaborPay;
 
           // 30% retained → 70% distributable
           const retainedAmt = grossProfit > 0 ? grossProfit * 0.30 : 0;
@@ -1003,18 +1006,18 @@ export default function CalculatorPage() {
 
           const ownerAAmount = distributable * CHEF_PROFIT_PCT / 100;
           const ownerBAmount = distributable * ASST_PROFIT_PCT / 100;
-          const aSorianoTotal = chefPay + ownerAAmount;
-          const jSorianoTotal = asstPay + ownerBAmount;
+
+          // Total per person = base labor + profit share + tip
+          const aSorianoTotal = chefBasePay + ownerAAmount + chefGratPay;
+          const jSorianoTotal = asstBasePay + ownerBAmount + asstGratPay;
           const aSorianoPct = totalCharged > 0 ? (aSorianoTotal / totalCharged) * 100 : 0;
           const jSorianoPct = totalCharged > 0 ? (jSorianoTotal / totalCharged) * 100 : 0;
 
-          const pctOf = (amt: number) => totalCharged > 0 ? ((amt / totalCharged) * 100).toFixed(1) : '0.0';
-
-          // Bar segment widths (% of totalCharged)
-          const barLabor = totalCharged > 0 ? (totalLaborFromScenario / totalCharged) * 100 : 0;
-          const barCosts = totalCharged > 0 ? (totalCosts / totalCharged) * 100 : 0;
-          const barRetained = totalCharged > 0 ? (retainedAmt / totalCharged) * 100 : 0;
-          const barDistributable = totalCharged > 0 ? (distributable / totalCharged) * 100 : 0;
+          // Bar segments as % of subtotal (revenue only, gratuity excluded)
+          const barLabor = subtotal > 0 ? (totalBaseLaborPay / subtotal) * 100 : 0;
+          const barCosts = subtotal > 0 ? (totalCosts / subtotal) * 100 : 0;
+          const barRetained = subtotal > 0 ? (retainedAmt / subtotal) * 100 : 0;
+          const barDistributable = subtotal > 0 ? (distributable / subtotal) * 100 : 0;
 
           return (
             <div className="space-y-5">
@@ -1086,7 +1089,7 @@ export default function CalculatorPage() {
               <div className="rounded-lg border border-border bg-card p-5">
                 <h2 className="mb-1 text-base font-semibold text-text-primary">Where Every Dollar Goes</h2>
                 <p className="mb-4 text-xs text-text-muted">
-                  {guests} guests × {formatCurrency(pricePerGuest)} = {formatCurrency(subtotal)} revenue
+                  {guests} guests × {formatCurrency(pricePerGuest)} = {formatCurrency(subtotal)} revenue · gratuity separate
                 </p>
                 <div className="flex h-8 w-full overflow-hidden rounded-lg border border-border">
                   {barLabor > 0.5 && <div className="bg-blue-500 transition-all duration-300" style={{ width: `${barLabor}%` }} />}
@@ -1096,7 +1099,7 @@ export default function CalculatorPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
                   {[
-                    { color: 'bg-blue-500', label: 'Labor', pct: barLabor, amount: totalLaborFromScenario },
+                    { color: 'bg-blue-500', label: 'Labor', pct: barLabor, amount: totalBaseLaborPay },
                     { color: 'bg-red-500', label: 'Food & Costs', pct: barCosts, amount: totalCosts },
                     { color: 'bg-violet-500', label: 'Retained', pct: barRetained, amount: retainedAmt },
                     { color: 'bg-emerald-500', label: 'Distributable', pct: barDistributable, amount: distributable },
@@ -1117,24 +1120,20 @@ export default function CalculatorPage() {
                   <p className="font-semibold text-text-primary">Money Waterfall</p>
                 </div>
 
-                {/* Event Summary */}
+                {/* Revenue */}
                 <div className="border-b border-border pb-1 pt-2">
-                  <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Event Summary</p>
+                  <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Revenue</p>
                   <div className="flex items-center justify-between gap-3 px-4 py-2">
                     <span className="text-text-secondary">{guests} guests × {formatCurrency(pricePerGuest)}</span>
                     <span className="tabular-nums text-text-primary">{formatCurrency(subtotal)}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 px-4 py-2">
-                    <span className="text-text-secondary">Gratuity ({gratuityPct}%)</span>
-                    <span className="tabular-nums text-emerald-400">+{formatCurrency(gratuity)}</span>
-                  </div>
                   <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
-                    <span className="text-text-primary">Total Collected</span>
-                    <span className="tabular-nums text-text-primary">{formatCurrency(totalCharged)}</span>
+                    <span className="text-text-primary">Total Revenue</span>
+                    <span className="tabular-nums text-text-primary">{formatCurrency(subtotal)}</span>
                   </div>
                 </div>
 
-                {/* Labor */}
+                {/* Labor (base pay from revenue only) */}
                 <div className="border-b border-border pb-1 pt-2">
                   <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Labor</p>
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
@@ -1142,20 +1141,12 @@ export default function CalculatorPage() {
                     <span className="tabular-nums text-blue-400">−{formatCurrency(chefBasePay)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                    <span className="text-text-secondary">Lead Chef — {CHEF_GRAT_PCT}% of gratuity</span>
-                    <span className="tabular-nums text-blue-300">−{formatCurrency(chefGratPay)}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
                     <span className="text-text-secondary">Assistant — {ASST_REV_PCT}% of revenue</span>
                     <span className="tabular-nums text-blue-400">−{formatCurrency(asstBasePay)}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                    <span className="text-text-secondary">Assistant — {ASST_GRAT_PCT}% of gratuity</span>
-                    <span className="tabular-nums text-blue-300">−{formatCurrency(asstGratPay)}</span>
-                  </div>
                   <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
                     <span className="text-text-primary">Total Labor</span>
-                    <span className="tabular-nums text-danger">−{formatCurrency(totalLaborFromScenario)}</span>
+                    <span className="tabular-nums text-danger">−{formatCurrency(totalBaseLaborPay)}</span>
                   </div>
                 </div>
 
@@ -1177,7 +1168,7 @@ export default function CalculatorPage() {
                 </div>
 
                 {/* Profit Distribution */}
-                <div className="pb-1 pt-2">
+                <div className="border-b border-border pb-1 pt-2">
                   <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Profit Distribution</p>
                   <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
                     <span className="text-text-primary">Gross Profit</span>
@@ -1198,6 +1189,23 @@ export default function CalculatorPage() {
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
                     <span className="text-text-secondary">J Soriano — {ASST_PROFIT_PCT}% of profit</span>
                     <span className="tabular-nums text-emerald-500">{formatCurrency(ownerBAmount)}</span>
+                  </div>
+                </div>
+
+                {/* Gratuity — pass-through, separate from revenue */}
+                <div className="pb-1 pt-2">
+                  <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Gratuity (pass-through)</p>
+                  <div className="flex items-center justify-between gap-3 px-4 py-2">
+                    <span className="text-text-secondary">Collected ({gratuityPct}% of revenue)</span>
+                    <span className="tabular-nums text-text-primary">{formatCurrency(gratuity)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Lead Chef — {CHEF_GRAT_PCT}%</span>
+                    <span className="tabular-nums text-blue-300">{formatCurrency(chefGratPay)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Assistant — {ASST_GRAT_PCT}%</span>
+                    <span className="tabular-nums text-blue-300">{formatCurrency(asstGratPay)}</span>
                   </div>
                 </div>
               </div>
