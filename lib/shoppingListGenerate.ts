@@ -41,7 +41,7 @@ function existingByNameMap(items: ShoppingListItem[]): Map<string, ShoppingListI
 }
 
 /** Default oz per portion: proteins 5 oz, sides 4 oz (portions → lbs = portions * ozPerPortion / 16) */
-const OZ_PER_PORTION_PROTEIN = 5;
+const OZ_PER_PORTION_PROTEIN = 4.5;
 const OZ_PER_PORTION_SIDE = 4;
 
 /** Build shopping list items from hibachi EventMenu (guest selections → protein/side counts). calculatedQty = portions; qty required (lbs) = portions * ozPerPortion / 16. */

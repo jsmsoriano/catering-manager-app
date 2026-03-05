@@ -561,11 +561,153 @@ function Slider({
   );
 }
 
+// ─── Business Rules Tab ───────────────────────────────────────────────────────
+
+function DollarBar({ label, pct, color, tooltip }: { label: string; pct: number; color: string; tooltip: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-sm">
+        <span className="flex items-center gap-1.5 font-medium text-text-primary">
+          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: color }} />
+          {label}
+          <InfoTooltip text={tooltip} />
+        </span>
+        <span className="font-semibold text-text-primary">{pct.toFixed(0)}¢ per $1</span>
+      </div>
+      <div className="h-4 w-full overflow-hidden rounded-full bg-card-elevated">
+        <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
+function BusinessRulesTab({ rules }: { rules: MoneyRules }) {
+  const pd = rules.profitDistribution;
+  const foodCostPct = rules.costs.primaryFoodCostPercent;
+  const suppliesPct = rules.costs.suppliesCostPercent;
+  const laborPct = rules.privateLabor.leadChefBasePercent; // lead chef as representative
+  const taxReservePct = pd.businessRetainedPercent;
+  const ownerRevPct = pd.ownerRevenuePercent ?? 20;
+  const ownerGratPct = pd.ownerGratuityPercent ?? 60;
+  const ownerProfitPct = pd.ownerMonthlyProfitPercent ?? 40;
+
+  // Example event: 15 guests @ $65 + 20% gratuity
+  const exGuests = 15;
+  const exPrice = rules.pricing.primaryBasePrice;
+  const exSubtotal = exGuests * exPrice;
+  const exGratuity = exSubtotal * (rules.pricing.defaultGratuityPercent / 100);
+  const exRevenue = exSubtotal + exGratuity;
+  const exFood = exSubtotal * (foodCostPct / 100);
+  const exSupplies = exSubtotal * (suppliesPct / 100);
+  const exTransport = rules.costs.transportationStipend;
+  const exLabor = exSubtotal * (rules.privateLabor.leadChefBasePercent / 100) + exGratuity * (rules.privateLabor.chefGratuitySplitPercent / 100);
+  const exGrossProfit = exRevenue - exFood - exSupplies - exTransport - exLabor;
+  const exRetained = Math.max(exGrossProfit * (taxReservePct / 100), 0);
+  const exDistributable = Math.max(exGrossProfit - exRetained, 0);
+
+  // Chef-owner per-event pay
+  const ownerRevPay = exSubtotal * (ownerRevPct / 100);
+  const ownerGratPay = exGratuity * (ownerGratPct / 100);
+  const ownerProfitPay = exDistributable * (ownerProfitPct / 100);
+  const ownerTotalPerEvent = ownerRevPay + ownerGratPay;
+  const ownerTotalWithProfit = ownerTotalPerEvent + ownerProfitPay;
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+
+      {/* Dollar Flow */}
+      <div className="rounded-lg border border-border bg-card p-5">
+        <h2 className="mb-1 text-lg font-semibold text-text-primary">Where Every Dollar Goes</h2>
+        <p className="mb-5 text-sm text-text-muted">
+          Based on a {exGuests}-guest private dinner at {formatCurrency(exPrice)}/guest. Adjust business rules in Settings to change these percentages.
+        </p>
+        <div className="space-y-4">
+          <DollarBar label="Food Cost" pct={foodCostPct} color="#ef4444"
+            tooltip={`${foodCostPct}% of subtotal goes to ingredients and proteins.`} />
+          <DollarBar label="Supplies" pct={suppliesPct} color="#f97316"
+            tooltip={`${suppliesPct}% of subtotal covers disposables, propane, etc.`} />
+          <DollarBar label="Labor (Lead Chef)" pct={laborPct} color="#eab308"
+            tooltip={`${laborPct}% of subtotal is the lead chef base pay, plus ${rules.privateLabor.chefGratuitySplitPercent}% of gratuity.`} />
+          <DollarBar label="Tax Reserve" pct={taxReservePct} color="#8b5cf6"
+            tooltip={`${taxReservePct}% of gross profit is retained in the business for taxes and reserves.`} />
+          <DollarBar label="Distributable Profit" pct={rules.profitDistribution.ownerDistributionPercent} color="#22c55e"
+            tooltip={`${rules.profitDistribution.ownerDistributionPercent}% of gross profit is available for owner distributions.`} />
+        </div>
+
+        {/* Example breakdown table */}
+        <div className="mt-6 rounded-md border border-border bg-card-elevated text-sm">
+          <div className="border-b border-border px-4 py-2 font-semibold text-text-primary">Example Event Breakdown</div>
+          {[
+            ['Subtotal', formatCurrency(exSubtotal)],
+            ['Gratuity (20%)', formatCurrency(exGratuity)],
+            ['Total Revenue', formatCurrency(exRevenue), true],
+            ['Food Cost', `-${formatCurrency(exFood)}`],
+            ['Supplies', `-${formatCurrency(exSupplies)}`],
+            ['Transportation', `-${formatCurrency(exTransport)}`],
+            ['Labor (chef + asst)', `-${formatCurrency(exLabor)}`],
+            ['Gross Profit', formatCurrency(exGrossProfit), true],
+            [`Tax Reserve (${taxReservePct}%)`, `-${formatCurrency(exRetained)}`],
+            ['Available for Distribution', formatCurrency(exDistributable), true],
+          ].map(([label, value, bold]) => (
+            <div key={String(label)} className={`flex justify-between px-4 py-2 ${bold ? 'border-t border-border font-semibold text-text-primary' : 'text-text-secondary'}`}>
+              <span>{label}</span>
+              <span>{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Chef-Owner Compensation */}
+      <div className="rounded-lg border border-border bg-card p-5">
+        <h2 className="mb-1 text-lg font-semibold text-text-primary">Chef-Owner Compensation</h2>
+        <p className="mb-5 text-sm text-text-muted">
+          How the chef owner is paid — per event and at month end from remaining profit.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Revenue Share', pct: ownerRevPct, example: ownerRevPay, desc: '% of subtotal per event', color: '#3b82f6' },
+            { label: 'Gratuity Share', pct: ownerGratPct, example: ownerGratPay, desc: '% of gratuity per event', color: '#10b981' },
+            { label: 'Monthly Profit Share', pct: ownerProfitPct, example: ownerProfitPay, desc: '% of remaining monthly profit', color: '#f59e0b' },
+          ].map(({ label, pct, example, desc, color }) => (
+            <div key={label} className="rounded-md border border-border bg-card-elevated p-4 text-center">
+              <div className="text-2xl font-bold" style={{ color }}>{pct}%</div>
+              <div className="mt-1 text-sm font-medium text-text-primary">{label}</div>
+              <div className="mt-0.5 text-xs text-text-muted">{desc}</div>
+              <div className="mt-2 text-sm font-semibold text-text-primary">{formatCurrency(example)} <span className="text-xs font-normal text-text-muted">ex.</span></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 rounded-md border border-border bg-card-elevated text-sm">
+          <div className="border-b border-border px-4 py-2 font-semibold text-text-primary">Example Payout (same {exGuests}-guest event)</div>
+          {[
+            [`Revenue share (${ownerRevPct}% × ${formatCurrency(exSubtotal)})`, formatCurrency(ownerRevPay)],
+            [`Gratuity share (${ownerGratPct}% × ${formatCurrency(exGratuity)})`, formatCurrency(ownerGratPay)],
+            ['Per-event total', formatCurrency(ownerTotalPerEvent), true],
+            [`Monthly profit share (${ownerProfitPct}% of distributable)`, `+ ${formatCurrency(ownerProfitPay)}`],
+            ['Total incl. month-end profit', formatCurrency(ownerTotalWithProfit), true],
+          ].map(([label, value, bold]) => (
+            <div key={String(label)} className={`flex justify-between px-4 py-2 ${bold ? 'border-t border-border font-semibold text-text-primary' : 'text-text-secondary'}`}>
+              <span>{label}</span>
+              <span>{value}</span>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-3 text-xs text-text-muted">
+          Revenue and gratuity shares are paid per event. Monthly profit share is distributed at month end from the pool remaining after all events, costs, and tax reserves are settled. Configure percentages in Settings → Business Rules.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CalculatorPage() {
   const rules = useMoneyRules();
-  const [activeTab, setActiveTab] = useState<'calculator' | 'chef' | 'expenses'>('calculator');
+  const [activeTab, setActiveTab] = useState<'calculator' | 'chef' | 'expenses' | 'business'>('calculator');
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [eventsPerMonth, setEventsPerMonth] = useState(4);
   const [salesTaxPct, setSalesTaxPct] = useState(8);
@@ -656,7 +798,7 @@ export default function CalculatorPage() {
             <p className="mt-1 text-sm text-text-secondary">Adjust guests and price to see live pay breakdown</p>
           </div>
           <div className="flex rounded-lg border border-border bg-card-elevated p-1">
-            {([['calculator', 'Calculator'], ['chef', 'Event Summary'], ['expenses', 'Overhead & Reserves']] as const).map(([id, label]) => (
+            {([['calculator', 'Calculator'], ['chef', 'Event Summary'], ['expenses', 'Overhead & Reserves'], ['business', 'Business Rules']] as const).map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
@@ -671,6 +813,8 @@ export default function CalculatorPage() {
         </div>
 
         {activeTab === 'chef' && <ChefBreakdownTab rules={rules} perEventExpense={perEventExpense} salesTaxPct={salesTaxPct} seTaxPct={seTaxPct} incomeTaxPct={incomeTaxPct} />}
+
+        {activeTab === 'business' && <BusinessRulesTab rules={rules} />}
 
         {activeTab === 'expenses' && (
           <div className="mx-auto max-w-3xl space-y-5">

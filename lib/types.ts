@@ -125,6 +125,10 @@ export interface MoneyRules {
     ownerAEquityPercent: number; // % (default: 40) — legacy, used when owners not set
     ownerBEquityPercent: number; // % (default: 60) — legacy
     distributionFrequency: 'monthly' | 'quarterly' | 'annual';
+    /** Chef-owner per-event compensation model */
+    ownerRevenuePercent: number;         // % of gross revenue (default: 20)
+    ownerGratuityPercent: number;        // % of gratuity (default: 60)
+    ownerMonthlyProfitPercent: number;   // % of remaining monthly profit (default: 40)
   };
 
   // Safety Limits (warnings only)

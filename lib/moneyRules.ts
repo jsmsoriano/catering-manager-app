@@ -69,6 +69,9 @@ export const DEFAULT_RULES: MoneyRules = {
     ownerAEquityPercent: 40,
     ownerBEquityPercent: 60,
     distributionFrequency: 'monthly',
+    ownerRevenuePercent: 20,
+    ownerGratuityPercent: 60,
+    ownerMonthlyProfitPercent: 40,
   },
   safetyLimits: {
     maxTotalLaborPercent: 30,
