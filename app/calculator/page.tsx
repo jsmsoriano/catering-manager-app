@@ -478,32 +478,6 @@ function ChefBreakdownTab({ rules, perEventExpense, salesTaxPct, seTaxPct, incom
                 </div>
               ))}
             </div>
-            <div className="mt-5 space-y-1.5 border-t border-border pt-4 text-xs text-text-muted">
-              <div className="flex justify-between">
-                <span>Food cost rate</span>
-                <span>{fin.foodCostPercent}% of subtotal</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Supplies rate</span>
-                <span>{rules.costs.suppliesCostPercent}% of subtotal</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Labor rate</span>
-                <span>{fin.laborAsPercentOfRevenue.toFixed(1)}% of revenue</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Sales tax reserve</span>
-                <span>{salesTaxPct}% of adjusted profit</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SE tax reserve</span>
-                <span>{seTaxPct}% of adjusted profit</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Income tax reserve</span>
-                <span>{incomeTaxPct}% of adjusted profit</span>
-              </div>
-            </div>
           </div>
 
           {fin.warnings.length > 0 && (
@@ -537,81 +511,72 @@ const DEFAULT_STAFF: StaffEntry[] = [
   { id: 'asst-default', role: 'Assistant', pay: 72 },
 ];
 
-// ─── Slider input ─────────────────────────────────────────────────────────────
-
-const ACCENT = '#f97316';
-
-function Slider({
-  value, min, max, step = 1,
-  onChange,
-}: {
-  value: number; min: number; max: number; step?: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="w-full cursor-pointer"
-      style={{ accentColor: ACCENT }}
-    />
-  );
-}
-
 // ─── Business Rules Tab ───────────────────────────────────────────────────────
 
-function DollarBar({ label, pct, color, tooltip }: { label: string; pct: number; color: string; tooltip: string }) {
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-sm">
-        <span className="flex items-center gap-1.5 font-medium text-text-primary">
-          <span className="inline-block h-3 w-3 rounded-sm" style={{ background: color }} />
-          {label}
-          <InfoTooltip text={tooltip} />
-        </span>
-        <span className="font-semibold text-text-primary">{pct.toFixed(0)}¢ per $1</span>
-      </div>
-      <div className="h-4 w-full overflow-hidden rounded-full bg-card-elevated">
-        <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
-      </div>
-    </div>
-  );
-}
+// Fixed allocation model: Labor 30% | Food 30% | Supplies 5% → Gross Profit 35%
+// Tax Reserve = 30% of GP (10.5%) | Distributable = 70% of GP (24.5%)
+const ALLOC_LABOR = 30;
+const ALLOC_FOOD = 30;
+const ALLOC_SUPPLIES = 5;
+const ALLOC_PROFIT = 35; // 100 - 30 - 30 - 5
+const PROFIT_TAX_RESERVE_PCT = 30; // % of gross profit set aside
+const ALLOC_TAX_RESERVE = parseFloat((ALLOC_PROFIT * PROFIT_TAX_RESERVE_PCT / 100).toFixed(1)); // 10.5
+const ALLOC_DISTRIBUTABLE = parseFloat((ALLOC_PROFIT * (100 - PROFIT_TAX_RESERVE_PCT) / 100).toFixed(1)); // 24.5
 
 function BusinessRulesTab({ rules }: { rules: MoneyRules }) {
   const pd = rules.profitDistribution;
-  const foodCostPct = rules.costs.primaryFoodCostPercent;
-  const suppliesPct = rules.costs.suppliesCostPercent;
-  const laborPct = rules.privateLabor.leadChefBasePercent; // lead chef as representative
-  const taxReservePct = pd.businessRetainedPercent;
+  const ownerAEquity = pd.ownerAEquityPercent;
+  const ownerBEquity = pd.ownerBEquityPercent;
   const ownerRevPct = pd.ownerRevenuePercent ?? 20;
   const ownerGratPct = pd.ownerGratuityPercent ?? 60;
   const ownerProfitPct = pd.ownerMonthlyProfitPercent ?? 40;
 
-  // Example event: 15 guests @ $65 + 20% gratuity
+  const ownerAPct = parseFloat((ALLOC_DISTRIBUTABLE * ownerAEquity / 100).toFixed(1));
+  const ownerBPct = parseFloat((ALLOC_DISTRIBUTABLE * ownerBEquity / 100).toFixed(1));
+
+  // Example event amounts
   const exGuests = 15;
   const exPrice = rules.pricing.primaryBasePrice;
   const exSubtotal = exGuests * exPrice;
   const exGratuity = exSubtotal * (rules.pricing.defaultGratuityPercent / 100);
   const exRevenue = exSubtotal + exGratuity;
-  const exFood = exSubtotal * (foodCostPct / 100);
-  const exSupplies = exSubtotal * (suppliesPct / 100);
-  const exTransport = rules.costs.transportationStipend;
-  const exLabor = exSubtotal * (rules.privateLabor.leadChefBasePercent / 100) + exGratuity * (rules.privateLabor.chefGratuitySplitPercent / 100);
-  const exGrossProfit = exRevenue - exFood - exSupplies - exTransport - exLabor;
-  const exRetained = Math.max(exGrossProfit * (taxReservePct / 100), 0);
-  const exDistributable = Math.max(exGrossProfit - exRetained, 0);
+  const exLabor = exSubtotal * ALLOC_LABOR / 100;
+  const exFood = exSubtotal * ALLOC_FOOD / 100;
+  const exSupplies = exSubtotal * ALLOC_SUPPLIES / 100;
+  const exGrossProfit = exSubtotal - exLabor - exFood - exSupplies;
+  const exTaxReserve = Math.max(exGrossProfit * PROFIT_TAX_RESERVE_PCT / 100, 0);
+  const exDistributable = Math.max(exGrossProfit * (100 - PROFIT_TAX_RESERVE_PCT) / 100, 0);
+  const exOwnerA = exDistributable * ownerAEquity / 100;
+  const exOwnerB = exDistributable * ownerBEquity / 100;
 
-  // Chef-owner per-event pay
-  const ownerRevPay = exSubtotal * (ownerRevPct / 100);
-  const ownerGratPay = exGratuity * (ownerGratPct / 100);
-  const ownerProfitPay = exDistributable * (ownerProfitPct / 100);
+  const ownerRevPay = exSubtotal * ownerRevPct / 100;
+  const ownerGratPay = exGratuity * ownerGratPct / 100;
+  const ownerProfitPay = exDistributable * ownerProfitPct / 100;
   const ownerTotalPerEvent = ownerRevPay + ownerGratPay;
   const ownerTotalWithProfit = ownerTotalPerEvent + ownerProfitPay;
+
+  const barSegments = [
+    { label: 'Labor', pct: ALLOC_LABOR, color: 'bg-blue-500' },
+    { label: 'Food Cost', pct: ALLOC_FOOD, color: 'bg-red-500' },
+    { label: 'Supplies', pct: ALLOC_SUPPLIES, color: 'bg-orange-500' },
+    { label: 'Tax Reserve', pct: ALLOC_TAX_RESERVE, color: 'bg-violet-500' },
+    { label: `Owner A (${ownerAEquity}%)`, pct: ownerAPct, color: 'bg-emerald-400' },
+    { label: `Owner B (${ownerBEquity}%)`, pct: ownerBPct, color: 'bg-emerald-600' },
+  ];
+
+  const waterfallRows: { label: string; value: number; indent: boolean; total: boolean; colorClass: string }[] = [
+    { label: `${exGuests} guests × ${formatCurrency(exPrice)}`, value: exSubtotal, indent: false, total: false, colorClass: 'text-text-primary' },
+    { label: `Gratuity (${rules.pricing.defaultGratuityPercent}%)`, value: exGratuity, indent: true, total: false, colorClass: 'text-text-secondary' },
+    { label: 'Total Collected', value: exRevenue, indent: false, total: true, colorClass: 'text-success' },
+    { label: `Labor (${ALLOC_LABOR}% of subtotal)`, value: -exLabor, indent: true, total: false, colorClass: 'text-blue-400' },
+    { label: `Food Cost (${ALLOC_FOOD}% of subtotal)`, value: -exFood, indent: true, total: false, colorClass: 'text-red-400' },
+    { label: `Supplies (${ALLOC_SUPPLIES}% of subtotal)`, value: -exSupplies, indent: true, total: false, colorClass: 'text-orange-400' },
+    { label: `Gross Profit (${ALLOC_PROFIT}%)`, value: exGrossProfit, indent: false, total: true, colorClass: exGrossProfit >= 0 ? 'text-success' : 'text-danger' },
+    { label: `Tax Reserve (${PROFIT_TAX_RESERVE_PCT}% of profit)`, value: -exTaxReserve, indent: true, total: false, colorClass: 'text-violet-400' },
+    { label: `Distributable (${100 - PROFIT_TAX_RESERVE_PCT}% of profit)`, value: exDistributable, indent: false, total: true, colorClass: 'text-success' },
+    { label: `Owner A — ${ownerAEquity}% equity`, value: exOwnerA, indent: true, total: false, colorClass: 'text-emerald-400' },
+    { label: `Owner B — ${ownerBEquity}% equity`, value: exOwnerB, indent: true, total: false, colorClass: 'text-emerald-500' },
+  ];
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -620,39 +585,52 @@ function BusinessRulesTab({ rules }: { rules: MoneyRules }) {
       <div className="rounded-lg border border-border bg-card p-5">
         <h2 className="mb-1 text-lg font-semibold text-text-primary">Where Every Dollar Goes</h2>
         <p className="mb-5 text-sm text-text-muted">
-          Based on a {exGuests}-guest private dinner at {formatCurrency(exPrice)}/guest. Adjust business rules in Settings to change these percentages.
+          Every dollar of subtotal revenue is allocated across these categories — totaling 100%.
         </p>
-        <div className="space-y-4">
-          <DollarBar label="Food Cost" pct={foodCostPct} color="#ef4444"
-            tooltip={`${foodCostPct}% of subtotal goes to ingredients and proteins.`} />
-          <DollarBar label="Supplies" pct={suppliesPct} color="#f97316"
-            tooltip={`${suppliesPct}% of subtotal covers disposables, propane, etc.`} />
-          <DollarBar label="Labor (Lead Chef)" pct={laborPct} color="#eab308"
-            tooltip={`${laborPct}% of subtotal is the lead chef base pay, plus ${rules.privateLabor.chefGratuitySplitPercent}% of gratuity.`} />
-          <DollarBar label="Tax Reserve" pct={taxReservePct} color="#8b5cf6"
-            tooltip={`${taxReservePct}% of gross profit is retained in the business for taxes and reserves.`} />
-          <DollarBar label="Distributable Profit" pct={rules.profitDistribution.ownerDistributionPercent} color="#22c55e"
-            tooltip={`${rules.profitDistribution.ownerDistributionPercent}% of gross profit is available for owner distributions.`} />
+
+        {/* Stacked 100% bar */}
+        <div className="mb-4 flex h-10 w-full overflow-hidden rounded-lg border border-border">
+          {barSegments.map(({ label, pct, color }) =>
+            pct > 0 ? (
+              <div
+                key={label}
+                className={`${color} flex items-center justify-center overflow-hidden transition-all duration-300`}
+                style={{ width: `${pct}%` }}
+                title={`${label}: ${pct}%`}
+              >
+                {pct >= 8 && (
+                  <span className="text-[10px] font-bold text-white drop-shadow">{pct}%</span>
+                )}
+              </div>
+            ) : null
+          )}
         </div>
 
-        {/* Example breakdown table */}
-        <div className="mt-6 rounded-md border border-border bg-card-elevated text-sm">
-          <div className="border-b border-border px-4 py-2 font-semibold text-text-primary">Example Event Breakdown</div>
-          {[
-            ['Subtotal', formatCurrency(exSubtotal)],
-            ['Gratuity (20%)', formatCurrency(exGratuity)],
-            ['Total Revenue', formatCurrency(exRevenue), true],
-            ['Food Cost', `-${formatCurrency(exFood)}`],
-            ['Supplies', `-${formatCurrency(exSupplies)}`],
-            ['Transportation', `-${formatCurrency(exTransport)}`],
-            ['Labor (chef + asst)', `-${formatCurrency(exLabor)}`],
-            ['Gross Profit', formatCurrency(exGrossProfit), true],
-            [`Tax Reserve (${taxReservePct}%)`, `-${formatCurrency(exRetained)}`],
-            ['Available for Distribution', formatCurrency(exDistributable), true],
-          ].map(([label, value, bold]) => (
-            <div key={String(label)} className={`flex justify-between px-4 py-2 ${bold ? 'border-t border-border font-semibold text-text-primary' : 'text-text-secondary'}`}>
+        {/* Legend */}
+        <div className="mb-6 flex flex-wrap gap-x-5 gap-y-1.5">
+          {barSegments.map(({ label, pct, color }) => (
+            <div key={label} className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <span className={`inline-block h-2.5 w-2.5 rounded-sm ${color}`} />
               <span>{label}</span>
-              <span>{value}</span>
+              <span className="font-semibold text-text-primary">{pct}%</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Waterfall table */}
+        <div className="overflow-hidden rounded-md border border-border text-sm">
+          <div className="border-b border-border bg-card-elevated px-4 py-2 font-semibold text-text-primary">
+            Example: {exGuests} guests × {formatCurrency(exPrice)}/guest
+          </div>
+          {waterfallRows.map((row) => (
+            <div
+              key={row.label}
+              className={`flex items-baseline justify-between border-b border-border last:border-b-0 py-2.5 ${row.indent ? 'pl-8 pr-4' : 'px-4'} ${row.total ? 'bg-card-elevated font-semibold' : ''}`}
+            >
+              <span className={row.total ? 'text-text-primary' : 'text-text-secondary'}>{row.label}</span>
+              <span className={`tabular-nums ${row.colorClass}`}>
+                {row.value < 0 ? `−${formatCurrency(Math.abs(row.value))}` : formatCurrency(row.value)}
+              </span>
             </div>
           ))}
         </div>
