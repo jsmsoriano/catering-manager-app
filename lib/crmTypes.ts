@@ -27,6 +27,7 @@ export interface CrmTask {
   notes?: string;
   dueDate?: string; // YYYY-MM-DD
   status: CrmTaskStatus;
+  assignedTo?: string; // Staff name or ID responsible for this task
   createdAt: string;
   completedAt?: string;
 }

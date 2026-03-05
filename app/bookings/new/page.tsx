@@ -31,12 +31,15 @@ function NewBookingContent() {
   const searchParams = useSearchParams();
   const rules = useMoneyRules();
   const { config: templateConfig } = useTemplateConfig();
-  const { addBooking } = useBookingsQuery();
+  const { addBooking, bookings: existingBookings } = useBookingsQuery();
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [location, setLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  const isReturningCustomer = customerEmail.trim().length > 3 &&
+    existingBookings.some((b) => b.customerEmail.toLowerCase() === customerEmail.trim().toLowerCase());
   const defaultDateStr = getDefaultEventDate(searchParams.get('date'));
 
   // Prefill from "Book Again" (customers page) or ?date= from calendar
@@ -126,6 +129,7 @@ function NewBookingContent() {
       pricingSnapshot,
       pricingMode: templateConfig.pricingModeDefault ?? undefined,
       businessType: templateConfig.businessType ?? undefined,
+      pipeline_status: isReturningCustomer ? 'quote_sent' : 'inquiry',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -195,7 +199,14 @@ function NewBookingContent() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-text-secondary">Email *</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-text-secondary">Email *</label>
+                  {isReturningCustomer && (
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent">
+                      Returning customer — starts at Quote Sent
+                    </span>
+                  )}
+                </div>
                 <input
                   type="email"
                   required

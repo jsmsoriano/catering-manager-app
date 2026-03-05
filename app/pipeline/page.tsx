@@ -370,11 +370,31 @@ function PipelineCard({
         isDragging ? 'opacity-0' : ''
       }`}
     >
-      <p className="font-medium text-text-primary">{booking.customerName}</p>
+      <div className="flex items-start justify-between gap-1">
+        <p className="font-medium text-text-primary">{booking.customerName}</p>
+        {booking.leadPriority && (
+          <span
+            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+              booking.leadPriority === 'hot'
+                ? 'bg-red-500/20 text-red-400'
+                : booking.leadPriority === 'warm'
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-blue-500/20 text-blue-400'
+            }`}
+          >
+            {booking.leadPriority}
+          </span>
+        )}
+      </div>
       <p className="mt-0.5 text-xs text-text-muted">{formatDate(booking.eventDate)}</p>
       <p className="mt-1 text-xs text-text-secondary">
         {booking.adults + booking.children} guests · {formatCurrency(booking.total)}
       </p>
+      {booking.pipeline_status === 'declined' && booking.declinedReason && (
+        <p className="mt-1 truncate text-[11px] text-red-400" title={booking.declinedReason}>
+          ✕ {booking.declinedReason}
+        </p>
+      )}
       <div
         className="mt-2 rounded-md border border-border/70 bg-card/70 p-2"
         onClick={(e) => e.stopPropagation()}

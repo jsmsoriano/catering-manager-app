@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense, Fragment } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
@@ -16,7 +16,7 @@ import { calculateEventFinancials } from '@/lib/moneyRules';
 import { useMoneyRules } from '@/lib/useMoneyRules';
 import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import { getPricingSlot, type EventTypeConfig } from '@/lib/templateConfig';
-import type { Booking, BookingStatus, BookingPricingSnapshot } from '@/lib/bookingTypes';
+import type { Booking, BookingStatus, BookingPricingSnapshot, PipelineStatus } from '@/lib/bookingTypes';
 import { getBookingServiceStatus, normalizeBookingWorkflowFields, applyConfirmationPaymentTerms } from '@/lib/bookingWorkflow';
 import { getHibachiServiceFormat } from '@/lib/hibachiService';
 import { calculateGuestChangeCutoffISO } from '@/lib/guestChangePolicy';
@@ -86,6 +86,61 @@ function saveBookings(bookings: Booking[]) {
   const normalized = bookings.map((b) => normalizeBookingWorkflowFields(b));
   localStorage.setItem('bookings', JSON.stringify(normalized));
   window.dispatchEvent(new Event('bookingsUpdated'));
+}
+
+// ─── Pipeline status bar ────────────────────────────────────────────────────────
+
+const PIPELINE_STEPS: { id: PipelineStatus; label: string }[] = [
+  { id: 'inquiry', label: 'Inquiry' },
+  { id: 'qualified', label: 'Qualified' },
+  { id: 'quote_sent', label: 'Quote Sent' },
+  { id: 'deposit_pending', label: 'Deposit' },
+  { id: 'booked', label: 'Booked' },
+  { id: 'completed', label: 'Done' },
+];
+
+function PipelineStatusBar({ pipeline_status }: { pipeline_status?: PipelineStatus }) {
+  const current = pipeline_status ?? 'inquiry';
+  const isDeclined = current === 'declined';
+  // follow_up lives between quote_sent and deposit_pending — map to quote_sent for display
+  const normalized: PipelineStatus = current === 'follow_up' ? 'quote_sent' : current;
+  const activeIndex = isDeclined ? -1 : PIPELINE_STEPS.findIndex((s) => s.id === normalized);
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-start">
+        {PIPELINE_STEPS.map((step, i) => (
+          <Fragment key={step.id}>
+            <div className="flex flex-col items-center" style={{ flex: 1, minWidth: 0 }}>
+              <div
+                className={`h-3 w-3 rounded-full border-2 transition-colors ${
+                  i <= activeIndex ? 'border-accent bg-accent' : 'border-border bg-transparent'
+                }`}
+              />
+              <span
+                className={`mt-1 text-center text-[10px] leading-tight ${
+                  i === activeIndex ? 'font-semibold text-accent' : 'text-text-muted'
+                }`}
+              >
+                {step.label}
+              </span>
+            </div>
+            {i < PIPELINE_STEPS.length - 1 && (
+              <div className={`mt-1.5 h-0.5 flex-1 ${i < activeIndex ? 'bg-accent' : 'bg-border'}`} />
+            )}
+          </Fragment>
+        ))}
+      </div>
+      {isDeclined && (
+        <p className="mt-2 text-xs font-medium text-slate-400">
+          ✕ Declined
+        </p>
+      )}
+      {current === 'follow_up' && (
+        <p className="mt-1 text-[11px] text-violet-400">↩ In follow-up</p>
+      )}
+    </div>
+  );
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -878,6 +933,7 @@ function EventDetailContent() {
 
         {/* Status card */}
         <div className="mb-6 rounded-xl border border-border bg-card p-4">
+          <PipelineStatusBar pipeline_status={booking.pipeline_status} />
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClassByService[serviceStatus]}`}>
               Event {statusLabelByService[serviceStatus]}

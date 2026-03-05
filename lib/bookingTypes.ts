@@ -116,6 +116,9 @@ export interface Booking {
   nextFollowUpAt?: string;
   lostReason?: string;
   sourceChannel?: string;
+  leadPriority?: 'hot' | 'warm' | 'cold'; // Sales urgency indicator
+  declinedReason?: string; // Why lead was declined/lost
+  reviewRequested?: boolean; // True once a Google review request has been sent
 
   // Proposal (client-facing quote link)
   proposalToken?: string;      // UUID token for the public proposal URL

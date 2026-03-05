@@ -92,4 +92,22 @@ export function runPipelineStageAutomation(params: {
       marker: '[auto:convert-handoff]',
     });
   }
+
+  if (nextStage === 'follow_up') {
+    createAutomatedTask({
+      booking,
+      title: 'Re-engage lead: check in and address concerns',
+      dueInDays: 3,
+      marker: '[auto:followup-reengagement]',
+    });
+  }
+
+  if (nextStage === 'completed') {
+    createAutomatedTask({
+      booking,
+      title: 'Request Google review from customer',
+      dueInDays: 1,
+      marker: '[auto:review-request]',
+    });
+  }
 }

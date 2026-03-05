@@ -12,6 +12,7 @@ import { getCurrentChefStaffId, bookingHasStaff } from '@/lib/chefIdentity';
 import { loadRetainedEarningsTransactions } from '@/lib/financeStorage';
 import type { RetainedEarningsTransaction } from '@/lib/financeTypes';
 import { PlusIcon, XMarkIcon, QuestionMarkCircleIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import { ProfitWaterfallCalculator } from '@/components/ProfitWaterfallCalculator';
 
 const ROLE_LABELS: Record<string, string> = {
   lead: 'Lead Chef',
@@ -707,7 +708,7 @@ function BusinessRulesTab({ rules }: { rules: MoneyRules }) {
 
 export default function CalculatorPage() {
   const rules = useMoneyRules();
-  const [activeTab, setActiveTab] = useState<'calculator' | 'chef' | 'expenses' | 'business'>('calculator');
+  const [activeTab, setActiveTab] = useState<'calculator' | 'chef' | 'expenses' | 'business' | 'waterfall'>('calculator');
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [eventsPerMonth, setEventsPerMonth] = useState(4);
   const [salesTaxPct, setSalesTaxPct] = useState(8);
@@ -798,7 +799,7 @@ export default function CalculatorPage() {
             <p className="mt-1 text-sm text-text-secondary">Adjust guests and price to see live pay breakdown</p>
           </div>
           <div className="flex rounded-lg border border-border bg-card-elevated p-1">
-            {([['calculator', 'Calculator'], ['chef', 'Event Summary'], ['expenses', 'Overhead & Reserves'], ['business', 'Business Rules']] as const).map(([id, label]) => (
+            {([['calculator', 'Calculator'], ['chef', 'Event Summary'], ['expenses', 'Overhead & Reserves'], ['business', 'Business Rules'], ['waterfall', 'Profit Waterfall']] as const).map(([id, label]) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
@@ -816,22 +817,16 @@ export default function CalculatorPage() {
 
         {activeTab === 'business' && <BusinessRulesTab rules={rules} />}
 
+        {activeTab === 'waterfall' && (
+          <ProfitWaterfallCalculator
+            guests={guests}
+            pricePerPerson={pricePerGuest}
+            gratuityRate={gratuityPct}
+          />
+        )}
+
         {activeTab === 'expenses' && (
           <div className="mx-auto max-w-3xl space-y-5">
-            {/* Events per month */}
-            <div className="rounded-lg border border-border bg-card p-5">
-              <h2 className="mb-1 text-lg font-semibold text-text-primary">Monthly Overhead</h2>
-              <p className="mb-5 text-sm text-text-muted">Expenses are prorated per event and deducted from gross profit before owner distributions.</p>
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-text-secondary">Events per month</label>
-                <input
-                  type="number" min="1" max="30" value={eventsPerMonth}
-                  onChange={(e) => setEventsPerMonth(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                />
-              </div>
-            </div>
-
             {/* Expense list */}
             <div className="rounded-lg border border-border bg-card p-5">
               <div className="mb-4 flex items-center justify-between">
@@ -907,51 +902,39 @@ export default function CalculatorPage() {
                 <InfoTooltip text="Tax reserves are set aside from adjusted profit (after overhead) before owner splits. Sales tax: state sales tax obligations. Self-employment tax (SE): Social Security + Medicare (~15.3%). Income tax: federal and state tax on profit (estimate based on your bracket)." />
               </div>
               <p className="mb-5 text-sm text-text-muted">Reserved before owner profit splits — set aside for tax obligations.</p>
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-text-secondary">Sales Tax Reserve</label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number" min="0" max="30" step="0.5" value={salesTaxPct}
-                        onChange={(e) => setSalesTaxPct(parseFloat(e.target.value) || 0)}
-                        className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                      />
-                      <span className="text-lg font-semibold text-text-muted">%</span>
-                    </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-text-secondary">Sales Tax Reserve</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number" min="0" max="30" step="0.5" value={salesTaxPct}
+                      onChange={(e) => setSalesTaxPct(parseFloat(e.target.value) || 0)}
+                      className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
+                    />
+                    <span className="text-lg font-semibold text-text-muted">%</span>
                   </div>
-                  <Slider value={salesTaxPct} min={0} max={20} step={0.5} onChange={setSalesTaxPct} />
-                  <div className="flex justify-between text-xs text-text-muted"><span>0%</span><span>20%</span></div>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-text-secondary">Self-Employment Tax</label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number" min="0" max="30" step="0.1" value={seTaxPct}
-                        onChange={(e) => setSeTaxPct(parseFloat(e.target.value) || 0)}
-                        className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                      />
-                      <span className="text-lg font-semibold text-text-muted">%</span>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-text-secondary">Self-Employment Tax</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number" min="0" max="30" step="0.1" value={seTaxPct}
+                      onChange={(e) => setSeTaxPct(parseFloat(e.target.value) || 0)}
+                      className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
+                    />
+                    <span className="text-lg font-semibold text-text-muted">%</span>
                   </div>
-                  <Slider value={seTaxPct} min={0} max={30} step={0.1} onChange={setSeTaxPct} />
-                  <div className="flex justify-between text-xs text-text-muted"><span>0%</span><span>30%</span></div>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-text-secondary">Income Tax Reserve</label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number" min="0" max="40" step="0.5" value={incomeTaxPct}
-                        onChange={(e) => setIncomeTaxPct(parseFloat(e.target.value) || 0)}
-                        className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                      />
-                      <span className="text-lg font-semibold text-text-muted">%</span>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-text-secondary">Income Tax Reserve</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number" min="0" max="40" step="0.5" value={incomeTaxPct}
+                      onChange={(e) => setIncomeTaxPct(parseFloat(e.target.value) || 0)}
+                      className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
+                    />
+                    <span className="text-lg font-semibold text-text-muted">%</span>
                   </div>
-                  <Slider value={incomeTaxPct} min={0} max={40} step={0.5} onChange={setIncomeTaxPct} />
-                  <div className="flex justify-between text-xs text-text-muted"><span>0%</span><span>40%</span></div>
                 </div>
                 {(salesTaxPct > 0 || seTaxPct > 0 || incomeTaxPct > 0) && (
                   <div className="rounded-lg bg-card-elevated p-3 text-xs text-text-muted">
@@ -1037,343 +1020,224 @@ export default function CalculatorPage() {
           const asstPay = (asstComp?.finalPay ?? 0) * scale;
           const totalLaborFromScenario = chefPay + asstPay;
           const grossProfit = totalCharged - totalCosts - totalLaborFromScenario;
-          const adjustedGross = grossProfit - perEventExpense;
-          const calcSalesTaxReserve = adjustedGross > 0 ? adjustedGross * salesTaxPct / 100 : 0;
-          const calcSeTaxReserve = adjustedGross > 0 ? adjustedGross * seTaxPct / 100 : 0;
-          const calcIncomeTaxReserve = adjustedGross > 0 ? adjustedGross * incomeTaxPct / 100 : 0;
-          const afterTaxReservesCalc = adjustedGross - calcSalesTaxReserve - calcSeTaxReserve - calcIncomeTaxReserve;
-          const retainedPct = rules.profitDistribution.businessRetainedPercent;
-          const retainedAmt = afterTaxReservesCalc > 0 ? afterTaxReservesCalc * retainedPct / 100 : 0;
-          const distributablePct = rules.profitDistribution.ownerDistributionPercent;
-          const distributable = afterTaxReservesCalc > 0 ? afterTaxReservesCalc * distributablePct / 100 : 0;
+
+          // 30% retained → 70% distributable (scenario builder model)
+          const retainedAmt = grossProfit > 0 ? grossProfit * 0.30 : 0;
+          const distributable = grossProfit > 0 ? grossProfit * 0.70 : 0;
 
           const ownersList = rules.profitDistribution.owners?.length
             ? rules.profitDistribution.owners
             : [
-                { id: 'a', name: `Owner A (${rules.profitDistribution.ownerAEquityPercent}%)`, equityPercent: rules.profitDistribution.ownerAEquityPercent },
-                { id: 'b', name: `Owner B (${rules.profitDistribution.ownerBEquityPercent}%)`, equityPercent: rules.profitDistribution.ownerBEquityPercent },
+                { id: 'a', name: `A Soriano (${rules.profitDistribution.ownerAEquityPercent}%)`, equityPercent: rules.profitDistribution.ownerAEquityPercent },
+                { id: 'b', name: `J Soriano (${rules.profitDistribution.ownerBEquityPercent}%)`, equityPercent: rules.profitDistribution.ownerBEquityPercent },
               ];
           const calcOwnerRows = ownersList.map((o) => ({
             name: o.name,
             amount: distributable * o.equityPercent / 100,
           }));
 
-          const ownerA = calcOwnerRows[0];
-          const ownerB = calcOwnerRows[1];
-          const ownerAAmount = ownerA?.amount ?? 0;
-          const ownerBAmount = ownerB?.amount ?? 0;
+          const ownerAAmount = calcOwnerRows[0]?.amount ?? 0;
+          const ownerBAmount = calcOwnerRows[1]?.amount ?? 0;
           const aSorianoTotal = chefPay + ownerAAmount;
           const jSorianoTotal = asstPay + ownerBAmount;
           const aSorianoPct = totalCharged > 0 ? (aSorianoTotal / totalCharged) * 100 : 0;
           const jSorianoPct = totalCharged > 0 ? (jSorianoTotal / totalCharged) * 100 : 0;
 
-          const pct = (amt: number) => totalCharged > 0 ? ((amt / totalCharged) * 100).toFixed(1) : '0.0';
+          const pctOf = (amt: number) => totalCharged > 0 ? ((amt / totalCharged) * 100).toFixed(1) : '0.0';
+
+          // Bar segment widths (% of totalCharged)
+          const barLabor = totalCharged > 0 ? (totalLaborFromScenario / totalCharged) * 100 : 0;
+          const barCosts = totalCharged > 0 ? (totalCosts / totalCharged) * 100 : 0;
+          const barRetained = totalCharged > 0 ? (retainedAmt / totalCharged) * 100 : 0;
+          const barOwnerA = totalCharged > 0 ? (ownerAAmount / totalCharged) * 100 : 0;
+          const barOwnerB = totalCharged > 0 ? (ownerBAmount / totalCharged) * 100 : 0;
+
+          // Waterfall rows
+          const waterfallRows: { label: string; value: number; indent: boolean; total: boolean; colorClass: string }[] = [
+            { label: `${guests} guests × ${formatCurrency(pricePerGuest)}`, value: subtotal, indent: false, total: false, colorClass: 'text-text-primary' },
+            { label: `Gratuity (${gratuityPct}%)`, value: gratuity, indent: true, total: false, colorClass: 'text-text-secondary' },
+            { label: 'Total Collected', value: totalCharged, indent: false, total: true, colorClass: 'text-success' },
+            { label: `Food Cost (${foodCostPct}%)`, value: -foodCost, indent: true, total: false, colorClass: 'text-danger' },
+            { label: `Supplies (${suppliesCostPct}%)`, value: -suppliesCost, indent: true, total: false, colorClass: 'text-danger' },
+            ...(chefComp ? [{ label: `Chef Labor (base + grat)`, value: -chefPay, indent: true, total: false, colorClass: 'text-blue-400' }] : []),
+            ...(asstComp ? [{ label: `Assistant Labor (base + grat)`, value: -asstPay, indent: true, total: false, colorClass: 'text-blue-400' }] : []),
+            { label: 'Gross Profit', value: grossProfit, indent: false, total: true, colorClass: grossProfit >= 0 ? 'text-success' : 'text-danger' },
+            { label: 'Business Retained (30%)', value: -retainedAmt, indent: true, total: false, colorClass: 'text-violet-400' },
+            { label: 'Distributable (70%)', value: distributable, indent: false, total: true, colorClass: 'text-success' },
+            ...calcOwnerRows.map((o, i) => ({
+              label: o.name,
+              value: o.amount,
+              indent: true,
+              total: false,
+              colorClass: i === 0 ? 'text-emerald-400' : 'text-emerald-500',
+            })),
+          ];
 
           return (
             <div className="space-y-5">
 
               {/* ── Inputs ── */}
-              <div className="rounded-lg border border-border bg-card p-6">
-                <h2 className="mb-6 text-lg font-semibold text-text-primary">Scenario Inputs</h2>
-                <div className="space-y-6">
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-text-secondary">Number of Guests</label>
-                      <input
-                        type="number" min="1" max="300" value={guestText}
-                        onChange={(e) => { setGuestText(e.target.value); const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) setGuests(v); }}
-                        onBlur={() => setGuestText(String(guests))}
-                        className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                      />
-                    </div>
-                    <Slider value={Math.min(guests, 150)} min={1} max={150} onChange={handleGuestsChange} />
-                    <div className="flex justify-between text-xs text-text-muted"><span>1</span><span>150 guests</span></div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-text-secondary">Price per Guest</label>
-                      <div className="flex items-center gap-1">
-                        <span className="text-lg font-semibold text-text-muted">$</span>
-                        <input
-                          type="number" min="1" max="999" value={priceText}
-                          onChange={(e) => { setPriceText(e.target.value); const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) setPricePerGuest(v); }}
-                          onBlur={() => setPriceText(String(pricePerGuest))}
-                          className="w-24 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                    <Slider value={Math.min(Math.max(pricePerGuest, 20), 250)} min={20} max={250} step={5} onChange={handlePriceChange} />
-                    <div className="flex justify-between text-xs text-text-muted"><span>$20</span><span>$250</span></div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-text-secondary">Gratuity</label>
-                      <span className="text-xl font-bold text-text-primary">{gratuityPct}%</span>
-                    </div>
-                    <Slider value={gratuityPct} min={0} max={30} onChange={setGratuityPct} />
-                    <div className="flex justify-between text-xs text-text-muted"><span>0%</span><span>30%</span></div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-text-secondary">Events per Month</label>
-                      <input
-                        type="number" min="1" max="30" value={eventsPerMonth}
-                        onChange={(e) => setEventsPerMonth(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                      />
-                    </div>
-                    <Slider value={eventsPerMonth} min={1} max={20} onChange={setEventsPerMonth} />
-                    <div className="flex justify-between text-xs text-text-muted"><span>1</span><span>20 events/mo</span></div>
-                  </div>
-
+              <div className="rounded-lg border border-border bg-card p-5">
+                <h2 className="mb-4 text-base font-semibold text-text-primary">Scenario</h2>
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <div className="mb-3 flex items-center justify-between">
-                      <label className="text-sm font-medium text-text-secondary">Staff</label>
-                      <button onClick={addStaff} className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-card-elevated hover:text-text-primary">
-                        <PlusIcon className="h-4 w-4" /> Add Staff
-                      </button>
+                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Guests</label>
+                    <input
+                      type="number" min="1" max="300" value={guestText}
+                      onChange={(e) => { setGuestText(e.target.value); const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) setGuests(v); }}
+                      onBlur={() => setGuestText(String(guests))}
+                      className="w-full rounded-md border border-border bg-card-elevated px-3 py-2 text-center text-lg font-bold text-text-primary focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Price / Guest</label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-medium text-text-muted">$</span>
+                      <input
+                        type="number" min="1" max="999" value={priceText}
+                        onChange={(e) => { setPriceText(e.target.value); const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) setPricePerGuest(v); }}
+                        onBlur={() => setPriceText(String(pricePerGuest))}
+                        className="w-full rounded-md border border-border bg-card-elevated pl-7 pr-3 py-2 text-center text-lg font-bold text-text-primary focus:border-accent focus:outline-none"
+                      />
                     </div>
-                    <div className="space-y-2">
-                      {staff.map((s) => (
-                        <div key={s.id} className="flex items-center gap-3 rounded-lg bg-card-elevated p-3">
-                          <input type="text" value={s.role} onChange={(e) => updateStaff(s.id, 'role', e.target.value)}
-                            className="min-w-0 flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none" />
-                          <div className="flex shrink-0 items-center gap-1">
-                            <span className="text-sm text-text-muted">$</span>
-                            <input type="number" min="0" step="5" value={s.pay}
-                              onChange={(e) => updateStaff(s.id, 'pay', parseFloat(e.target.value) || 0)}
-                              className="w-24 rounded-md border border-border bg-card px-2 py-2 text-right text-sm font-semibold text-text-primary focus:border-accent focus:outline-none" />
-                          </div>
-                          <button onClick={() => removeStaff(s.id)} className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-card hover:text-danger">
-                            <XMarkIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-text-muted">Gratuity</label>
+                    <div className="relative">
+                      <input
+                        type="number" min="0" max="50" value={gratuityPct}
+                        onChange={(e) => setGratuityPct(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full rounded-md border border-border bg-card-elevated px-3 pr-8 py-2 text-center text-lg font-bold text-text-primary focus:border-accent focus:outline-none"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm font-medium text-text-muted">%</span>
                     </div>
+                  </div>
+                </div>
+                {/* Staff */}
+                <div className="mt-4 border-t border-border pt-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-xs font-medium text-text-muted">Staff</label>
+                    <button onClick={addStaff} className="flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-text-secondary hover:bg-card-elevated hover:text-text-primary">
+                      <PlusIcon className="h-3.5 w-3.5" /> Add
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {staff.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 rounded-md bg-card-elevated px-3 py-2">
+                        <input type="text" value={s.role} onChange={(e) => updateStaff(s.id, 'role', e.target.value)}
+                          className="min-w-0 flex-1 bg-transparent text-sm text-text-primary focus:outline-none" />
+                        <span className="text-xs text-text-muted">$</span>
+                        <input type="number" min="0" step="5" value={s.pay}
+                          onChange={(e) => updateStaff(s.id, 'pay', parseFloat(e.target.value) || 0)}
+                          className="w-20 rounded border border-border bg-card px-2 py-1 text-right text-sm font-semibold text-text-primary focus:border-accent focus:outline-none" />
+                        <button onClick={() => removeStaff(s.id)} className="rounded p-0.5 text-text-muted hover:text-danger">
+                          <XMarkIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* ── Per-person cuts ── */}
+              {/* ── Stacked Bar ── */}
+              <div className="overflow-hidden rounded-lg border border-border">
+                <div className="flex h-10">
+                  {([
+                    { w: barLabor, color: 'bg-blue-500', key: 'labor' },
+                    { w: barCosts, color: 'bg-red-500', key: 'costs' },
+                    { w: barRetained, color: 'bg-violet-500', key: 'retained' },
+                    { w: barOwnerA, color: 'bg-emerald-400', key: 'ownerA' },
+                    { w: barOwnerB, color: 'bg-emerald-600', key: 'ownerB' },
+                  ] as const).map(({ w, color, key }) =>
+                    w > 0.5 ? (
+                      <div key={key} className={`${color} flex items-center justify-center overflow-hidden transition-all duration-500`} style={{ width: `${w}%` }}>
+                        {w > 8 && <span className="text-[10px] font-semibold text-white/90 drop-shadow">{w.toFixed(0)}%</span>}
+                      </div>
+                    ) : null
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 bg-card-elevated px-4 py-2.5">
+                  {[
+                    { color: 'bg-blue-500', label: 'Labor', pct: pctOf(totalLaborFromScenario), amount: totalLaborFromScenario },
+                    { color: 'bg-red-500', label: 'Costs', pct: pctOf(totalCosts), amount: totalCosts },
+                    { color: 'bg-violet-500', label: 'Retained', pct: pctOf(retainedAmt), amount: retainedAmt },
+                    { color: 'bg-emerald-400', label: 'A Soriano', pct: pctOf(ownerAAmount), amount: ownerAAmount },
+                    { color: 'bg-emerald-600', label: 'J Soriano', pct: pctOf(ownerBAmount), amount: ownerBAmount },
+                  ].map(({ color, label, pct, amount }) => (
+                    <span key={label} className="flex items-center gap-1.5 text-xs text-text-secondary">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-sm ${color}`} />
+                      {label} {pct}% · {formatCurrency(amount)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Waterfall Table ── */}
+              <div className="overflow-hidden rounded-lg border border-border bg-card text-sm">
+                {waterfallRows.map((row) => (
+                  <div
+                    key={row.label}
+                    className={`flex items-baseline justify-between border-b border-border last:border-b-0 py-2.5 ${
+                      row.indent ? 'pl-8 pr-4' : 'px-4'
+                    } ${row.total ? 'bg-card-elevated font-semibold' : ''}`}
+                  >
+                    <span className={row.total ? 'text-text-primary' : 'text-text-secondary'}>{row.label}</span>
+                    <span className={`tabular-nums ${row.colorClass}`}>
+                      {row.value < 0 ? `−${formatCurrency(Math.abs(row.value))}` : formatCurrency(row.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Owner Cards ── */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-xl border-2 border-accent bg-accent/10 p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-accent">A Soriano</p>
-                  <p className="mb-3 text-xs text-text-muted">Lead Chef · Owner</p>
+                  <p className="mb-2 text-xs text-text-muted">Lead Chef · Owner</p>
                   <p className="text-3xl font-bold text-text-primary">{formatCurrency(aSorianoTotal)}</p>
-                  <p className="mb-3 text-lg font-bold text-accent">{aSorianoPct.toFixed(1)}% of event</p>
+                  <p className="mb-3 text-base font-bold text-accent">{aSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-accent/20 pt-3 text-xs">
                     {chefComp && (
                       <>
                         <div className="flex justify-between gap-2">
                           <span className="text-text-secondary">Base pay</span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-text-muted">{pct(chefComp.basePay * scale)}%</span>
-                            <span className="font-medium text-text-primary">{formatCurrency(chefComp.basePay * scale)}</span>
-                          </span>
+                          <span className="font-medium text-text-primary">{formatCurrency(chefComp.basePay * scale)}</span>
                         </div>
                         <div className="flex justify-between gap-2">
                           <span className="text-text-secondary">Gratuity share</span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-text-muted">{pct(chefComp.gratuityShare * scale)}%</span>
-                            <span className="font-medium text-text-primary">{formatCurrency(chefComp.gratuityShare * scale)}</span>
-                          </span>
+                          <span className="font-medium text-text-primary">{formatCurrency(chefComp.gratuityShare * scale)}</span>
                         </div>
                       </>
                     )}
-                    {ownerA && (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-text-secondary">Profit split</span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-text-muted">{pct(ownerAAmount)}%</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(ownerAAmount)}</span>
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-text-secondary">Profit split</span>
+                      <span className="font-medium text-emerald-400">{formatCurrency(ownerAAmount)}</span>
+                    </div>
                   </div>
                 </div>
-
                 <div className="rounded-xl border-2 border-border bg-card p-4">
                   <p className="text-xs font-bold uppercase tracking-widest text-text-secondary">J Soriano</p>
-                  <p className="mb-3 text-xs text-text-muted">Assistant Chef · Owner</p>
+                  <p className="mb-2 text-xs text-text-muted">Assistant Chef · Owner</p>
                   <p className="text-3xl font-bold text-text-primary">{formatCurrency(jSorianoTotal)}</p>
-                  <p className="mb-3 text-lg font-bold text-text-secondary">{jSorianoPct.toFixed(1)}% of event</p>
+                  <p className="mb-3 text-base font-bold text-text-secondary">{jSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-border pt-3 text-xs">
                     {asstComp && (
                       <>
                         <div className="flex justify-between gap-2">
                           <span className="text-text-secondary">Base pay</span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-text-muted">{pct(asstComp.basePay * scale)}%</span>
-                            <span className="font-medium text-text-primary">{formatCurrency(asstComp.basePay * scale)}</span>
-                          </span>
+                          <span className="font-medium text-text-primary">{formatCurrency(asstComp.basePay * scale)}</span>
                         </div>
                         <div className="flex justify-between gap-2">
                           <span className="text-text-secondary">Gratuity share</span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-text-muted">{pct(asstComp.gratuityShare * scale)}%</span>
-                            <span className="font-medium text-text-primary">{formatCurrency(asstComp.gratuityShare * scale)}</span>
-                          </span>
+                          <span className="font-medium text-text-primary">{formatCurrency(asstComp.gratuityShare * scale)}</span>
                         </div>
                       </>
                     )}
-                    {ownerB && (
-                      <div className="flex justify-between gap-2">
-                        <span className="text-text-secondary">Profit split</span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-text-muted">{pct(ownerBAmount)}%</span>
-                          <span className="font-medium text-text-primary">{formatCurrency(ownerBAmount)}</span>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Revenue ── */}
-              <div className="rounded-lg border border-border bg-card p-5">
-                <h2 className="mb-4 text-lg font-semibold text-text-primary">Revenue</h2>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">{guests} guests × {formatCurrency(pricePerGuest)}</span>
-                    <span className="font-medium text-text-primary">{formatCurrency(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Gratuity ({gratuityPct}%)</span>
-                    <span className="font-medium text-text-primary">{formatCurrency(gratuity)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-2">
-                    <span className="font-semibold text-text-primary">Total Charged</span>
-                    <span className="text-2xl font-bold text-success">{formatCurrency(totalCharged)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Cost Breakdown ── */}
-              <div className="rounded-lg border border-border bg-card p-5">
-                <h2 className="mb-4 text-lg font-semibold text-text-primary">Cost Breakdown</h2>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Food Cost ({foodCostPct}% of subtotal)</span>
-                    <span className="font-medium text-text-primary">{formatCurrency(foodCost)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Supplies ({suppliesCostPct}% of subtotal)</span>
-                    <span className="font-medium text-text-primary">{formatCurrency(suppliesCost)}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-2">
-                    <span className="font-semibold text-text-primary">Total Costs</span>
-                    <span className="font-bold text-danger">{formatCurrency(totalCosts)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Labor Pay ── */}
-              <div className="rounded-lg border border-border bg-card p-5">
-                <h2 className="mb-4 text-lg font-semibold text-text-primary">Labor Pay</h2>
-                <div className="space-y-3">
-                  {chefComp && (
-                    <div className="rounded-lg bg-card-elevated p-4">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-text-primary">Lead Chef</span>
-                        <span className="text-xl font-bold text-text-primary">{formatCurrency(chefPay)}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-text-muted">Base {formatCurrency(chefComp.basePay * scale)} + Gratuity share {formatCurrency(chefComp.gratuityShare * scale)} · {pct(chefPay)}% of revenue</p>
-                    </div>
-                  )}
-                  {asstComp && (
-                    <div className="rounded-lg bg-card-elevated p-4">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-text-primary">Assistant</span>
-                        <span className="text-xl font-bold text-text-primary">{formatCurrency(asstPay)}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-text-muted">Base {formatCurrency(asstComp.basePay * scale)} + Gratuity share {formatCurrency(asstComp.gratuityShare * scale)} · {pct(asstPay)}% of revenue</p>
-                    </div>
-                  )}
-                  <div className="flex justify-between border-t border-border pt-3">
-                    <span className="font-semibold text-text-primary">Total Labor</span>
-                    <span className="font-bold text-warning">{formatCurrency(totalLaborFromScenario)}</span>
-                  </div>
-                  <p className="text-xs text-text-muted">{pct(totalLaborFromScenario)}% of total revenue</p>
-                </div>
-              </div>
-
-              {/* ── Reserve Allocations ── */}
-              <div className="rounded-lg border border-border bg-card p-5">
-                <h2 className="mb-4 text-lg font-semibold text-text-primary">Reserve Allocations</h2>
-                <div className="mb-3 flex items-center justify-between rounded-lg bg-card-elevated p-3">
-                  <span className="text-sm text-text-secondary">Gross Profit</span>
-                  <span className={`text-xl font-bold ${grossProfit >= 0 ? 'text-success' : 'text-danger'}`}>
-                    {formatCurrency(grossProfit)}
-                  </span>
-                </div>
-                {perEventExpense > 0 && (
-                  <div className="mb-3 space-y-2 text-sm">
-                    <div className="flex justify-between text-danger">
-                      <span>Monthly overhead (per event)</span>
-                      <span className="font-medium">−{formatCurrency(perEventExpense)}</span>
-                    </div>
-                    <div className="flex justify-between border-t border-border pt-2">
-                      <span className="font-semibold text-text-primary">Adjusted Profit</span>
-                      <span className={`font-bold ${adjustedGross >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {formatCurrency(adjustedGross)}
-                      </span>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-text-secondary">Profit split</span>
+                      <span className="font-medium text-emerald-500">{formatCurrency(ownerBAmount)}</span>
                     </div>
                   </div>
-                )}
-                {(salesTaxPct > 0 || seTaxPct > 0 || incomeTaxPct > 0) && (
-                  <div className="mb-3 space-y-2 text-sm">
-                    {salesTaxPct > 0 && (
-                      <div className="flex justify-between text-warning">
-                        <span>Sales tax reserve ({salesTaxPct}%)</span>
-                        <span className="font-medium">−{formatCurrency(calcSalesTaxReserve)}</span>
-                      </div>
-                    )}
-                    {seTaxPct > 0 && (
-                      <div className="flex justify-between text-warning">
-                        <span>Self-employment tax ({seTaxPct}%)</span>
-                        <span className="font-medium">−{formatCurrency(calcSeTaxReserve)}</span>
-                      </div>
-                    )}
-                    {incomeTaxPct > 0 && (
-                      <div className="flex justify-between text-warning">
-                        <span>Income tax reserve ({incomeTaxPct}%)</span>
-                        <span className="font-medium">−{formatCurrency(calcIncomeTaxReserve)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between border-t border-border pt-2">
-                      <span className="font-semibold text-text-primary">After Tax Reserves</span>
-                      <span className={`font-bold ${afterTaxReservesCalc >= 0 ? 'text-success' : 'text-danger'}`}>
-                        {formatCurrency(afterTaxReservesCalc)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2.5 text-xs text-accent">
-                  <span className="text-base leading-none">📅</span>
-                  <span>Profit distributions are paid out on the <strong>10th of each month</strong>.</span>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2.5 w-2.5 rounded-full bg-violet-500" />
-                      <span className="text-text-secondary">Business Retained ({retainedPct}%)</span>
-                      <InfoTooltip text="Portion of profit (after tax reserves) kept in the business for working capital, reinvestment, and contingency—not paid out to owners." />
-                    </div>
-                    <span className="font-medium text-text-primary">{formatCurrency(retainedAmt)}</span>
-                  </div>
-                  {calcOwnerRows.map((od, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`h-2.5 w-2.5 rounded-full ${i === 0 ? 'bg-success/70' : 'bg-success'}`} />
-                        <span className="text-text-secondary">{od.name}</span>
-                      </div>
-                      <span className="font-medium text-text-primary">{formatCurrency(od.amount)}</span>
-                    </div>
-                  ))}
                 </div>
               </div>
 
