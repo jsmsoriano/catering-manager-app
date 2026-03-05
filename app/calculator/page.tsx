@@ -1033,30 +1033,7 @@ export default function CalculatorPage() {
           const barLabor = totalCharged > 0 ? (totalLaborFromScenario / totalCharged) * 100 : 0;
           const barCosts = totalCharged > 0 ? (totalCosts / totalCharged) * 100 : 0;
           const barRetained = totalCharged > 0 ? (retainedAmt / totalCharged) * 100 : 0;
-          const barOwnerA = totalCharged > 0 ? (ownerAAmount / totalCharged) * 100 : 0;
-          const barOwnerB = totalCharged > 0 ? (ownerBAmount / totalCharged) * 100 : 0;
-
-          // Waterfall rows
-          const waterfallRows: { label: string; value: number; indent: boolean; deep?: boolean; total: boolean; colorClass: string }[] = [
-            { label: `${guests} guests × ${formatCurrency(pricePerGuest)}`, value: subtotal, indent: false, total: false, colorClass: 'text-text-primary' },
-            { label: `Gratuity (${gratuityPct}%)`, value: gratuity, indent: true, total: false, colorClass: 'text-text-secondary' },
-            { label: 'Total Collected', value: totalCharged, indent: false, total: true, colorClass: 'text-success' },
-            { label: `Food Cost (${foodCostPct}% of revenue)`, value: -foodCost, indent: true, total: false, colorClass: 'text-danger' },
-            { label: `Supplies (${suppliesCostPct}% of revenue)`, value: -suppliesCost, indent: true, total: false, colorClass: 'text-danger' },
-            ...(chefComp ? [
-              { label: `Lead Chef — ${chefBaseRevPct}% of revenue`, value: -chefBasePay, indent: true, total: false, colorClass: 'text-blue-400' },
-              { label: `Lead Chef — ${chefGratSplitPct}% of gratuity`, value: -chefGratPay, indent: true, deep: true, total: false, colorClass: 'text-blue-300' },
-            ] : []),
-            ...(asstComp ? [
-              { label: `Assistant — ${asstBaseRevPct}% of revenue`, value: -asstBasePay, indent: true, total: false, colorClass: 'text-blue-400' },
-              { label: `Assistant — ${asstGratSplitPct}% of gratuity`, value: -asstGratPay, indent: true, deep: true, total: false, colorClass: 'text-blue-300' },
-            ] : []),
-            { label: 'Gross Profit', value: grossProfit, indent: false, total: true, colorClass: grossProfit >= 0 ? 'text-success' : 'text-danger' },
-            { label: 'Business Retained (30%)', value: -retainedAmt, indent: true, total: false, colorClass: 'text-violet-400' },
-            { label: 'Distributable (70%)', value: distributable, indent: false, total: true, colorClass: 'text-success' },
-            { label: `A Soriano — ${CHEF_PROFIT_PCT}% of profit`, value: calcOwnerRows[0].amount, indent: true, total: false, colorClass: 'text-emerald-400' },
-            { label: `J Soriano — ${ASST_PROFIT_PCT}% of profit`, value: calcOwnerRows[1].amount, indent: true, total: false, colorClass: 'text-emerald-500' },
-          ];
+          const barDistributable = totalCharged > 0 ? (distributable / totalCharged) * 100 : 0;
 
           return (
             <div className="space-y-5">
@@ -1124,54 +1101,128 @@ export default function CalculatorPage() {
                 </div>
               </div>
 
-              {/* ── Stacked Bar ── */}
-              <div className="overflow-hidden rounded-lg border border-border">
-                <div className="flex h-10">
-                  {([
-                    { w: barLabor, color: 'bg-blue-500', key: 'labor' },
-                    { w: barCosts, color: 'bg-red-500', key: 'costs' },
-                    { w: barRetained, color: 'bg-violet-500', key: 'retained' },
-                    { w: barOwnerA, color: 'bg-emerald-400', key: 'ownerA' },
-                    { w: barOwnerB, color: 'bg-emerald-600', key: 'ownerB' },
-                  ] as const).map(({ w, color, key }) =>
-                    w > 0.5 ? (
-                      <div key={key} className={`${color} flex items-center justify-center overflow-hidden transition-all duration-500`} style={{ width: `${w}%` }}>
-                        {w > 8 && <span className="text-[10px] font-semibold text-white/90 drop-shadow">{w.toFixed(0)}%</span>}
-                      </div>
-                    ) : null
-                  )}
+              {/* ── Where Every Dollar Goes ── */}
+              <div className="rounded-lg border border-border bg-card p-5">
+                <h2 className="mb-1 text-base font-semibold text-text-primary">Where Every Dollar Goes</h2>
+                <p className="mb-4 text-xs text-text-muted">
+                  {guests} guests × {formatCurrency(pricePerGuest)} = {formatCurrency(subtotal)} revenue
+                </p>
+                <div className="flex h-8 w-full overflow-hidden rounded-lg border border-border">
+                  {barLabor > 0.5 && <div className="bg-blue-500 transition-all duration-300" style={{ width: `${barLabor}%` }} />}
+                  {barCosts > 0.5 && <div className="bg-red-500 transition-all duration-300" style={{ width: `${barCosts}%` }} />}
+                  {barRetained > 0.5 && <div className="bg-violet-500 transition-all duration-300" style={{ width: `${barRetained}%` }} />}
+                  {barDistributable > 0.5 && <div className="bg-emerald-500 transition-all duration-300" style={{ width: `${barDistributable}%` }} />}
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 bg-card-elevated px-4 py-2.5">
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
                   {[
-                    { color: 'bg-blue-500', label: 'Labor', pct: pctOf(totalLaborFromScenario), amount: totalLaborFromScenario },
-                    { color: 'bg-red-500', label: 'Costs', pct: pctOf(totalCosts), amount: totalCosts },
-                    { color: 'bg-violet-500', label: 'Retained', pct: pctOf(retainedAmt), amount: retainedAmt },
-                    { color: 'bg-emerald-400', label: 'A Soriano', pct: pctOf(ownerAAmount), amount: ownerAAmount },
-                    { color: 'bg-emerald-600', label: 'J Soriano', pct: pctOf(ownerBAmount), amount: ownerBAmount },
+                    { color: 'bg-blue-500', label: 'Labor', pct: barLabor, amount: totalLaborFromScenario },
+                    { color: 'bg-red-500', label: 'Food & Costs', pct: barCosts, amount: totalCosts },
+                    { color: 'bg-violet-500', label: 'Retained', pct: barRetained, amount: retainedAmt },
+                    { color: 'bg-emerald-500', label: 'Distributable', pct: barDistributable, amount: distributable },
                   ].map(({ color, label, pct, amount }) => (
-                    <span key={label} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                      <span className={`inline-block h-2.5 w-2.5 rounded-sm ${color}`} />
-                      {label} {pct}% · {formatCurrency(amount)}
-                    </span>
+                    <div key={label} className="flex items-center gap-1.5">
+                      <div className={`h-2.5 w-2.5 rounded-sm ${color}`} />
+                      <span className="text-[11px] text-text-secondary">
+                        {label} <span className="font-medium text-text-primary">{pct.toFixed(1)}%</span>
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
 
-              {/* ── Waterfall Table ── */}
+              {/* ── Money Waterfall ── */}
               <div className="overflow-hidden rounded-lg border border-border bg-card text-sm">
-                {waterfallRows.map((row) => (
-                  <div
-                    key={row.label}
-                    className={`flex items-baseline justify-between border-b border-border last:border-b-0 py-2 ${
-                      row.deep ? 'pl-12 pr-4' : row.indent ? 'pl-8 pr-4' : 'px-4'
-                    } ${row.total ? 'bg-card-elevated py-2.5 font-semibold' : ''}`}
-                  >
-                    <span className={`${row.total ? 'text-text-primary' : 'text-text-secondary'} ${row.deep ? 'text-xs' : ''}`}>{row.label}</span>
-                    <span className={`tabular-nums ${row.colorClass} ${row.deep ? 'text-xs' : ''}`}>
-                      {row.value < 0 ? `−${formatCurrency(Math.abs(row.value))}` : formatCurrency(row.value)}
-                    </span>
+                <div className="border-b border-border bg-card-elevated px-4 py-3">
+                  <p className="font-semibold text-text-primary">Money Waterfall</p>
+                </div>
+
+                {/* Event Summary */}
+                <div className="border-b border-border pb-1 pt-2">
+                  <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Event Summary</p>
+                  <div className="flex items-center justify-between gap-3 px-4 py-2">
+                    <span className="text-text-secondary">{guests} guests × {formatCurrency(pricePerGuest)}</span>
+                    <span className="tabular-nums text-text-primary">{formatCurrency(subtotal)}</span>
                   </div>
-                ))}
+                  <div className="flex items-center justify-between gap-3 px-4 py-2">
+                    <span className="text-text-secondary">Gratuity ({gratuityPct}%)</span>
+                    <span className="tabular-nums text-emerald-400">+{formatCurrency(gratuity)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
+                    <span className="text-text-primary">Total Collected</span>
+                    <span className="tabular-nums text-text-primary">{formatCurrency(totalCharged)}</span>
+                  </div>
+                </div>
+
+                {/* Labor */}
+                <div className="border-b border-border pb-1 pt-2">
+                  <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Labor</p>
+                  {chefComp && <>
+                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                      <span className="text-text-secondary">Lead Chef — {chefBaseRevPct}% of revenue</span>
+                      <span className="tabular-nums text-blue-400">−{formatCurrency(chefBasePay)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                      <span className="text-text-secondary">Lead Chef — {chefGratSplitPct}% of gratuity</span>
+                      <span className="tabular-nums text-blue-300">−{formatCurrency(chefGratPay)}</span>
+                    </div>
+                  </>}
+                  {asstComp && <>
+                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                      <span className="text-text-secondary">Assistant — {asstBaseRevPct}% of revenue</span>
+                      <span className="tabular-nums text-blue-400">−{formatCurrency(asstBasePay)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                      <span className="text-text-secondary">Assistant — {asstGratSplitPct}% of gratuity</span>
+                      <span className="tabular-nums text-blue-300">−{formatCurrency(asstGratPay)}</span>
+                    </div>
+                  </>}
+                  <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
+                    <span className="text-text-primary">Total Labor</span>
+                    <span className="tabular-nums text-danger">−{formatCurrency(totalLaborFromScenario)}</span>
+                  </div>
+                </div>
+
+                {/* Costs */}
+                <div className="border-b border-border pb-1 pt-2">
+                  <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Costs</p>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Food Cost ({foodCostPct}%)</span>
+                    <span className="tabular-nums text-red-400">−{formatCurrency(foodCost)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Supplies ({suppliesCostPct}%)</span>
+                    <span className="tabular-nums text-red-400">−{formatCurrency(suppliesCost)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
+                    <span className="text-text-primary">Total Costs</span>
+                    <span className="tabular-nums text-danger">−{formatCurrency(totalCosts)}</span>
+                  </div>
+                </div>
+
+                {/* Profit Distribution */}
+                <div className="pb-1 pt-2">
+                  <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Profit Distribution</p>
+                  <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
+                    <span className="text-text-primary">Gross Profit</span>
+                    <span className={`tabular-nums ${grossProfit >= 0 ? 'text-emerald-400' : 'text-danger'}`}>{formatCurrency(grossProfit)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Business Retained (30%)</span>
+                    <span className="tabular-nums text-violet-400">−{formatCurrency(retainedAmt)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
+                    <span className="text-text-primary">Distributable (70%)</span>
+                    <span className="tabular-nums text-success">{formatCurrency(distributable)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">A Soriano — {CHEF_PROFIT_PCT}% of profit</span>
+                    <span className="tabular-nums text-emerald-400">{formatCurrency(ownerAAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">J Soriano — {ASST_PROFIT_PCT}% of profit</span>
+                    <span className="tabular-nums text-emerald-500">{formatCurrency(ownerBAmount)}</span>
+                  </div>
+                </div>
               </div>
 
               {/* ── Owner Cards ── */}
