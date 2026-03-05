@@ -1002,16 +1002,13 @@ export default function CalculatorPage() {
           const retainedAmt = grossProfit > 0 ? grossProfit * 0.30 : 0;
           const distributable = grossProfit > 0 ? grossProfit * 0.70 : 0;
 
-          const ownersList = rules.profitDistribution.owners?.length
-            ? rules.profitDistribution.owners
-            : [
-                { id: 'a', name: `A Soriano (${rules.profitDistribution.ownerAEquityPercent}%)`, equityPercent: rules.profitDistribution.ownerAEquityPercent },
-                { id: 'b', name: `J Soriano (${rules.profitDistribution.ownerBEquityPercent}%)`, equityPercent: rules.profitDistribution.ownerBEquityPercent },
-              ];
-          const calcOwnerRows = ownersList.map((o) => ({
-            name: o.name,
-            amount: distributable * o.equityPercent / 100,
-          }));
+          // Scenario model: chef 40% / assistant 60% of distributable profit
+          const CHEF_PROFIT_PCT = 40;
+          const ASST_PROFIT_PCT = 60;
+          const calcOwnerRows = [
+            { name: 'A Soriano', amount: distributable * CHEF_PROFIT_PCT / 100 },
+            { name: 'J Soriano', amount: distributable * ASST_PROFIT_PCT / 100 },
+          ];
 
           const ownerAAmount = calcOwnerRows[0]?.amount ?? 0;
           const ownerBAmount = calcOwnerRows[1]?.amount ?? 0;
@@ -1057,13 +1054,8 @@ export default function CalculatorPage() {
             { label: 'Gross Profit', value: grossProfit, indent: false, total: true, colorClass: grossProfit >= 0 ? 'text-success' : 'text-danger' },
             { label: 'Business Retained (30%)', value: -retainedAmt, indent: true, total: false, colorClass: 'text-violet-400' },
             { label: 'Distributable (70%)', value: distributable, indent: false, total: true, colorClass: 'text-success' },
-            ...calcOwnerRows.map((o, i) => ({
-              label: o.name,
-              value: o.amount,
-              indent: true,
-              total: false,
-              colorClass: i === 0 ? 'text-emerald-400' : 'text-emerald-500',
-            })),
+            { label: `A Soriano — ${CHEF_PROFIT_PCT}% of profit`, value: calcOwnerRows[0].amount, indent: true, total: false, colorClass: 'text-emerald-400' },
+            { label: `J Soriano — ${ASST_PROFIT_PCT}% of profit`, value: calcOwnerRows[1].amount, indent: true, total: false, colorClass: 'text-emerald-500' },
           ];
 
           return (
@@ -1199,7 +1191,7 @@ export default function CalculatorPage() {
                       <span className="font-medium text-blue-300">{formatCurrency(chefGratPay)}</span>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <span className="text-text-secondary">Profit split</span>
+                      <span className="text-text-secondary">{CHEF_PROFIT_PCT}% of profit</span>
                       <span className="font-medium text-emerald-400">{formatCurrency(ownerAAmount)}</span>
                     </div>
                   </div>
@@ -1219,7 +1211,7 @@ export default function CalculatorPage() {
                       <span className="font-medium text-blue-300">{formatCurrency(asstGratPay)}</span>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <span className="text-text-secondary">Profit split</span>
+                      <span className="text-text-secondary">{ASST_PROFIT_PCT}% of profit</span>
                       <span className="font-medium text-emerald-500">{formatCurrency(ownerBAmount)}</span>
                     </div>
                   </div>
