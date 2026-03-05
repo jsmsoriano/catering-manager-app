@@ -973,61 +973,42 @@ export default function CalculatorPage() {
         )}
 
         {activeTab === 'calculator' && (() => {
+          // Hardcoded scenario model rates (independent of business rules config)
+          const CHEF_REV_PCT = 20;
+          const ASST_REV_PCT = 10;
+          const CHEF_GRAT_PCT = 60;
+          const ASST_GRAT_PCT = 40;
+          const CHEF_PROFIT_PCT = 40;
+          const ASST_PROFIT_PCT = 60;
+
           const foodCostPct = rules.costs.primaryFoodCostPercent;
           const suppliesCostPct = rules.costs.suppliesCostPercent;
           const foodCost = subtotal * foodCostPct / 100;
           const suppliesCost = subtotal * suppliesCostPct / 100;
           const totalCosts = foodCost + suppliesCost;
-          const scenarioFin = calculateEventFinancials(
-            {
-              adults: guests,
-              children: 0,
-              eventType: 'private-dinner',
-              eventDate: new Date(),
-              distanceMiles: 0,
-              premiumAddOn: 0,
-              subtotalOverride: subtotal,
-            },
-            rules
-          );
-          const scale = scenarioFin.totalCharged > 0 ? totalCharged / scenarioFin.totalCharged : 1;
-          const chefComp = scenarioFin.laborCompensation.find((c) => c.role === 'lead');
-          const asstComp = scenarioFin.laborCompensation.find((c) => c.role === 'assistant');
-          const chefPay = (chefComp?.finalPay ?? 0) * scale;
-          const asstPay = (asstComp?.finalPay ?? 0) * scale;
+
+          // Labor: hardcoded rates so the scenario always matches the stated model
+          const chefBasePay = subtotal * CHEF_REV_PCT / 100;
+          const chefGratPay = gratuity * CHEF_GRAT_PCT / 100;
+          const asstBasePay = subtotal * ASST_REV_PCT / 100;
+          const asstGratPay = gratuity * ASST_GRAT_PCT / 100;
+          const chefPay = chefBasePay + chefGratPay;
+          const asstPay = asstBasePay + asstGratPay;
           const totalLaborFromScenario = chefPay + asstPay;
           const grossProfit = totalCharged - totalCosts - totalLaborFromScenario;
 
-          // 30% retained → 70% distributable (scenario builder model)
+          // 30% retained → 70% distributable
           const retainedAmt = grossProfit > 0 ? grossProfit * 0.30 : 0;
           const distributable = grossProfit > 0 ? grossProfit * 0.70 : 0;
 
-          // Scenario model: chef 40% / assistant 60% of distributable profit
-          const CHEF_PROFIT_PCT = 40;
-          const ASST_PROFIT_PCT = 60;
-          const calcOwnerRows = [
-            { name: 'A Soriano', amount: distributable * CHEF_PROFIT_PCT / 100 },
-            { name: 'J Soriano', amount: distributable * ASST_PROFIT_PCT / 100 },
-          ];
-
-          const ownerAAmount = calcOwnerRows[0]?.amount ?? 0;
-          const ownerBAmount = calcOwnerRows[1]?.amount ?? 0;
+          const ownerAAmount = distributable * CHEF_PROFIT_PCT / 100;
+          const ownerBAmount = distributable * ASST_PROFIT_PCT / 100;
           const aSorianoTotal = chefPay + ownerAAmount;
           const jSorianoTotal = asstPay + ownerBAmount;
           const aSorianoPct = totalCharged > 0 ? (aSorianoTotal / totalCharged) * 100 : 0;
           const jSorianoPct = totalCharged > 0 ? (jSorianoTotal / totalCharged) * 100 : 0;
 
           const pctOf = (amt: number) => totalCharged > 0 ? ((amt / totalCharged) * 100).toFixed(1) : '0.0';
-
-          // Derive labor rates from computed amounts for accurate labels
-          const chefBasePay = (chefComp?.basePay ?? 0) * scale;
-          const chefGratPay = (chefComp?.gratuityShare ?? 0) * scale;
-          const asstBasePay = (asstComp?.basePay ?? 0) * scale;
-          const asstGratPay = (asstComp?.gratuityShare ?? 0) * scale;
-          const chefBaseRevPct = subtotal > 0 ? Math.round((chefBasePay / subtotal) * 100) : 0;
-          const chefGratSplitPct = gratuity > 0 ? Math.round((chefGratPay / gratuity) * 100) : 0;
-          const asstBaseRevPct = subtotal > 0 ? Math.round((asstBasePay / subtotal) * 100) : 0;
-          const asstGratSplitPct = gratuity > 0 ? Math.round((asstGratPay / gratuity) * 100) : 0;
 
           // Bar segment widths (% of totalCharged)
           const barLabor = totalCharged > 0 ? (totalLaborFromScenario / totalCharged) * 100 : 0;
@@ -1156,26 +1137,22 @@ export default function CalculatorPage() {
                 {/* Labor */}
                 <div className="border-b border-border pb-1 pt-2">
                   <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Labor</p>
-                  {chefComp && <>
-                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                      <span className="text-text-secondary">Lead Chef — {chefBaseRevPct}% of revenue</span>
-                      <span className="tabular-nums text-blue-400">−{formatCurrency(chefBasePay)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                      <span className="text-text-secondary">Lead Chef — {chefGratSplitPct}% of gratuity</span>
-                      <span className="tabular-nums text-blue-300">−{formatCurrency(chefGratPay)}</span>
-                    </div>
-                  </>}
-                  {asstComp && <>
-                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                      <span className="text-text-secondary">Assistant — {asstBaseRevPct}% of revenue</span>
-                      <span className="tabular-nums text-blue-400">−{formatCurrency(asstBasePay)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                      <span className="text-text-secondary">Assistant — {asstGratSplitPct}% of gratuity</span>
-                      <span className="tabular-nums text-blue-300">−{formatCurrency(asstGratPay)}</span>
-                    </div>
-                  </>}
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Lead Chef — {CHEF_REV_PCT}% of revenue</span>
+                    <span className="tabular-nums text-blue-400">−{formatCurrency(chefBasePay)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Lead Chef — {CHEF_GRAT_PCT}% of gratuity</span>
+                    <span className="tabular-nums text-blue-300">−{formatCurrency(chefGratPay)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Assistant — {ASST_REV_PCT}% of revenue</span>
+                    <span className="tabular-nums text-blue-400">−{formatCurrency(asstBasePay)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Assistant — {ASST_GRAT_PCT}% of gratuity</span>
+                    <span className="tabular-nums text-blue-300">−{formatCurrency(asstGratPay)}</span>
+                  </div>
                   <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
                     <span className="text-text-primary">Total Labor</span>
                     <span className="tabular-nums text-danger">−{formatCurrency(totalLaborFromScenario)}</span>
@@ -1234,11 +1211,11 @@ export default function CalculatorPage() {
                   <p className="mb-3 text-base font-bold text-accent">{aSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-accent/20 pt-3 text-xs">
                     <div className="flex justify-between gap-2">
-                      <span className="text-text-secondary">{chefBaseRevPct}% of revenue</span>
+                      <span className="text-text-secondary">{CHEF_REV_PCT}% of revenue</span>
                       <span className="font-medium text-blue-400">{formatCurrency(chefBasePay)}</span>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <span className="text-text-secondary">{chefGratSplitPct}% of gratuity</span>
+                      <span className="text-text-secondary">{CHEF_GRAT_PCT}% of gratuity</span>
                       <span className="font-medium text-blue-300">{formatCurrency(chefGratPay)}</span>
                     </div>
                     <div className="flex justify-between gap-2">
@@ -1254,11 +1231,11 @@ export default function CalculatorPage() {
                   <p className="mb-3 text-base font-bold text-text-secondary">{jSorianoPct.toFixed(1)}% of event</p>
                   <div className="space-y-1.5 border-t border-border pt-3 text-xs">
                     <div className="flex justify-between gap-2">
-                      <span className="text-text-secondary">{asstBaseRevPct}% of revenue</span>
+                      <span className="text-text-secondary">{ASST_REV_PCT}% of revenue</span>
                       <span className="font-medium text-blue-400">{formatCurrency(asstBasePay)}</span>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <span className="text-text-secondary">{asstGratSplitPct}% of gratuity</span>
+                      <span className="text-text-secondary">{ASST_GRAT_PCT}% of gratuity</span>
                       <span className="font-medium text-blue-300">{formatCurrency(asstGratPay)}</span>
                     </div>
                     <div className="flex justify-between gap-2">
