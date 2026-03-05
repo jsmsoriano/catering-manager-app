@@ -560,8 +560,7 @@ function BusinessRulesTab({ rules }: { rules: MoneyRules }) {
     { label: 'Food Cost', pct: ALLOC_FOOD, color: 'bg-red-500' },
     { label: 'Supplies', pct: ALLOC_SUPPLIES, color: 'bg-orange-500' },
     { label: 'Tax Reserve', pct: ALLOC_TAX_RESERVE, color: 'bg-violet-500' },
-    { label: `Owner A (${ownerAEquity}%)`, pct: ownerAPct, color: 'bg-emerald-400' },
-    { label: `Owner B (${ownerBEquity}%)`, pct: ownerBPct, color: 'bg-emerald-600' },
+    { label: 'Distributable Profit', pct: ALLOC_DISTRIBUTABLE, color: 'bg-emerald-500' },
   ];
 
   const waterfallRows: { label: string; value: number; indent: boolean; total: boolean; colorClass: string }[] = [
