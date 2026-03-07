@@ -66,6 +66,12 @@ export default function ChefPage() {
         <p className="mt-1 text-sm text-text-secondary">
           Chef-scoped view. Only events assigned to your staff profile are shown.
         </p>
+        <Link
+          href="/chef/shopping"
+          className="mt-3 inline-block rounded-md border border-border bg-card-elevated px-3 py-2 text-sm font-medium text-text-secondary hover:bg-card hover:text-text-primary"
+        >
+          Open Chef Shopping Lists
+        </Link>
       </div>
 
       {loading && (
@@ -108,6 +114,12 @@ export default function ChefPage() {
                           className="mt-2 inline-block text-xs text-accent hover:text-accent-hover"
                         >
                           View summary
+                        </Link>
+                        <Link
+                          href={`/bookings/shopping?bookingId=${event.id}`}
+                          className="ml-3 mt-2 inline-block text-xs text-accent hover:text-accent-hover"
+                        >
+                          Shopping list
                         </Link>
                       </div>
                     </div>

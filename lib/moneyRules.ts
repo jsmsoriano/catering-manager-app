@@ -18,6 +18,7 @@ export const DEFAULT_RULES: MoneyRules = {
     ],
     defaultGratuityPercent: 20,
     childDiscountPercent: 50,
+    salesTaxPercent: 8,
     defaultDepositPercent: 30,
   },
   staffing: {

@@ -13,6 +13,10 @@ import {
   loadShoppingListForBooking,
   upsertShoppingList,
 } from '@/lib/shoppingStorage';
+import { useAuth } from '@/components/AuthProvider';
+import { useStaffQuery } from '@/lib/hooks/useStaffQuery';
+import { getCurrentChefStaffId } from '@/lib/chefIdentity';
+import { canChefAccessShopping } from '@/lib/chefShoppingAccess';
 import type {
   ShoppingList,
   ShoppingListItem,
@@ -102,16 +106,20 @@ function EventShoppingListContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const bookingId = searchParams.get('bookingId');
+  const { user, loading: authLoading } = useAuth();
+  const { staff, loading: staffLoading } = useStaffQuery();
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [shoppingList, setShoppingList] = useState<ShoppingList | null>(null);
+  const [accessDenied, setAccessDenied] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState<ShoppingItemFormState>(DEFAULT_ITEM_FORM);
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-  const [presets, setPresets] = useState<ShoppingPreset[]>([]);
+  const [presets, setPresets] = useState<ShoppingPreset[]>(() => loadShoppingPresets());
   const [keepPackageInfoWhenRegenerating, setKeepPackageInfoWhenRegenerating] = useState(true);
 
   useEffect(() => {
+    if (authLoading || staffLoading) return;
     if (!bookingId) {
       router.push('/bookings');
       return;
@@ -126,11 +134,27 @@ function EventShoppingListContent() {
       return;
     }
 
+    const role = String((user?.app_metadata as { role?: string } | undefined)?.role ?? '').toLowerCase();
+    if (role === 'chef') {
+      const chefStaffId = getCurrentChefStaffId(user, staff);
+      const allowed = canChefAccessShopping(foundBooking, chefStaffId);
+      if (!allowed) {
+        queueMicrotask(() => {
+          setAccessDenied('You can only access shopping lists for your assigned upcoming events.');
+        });
+        return;
+      }
+    }
+
+    queueMicrotask(() => {
+      setAccessDenied(null);
+    });
+
     queueMicrotask(() => {
       setBooking(foundBooking);
       setShoppingList(ensureShoppingListForBooking(foundBooking.id));
     });
-  }, [bookingId, router]);
+  }, [authLoading, bookingId, router, staff, staffLoading, user]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -153,7 +177,6 @@ function EventShoppingListContent() {
   }, [bookingId]);
 
   useEffect(() => {
-    setPresets(loadShoppingPresets());
     const handleUpdate = () => setPresets(loadShoppingPresets());
     window.addEventListener('shoppingPresetsUpdated', handleUpdate);
     return () => window.removeEventListener('shoppingPresetsUpdated', handleUpdate);
@@ -326,6 +349,22 @@ function EventShoppingListContent() {
     window.dispatchEvent(new Event('expensesUpdated'));
     alert('Shopping list totals synced to linked expenses.');
   };
+
+  if (accessDenied) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center px-4 py-10">
+        <div className="max-w-lg rounded-lg border border-danger/30 bg-danger/10 p-5 text-center">
+          <p className="text-sm text-danger">{accessDenied}</p>
+          <Link
+            href="/chef/shopping"
+            className="mt-3 inline-block rounded-md border border-border bg-card-elevated px-3 py-2 text-sm text-text-secondary hover:bg-card"
+          >
+            Back to Chef Shopping
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!booking || !shoppingList) {
     return (

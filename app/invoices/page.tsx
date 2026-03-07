@@ -6,6 +6,12 @@ import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/moneyRules';
 import { loadFromStorage } from '@/lib/storage';
 import { getBookingServiceStatus, toLocalDateISO } from '@/lib/bookingWorkflow';
+import {
+  calculateBookingBalanceDueWithTax,
+  calculateBookingSalesTax,
+  calculateBookingTotalWithTax,
+  calculatePaymentSalesTaxPortion,
+} from '@/lib/salesTax';
 import type { Booking, BookingStatus } from '@/lib/bookingTypes';
 
 const EVENT_STATUS_TEXT: Record<BookingStatus, string> = {
@@ -22,7 +28,7 @@ type FilterTab = 'all' | 'outstanding' | 'paid' | 'draft';
 
 function getInvoiceStatus(booking: Booking): InvoiceStatus {
   const today = toLocalDateISO(new Date());
-  const balance = Math.max(0, booking.total - (booking.amountPaid ?? 0));
+  const balance = calculateBookingBalanceDueWithTax(booking);
   if (balance <= 0 && (booking.amountPaid ?? 0) > 0) return 'paid';
   const overdue =
     (booking.paymentStatus === 'deposit-due' &&
@@ -91,14 +97,18 @@ export default function InvoicesPage() {
     let totalOutstanding = 0;
     let totalOverdue = 0;
     let paidCount = 0;
+    let totalSalesTaxDue = 0;
+    let totalSalesTaxCollected = 0;
     for (const b of invoices) {
       const status = getInvoiceStatus(b);
-      const balance = Math.max(0, b.total - (b.amountPaid ?? 0));
+      const balance = calculateBookingBalanceDueWithTax(b);
       if (status !== 'paid' && status !== 'draft') totalOutstanding += balance;
       if (status === 'overdue') totalOverdue += balance;
       if (status === 'paid') paidCount++;
+      totalSalesTaxDue += calculateBookingSalesTax(b);
+      totalSalesTaxCollected += calculatePaymentSalesTaxPortion(b, b.amountPaid ?? 0);
     }
-    return { totalOutstanding, totalOverdue, paidCount };
+    return { totalOutstanding, totalOverdue, paidCount, totalSalesTaxDue, totalSalesTaxCollected };
   }, [invoices]);
 
   const filtered = useMemo(() => {
@@ -143,7 +153,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* Summary stat cards */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard
           label="Total Invoices"
           value={invoices.length.toString()}
@@ -163,6 +173,12 @@ export default function InvoicesPage() {
           value={`${stats.paidCount}`}
           sub={stats.paidCount > 0 ? 'invoice' + (stats.paidCount !== 1 ? 's' : '') : undefined}
           accent="text-success"
+        />
+        <StatCard
+          label="Sales Tax Collected"
+          value={formatCurrency(stats.totalSalesTaxCollected)}
+          sub={`of ${formatCurrency(stats.totalSalesTaxDue)} due`}
+          accent="text-text-primary"
         />
       </div>
 
@@ -221,7 +237,7 @@ export default function InvoicesPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map((booking) => {
-                const balance = Math.max(0, booking.total - (booking.amountPaid ?? 0));
+                const balance = calculateBookingBalanceDueWithTax(booking);
                 const status = getInvoiceStatus(booking);
                 return (
                   <tr key={booking.id} className="hover:bg-card-elevated/50">
@@ -239,6 +255,9 @@ export default function InvoicesPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-text-primary">
                       {formatCurrency(balance)}
+                      <p className="text-[10px] font-normal text-text-muted">
+                        Total {formatCurrency(calculateBookingTotalWithTax(booking))}
+                      </p>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`text-xs font-medium ${EVENT_STATUS_TEXT[getBookingServiceStatus(booking)]}`}>

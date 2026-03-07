@@ -62,6 +62,7 @@ export interface MoneyRules {
     proteinAddOns: { protein: string; label: string; pricePerPerson: number }[];
     defaultGratuityPercent: number; // %
     childDiscountPercent: number; // % (e.g., 50 for 50% off)
+    salesTaxPercent: number; // % (e.g., 8 for 8% sales tax)
     defaultDepositPercent: number; // % required deposit when booking is confirmed (e.g., 30)
   };
 

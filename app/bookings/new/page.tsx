@@ -42,6 +42,10 @@ function NewBookingContent() {
     existingBookings.some((b) => b.customerEmail.toLowerCase() === customerEmail.trim().toLowerCase());
   const defaultDateStr = getDefaultEventDate(searchParams.get('date'));
 
+  const conflictingBookings = existingBookings.filter(
+    (b) => b.eventDate === defaultDateStr && b.status !== 'cancelled'
+  );
+
   // Prefill from "Book Again" (customers page) or ?date= from calendar
   useEffect(() => {
     const raw = typeof window !== 'undefined' ? sessionStorage.getItem('bookingPrefill') : null;
@@ -102,6 +106,7 @@ function NewBookingContent() {
       adultBasePrice,
       childBasePrice: adultBasePrice * (1 - rules.pricing.childDiscountPercent / 100),
       gratuityPercent: rules.pricing.defaultGratuityPercent,
+      salesTaxPercent: rules.pricing.salesTaxPercent,
       capturedAt: new Date().toISOString(),
     };
 
@@ -168,6 +173,20 @@ function NewBookingContent() {
             Step 1 of {BOOKING_WIZARD_STEPS.length}: Contact
           </p>
         </div>
+
+        {conflictingBookings.length > 0 && (
+          <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
+            <p className="font-semibold">⚠ Date conflict — {defaultDateStr}</p>
+            <ul className="mt-1 space-y-0.5 text-amber-300/90">
+              {conflictingBookings.map((b) => (
+                <li key={b.id}>
+                  {b.customerName} · {b.eventTime ?? 'time TBD'} · {b.status}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-amber-300/70">You can still proceed — confirm the date on the next step.</p>
+          </div>
+        )}
 
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-text-primary">New Event</h1>

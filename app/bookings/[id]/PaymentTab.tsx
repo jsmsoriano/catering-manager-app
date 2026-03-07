@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/moneyRules';
+import { calculateBookingSalesTax, calculateBookingTotalWithTax } from '@/lib/salesTax';
 import type { Booking } from '@/lib/bookingTypes';
 import type { BookingFormData } from './bookingFormTypes';
 
@@ -25,9 +26,12 @@ export function PaymentTab({
   defaultDepositPercent,
 }: PaymentTabProps) {
   const effectiveDepositPct = formData.depositPercent ?? defaultDepositPercent;
+  const fallbackTaxPercent = 0;
+  const salesTaxDue = calculateBookingSalesTax(booking, fallbackTaxPercent);
+  const totalDue = calculateBookingTotalWithTax(booking, fallbackTaxPercent);
   const depositAmount =
     booking.depositAmount ??
-    Math.round((booking.total ?? 0) * (effectiveDepositPct / 100) * 100) / 100;
+    Math.round(totalDue * (effectiveDepositPct / 100) * 100) / 100;
   const amountPaid = booking.amountPaid ?? 0;
   const isDepositPaid = amountPaid >= depositAmount - 0.009;
 
@@ -67,11 +71,10 @@ export function PaymentTab({
             value={effectiveDepositPct}
             onChange={(e) => {
               const pct = parseFloat(e.target.value) || 0;
-              const total = booking.total ?? 0;
               setFormData((p) => ({
                 ...p,
                 depositPercent: pct,
-                depositAmount: Math.round(total * (pct / 100) * 100) / 100,
+                depositAmount: Math.round(totalDue * (pct / 100) * 100) / 100,
               }));
             }}
             className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-text-primary"
@@ -83,7 +86,7 @@ export function PaymentTab({
             type="number"
             min={0}
             step={0.01}
-            value={formData.depositAmount ?? Math.round((booking.total ?? 0) * (effectiveDepositPct / 100) * 100) / 100}
+            value={formData.depositAmount ?? Math.round(totalDue * (effectiveDepositPct / 100) * 100) / 100}
             onChange={(e) =>
               setFormData((p) => ({
                 ...p,
@@ -92,7 +95,9 @@ export function PaymentTab({
             }
             className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-text-primary"
           />
-          <p className="mt-1 text-xs text-text-muted">Total: {formatCurrency(booking.total ?? 0)}</p>
+          <p className="mt-1 text-xs text-text-muted">Base total: {formatCurrency(booking.total ?? 0)}</p>
+          <p className="mt-0.5 text-xs text-text-muted">Sales tax due: {formatCurrency(salesTaxDue)}</p>
+          <p className="mt-0.5 text-xs font-semibold text-text-primary">Total due (incl tax): {formatCurrency(totalDue)}</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-text-secondary">Deposit due date</label>

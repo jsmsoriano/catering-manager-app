@@ -4,6 +4,7 @@ import type {
   OwnerProfitPayoutRecord,
   ProfitDistributionOverride,
   RetainedEarningsTransaction,
+  SalesTaxRemittanceRecord,
 } from './financeTypes';
 
 export const LABOR_PAYMENTS_KEY = 'laborPayments';
@@ -11,6 +12,7 @@ export const OWNER_PROFIT_PAYOUTS_KEY = 'ownerProfitPayouts';
 export const RETAINED_EARNINGS_KEY = 'retainedEarningsTransactions';
 export const PROFIT_DISTRIBUTION_OVERRIDES_KEY = 'profitDistributionOverrides';
 export const CUSTOMER_PAYMENTS_KEY = 'customerPayments';
+export const SALES_TAX_REMITTANCES_KEY = 'salesTaxRemittances';
 
 function canUseBrowserStorage() {
   return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
@@ -77,4 +79,12 @@ export function loadCustomerPayments(): CustomerPaymentRecord[] {
 
 export function saveCustomerPayments(value: CustomerPaymentRecord[]) {
   saveList<CustomerPaymentRecord>(CUSTOMER_PAYMENTS_KEY, value, 'customerPaymentsUpdated');
+}
+
+export function loadSalesTaxRemittances(): SalesTaxRemittanceRecord[] {
+  return loadList<SalesTaxRemittanceRecord>(SALES_TAX_REMITTANCES_KEY);
+}
+
+export function saveSalesTaxRemittances(value: SalesTaxRemittanceRecord[]) {
+  saveList<SalesTaxRemittanceRecord>(SALES_TAX_REMITTANCES_KEY, value, 'salesTaxRemittancesUpdated');
 }

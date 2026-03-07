@@ -8,6 +8,11 @@ import { format } from 'date-fns';
 import { formatCurrency, loadRules } from '@/lib/moneyRules';
 import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import type { Booking, BookingPricingSnapshot } from '@/lib/bookingTypes';
+import {
+  calculateBookingSalesTax,
+  calculateBookingTotalWithTax,
+  calculatePaymentSalesTaxPortion,
+} from '@/lib/salesTax';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -37,6 +42,7 @@ function getSnapshot(booking: Booking): BookingPricingSnapshot {
     adultBasePrice: basePrice,
     childBasePrice: basePrice * (1 - rules.pricing.childDiscountPercent / 100),
     gratuityPercent: rules.pricing.defaultGratuityPercent,
+    salesTaxPercent: rules.pricing.salesTaxPercent,
     capturedAt: booking.createdAt,
   };
 }
@@ -141,9 +147,18 @@ export default function InvoicePage() {
 
   const subtotal = booking?.subtotal ?? 0;
   const gratuityAmount = booking?.gratuity ?? 0;
-  const total = booking?.total ?? 0;
+  const totalBeforeTax = booking?.total ?? 0;
+  const salesTaxAmount = booking && snapshot
+    ? calculateBookingSalesTax(booking, snapshot.salesTaxPercent ?? 0)
+    : 0;
+  const totalDue = booking && snapshot
+    ? calculateBookingTotalWithTax(booking, snapshot.salesTaxPercent ?? 0)
+    : totalBeforeTax;
   const amountPaid = booking?.amountPaid ?? 0;
-  const balanceDue = Math.max(0, total - amountPaid);
+  const balanceDue = Math.max(0, totalDue - amountPaid);
+  const salesTaxCollected = booking && snapshot
+    ? calculatePaymentSalesTaxPortion(booking, amountPaid, snapshot.salesTaxPercent ?? 0)
+    : 0;
 
   // Per-person breakdown for second page (cost + gratuity)
   const totalGuests = (booking?.adults ?? 0) + (booking?.children ?? 0);
@@ -156,15 +171,18 @@ export default function InvoicePage() {
     return {
       avgSubtotalPer: subtotal / totalGuests,
       avgGratuityPer: gratuityAmount / totalGuests,
-      avgTotalPer: total / totalGuests,
+      avgSalesTaxPer: salesTaxAmount / totalGuests,
+      avgTotalPer: totalDue / totalGuests,
       adultSubtotalPer,
       childSubtotalPer,
       adultGratuityPer,
       childGratuityPer,
-      adultTotalPer: adultSubtotalPer + adultGratuityPer,
-      childTotalPer: childSubtotalPer + childGratuityPer,
+      adultSalesTaxPer: (adultSubtotalPer * ((snapshot.salesTaxPercent ?? 0) / 100)),
+      childSalesTaxPer: (childSubtotalPer * ((snapshot.salesTaxPercent ?? 0) / 100)),
+      adultTotalPer: adultSubtotalPer + adultGratuityPer + (adultSubtotalPer * ((snapshot.salesTaxPercent ?? 0) / 100)),
+      childTotalPer: childSubtotalPer + childGratuityPer + (childSubtotalPer * ((snapshot.salesTaxPercent ?? 0) / 100)),
     };
-  }, [booking, snapshot, subtotal, gratuityAmount, total, totalGuests]);
+  }, [booking, snapshot, subtotal, gratuityAmount, salesTaxAmount, totalDue, totalGuests]);
 
   if (notFound) {
     return (
@@ -352,9 +370,16 @@ export default function InvoicePage() {
               <span>Gratuity ({snapshot.gratuityPercent}%)</span>
               <span>{formatCurrency(gratuityAmount)}</span>
             </div>
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>Sales Tax ({(snapshot.salesTaxPercent ?? 0).toFixed(2)}%)</span>
+              <span>{formatCurrency(salesTaxAmount)}</span>
+            </div>
             <div className="flex justify-between border-t border-gray-200 pt-3 text-base font-bold text-gray-900">
-              <span>Total</span>
-              <span>{formatCurrency(total)}</span>
+              <span>Total Due</span>
+              <span>{formatCurrency(totalDue)}</span>
+            </div>
+            <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+              Sales Tax Collected: <strong>{formatCurrency(salesTaxCollected)}</strong> of {formatCurrency(salesTaxAmount)}
             </div>
 
             {balanceDue <= 0 && amountPaid > 0 ? (
@@ -381,7 +406,7 @@ export default function InvoicePage() {
             ) : (
               <div className="-mx-3 mt-1 flex justify-between rounded-lg bg-orange-500 px-4 py-3 text-base font-bold text-white">
                 <span>Amount Due</span>
-                <span>{formatCurrency(total)}</span>
+                <span>{formatCurrency(totalDue)}</span>
               </div>
             )}
           </div>
@@ -428,8 +453,14 @@ export default function InvoicePage() {
                       {formatCurrency(perPersonBreakdown.avgGratuityPer)}
                     </td>
                   </tr>
+                  <tr>
+                    <td className="py-2 text-gray-600">Sales Tax ({(snapshot.salesTaxPercent ?? 0).toFixed(2)}%)</td>
+                    <td className="py-2 text-right font-medium text-gray-900">
+                      {formatCurrency(perPersonBreakdown.avgSalesTaxPer)}
+                    </td>
+                  </tr>
                   <tr className="border-t border-gray-200">
-                    <td className="py-2 font-semibold text-gray-900">Total per person</td>
+                    <td className="py-2 font-semibold text-gray-900">Total per person (incl tax)</td>
                     <td className="py-2 text-right font-bold text-gray-900">
                       {formatCurrency(perPersonBreakdown.avgTotalPer)}
                     </td>
@@ -463,7 +494,13 @@ export default function InvoicePage() {
                             </td>
                           </tr>
                           <tr>
-                            <td className="py-1 font-medium text-gray-900">Total per person</td>
+                            <td className="py-1 text-gray-600">Sales tax per person</td>
+                            <td className="py-1 text-right text-gray-900">
+                              {formatCurrency(perPersonBreakdown.adultSalesTaxPer)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1 font-medium text-gray-900">Total per person (incl tax)</td>
                             <td className="py-1 text-right font-semibold text-gray-900">
                               {formatCurrency(perPersonBreakdown.adultTotalPer)}
                             </td>
@@ -492,7 +529,13 @@ export default function InvoicePage() {
                             </td>
                           </tr>
                           <tr>
-                            <td className="py-1 font-medium text-gray-900">Total per person</td>
+                            <td className="py-1 text-gray-600">Sales tax per person</td>
+                            <td className="py-1 text-right text-gray-900">
+                              {formatCurrency(perPersonBreakdown.childSalesTaxPer)}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1 font-medium text-gray-900">Total per person (incl tax)</td>
                             <td className="py-1 text-right font-semibold text-gray-900">
                               {formatCurrency(perPersonBreakdown.childTotalPer)}
                             </td>

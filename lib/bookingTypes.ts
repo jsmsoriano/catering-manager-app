@@ -12,6 +12,7 @@ export interface BookingPricingSnapshot {
   adultBasePrice: number;   // rate per adult at booking time
   childBasePrice: number;   // rate per child at booking time
   gratuityPercent: number;  // gratuity % from business rules at booking time
+  salesTaxPercent?: number; // sales tax % from business rules at booking time
   capturedAt: string;       // ISO timestamp
 }
 

@@ -20,6 +20,7 @@ const BOOKING_COLUMNS = [
   'inquiry_score', 'last_contacted_at', 'next_follow_up_at',
   'lost_reason', 'source_channel',
   'created_at', 'updated_at', 'created_by', 'updated_by',
+  'organization_id',
 ].join(', ');
 
 // ─── Row type (snake_case, matches Supabase bookings table) ──────────────────
@@ -76,6 +77,7 @@ interface BookingRow {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+  organization_id: string | null;
 }
 
 /** Derive default pipeline_status from source/status for backfill */
@@ -148,6 +150,7 @@ function toRow(b: Booking): BookingRow {
     updated_at: b.updatedAt,
     created_by: null,
     updated_by: null,
+    organization_id: null,
   };
 }
 
@@ -264,7 +267,8 @@ export async function fetchBookingById(
 export async function upsertBookings(
   supabase: SupabaseClient,
   bookings: Booking[],
-  userId?: string
+  userId?: string,
+  organizationId?: string
 ): Promise<void> {
   if (bookings.length === 0) return;
   const uid = userId ?? null;
@@ -274,6 +278,7 @@ export async function upsertBookings(
     // Only set created_by when we have a userId so existing null values are
     // not overwritten on resync by unauthenticated paths.
     ...(uid ? { created_by: uid } : {}),
+    ...(organizationId ? { organization_id: organizationId } : {}),
   }));
   const { error } = await supabase
     .from('bookings')

@@ -12,6 +12,7 @@ const INQUIRY_FORM_PATH = '/inquiry-form';
 const INQUIRY_CHAT_PATH = '/inquiry-chat';
 
 const PROPOSAL_PATH = '/proposal';
+const RESET_PASSWORD_PATH = '/auth/reset-password';
 if (process.env.BYPASS_AUTH === 'true' && process.env.NODE_ENV === 'production') {
   throw new Error('BYPASS_AUTH must not be enabled in production');
 }
@@ -20,7 +21,7 @@ const BETA_ALLOW_SIGNUP =
   process.env.BETA_ALLOW_SIGNUP === 'true' ||
   process.env.NEXT_PUBLIC_BETA_ALLOW_SIGNUP === 'true';
 
-const publicPaths = [LOGIN_PATH, SIGNUP_PATH, AUTH_CALLBACK_PATH, BETA_PATH, INQUIRY_PATH, INQUIRY_FORM_PATH, INQUIRY_CHAT_PATH, PROPOSAL_PATH];
+const publicPaths = [LOGIN_PATH, SIGNUP_PATH, AUTH_CALLBACK_PATH, RESET_PASSWORD_PATH, BETA_PATH, INQUIRY_PATH, INQUIRY_FORM_PATH, INQUIRY_CHAT_PATH, PROPOSAL_PATH];
 
 function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api')) return true;
@@ -105,6 +106,8 @@ export async function middleware(request: NextRequest) {
       isApiPath ||
       pathname === CHEF_PATH ||
       pathname.startsWith(CHEF_PATH + '/') ||
+      pathname === '/bookings/shopping' ||
+      pathname.startsWith('/bookings/shopping/') ||
       pathname === '/calculator' ||
       pathname.startsWith('/calculator/') ||
       pathname === AUTH_CALLBACK_PATH ||
@@ -122,6 +125,7 @@ export async function middleware(request: NextRequest) {
     pathname === INQUIRY_FORM_PATH ||
     pathname === INQUIRY_CHAT_PATH;
   const isBetaPath = pathname === BETA_PATH || pathname.startsWith(BETA_PATH + '/');
+  const isResetPasswordPath = pathname === RESET_PASSWORD_PATH;
 
   // Invite-only beta by default: disable self-serve signup unless explicitly enabled.
   if (isSignupPath && !BETA_ALLOW_SIGNUP) {
@@ -129,8 +133,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Logged-in users are redirected away from auth pages, but may still open public
-  // customer/testing views (inquiry, proposal, beta hub).
-  if (user && !isApiPath && isPublicPath(pathname) && !isInquiryPath && !isProposalPath && !isBetaPath) {
+  // customer/testing views (inquiry, proposal, beta hub, reset-password).
+  if (user && !isApiPath && isPublicPath(pathname) && !isInquiryPath && !isProposalPath && !isBetaPath && !isResetPasswordPath) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

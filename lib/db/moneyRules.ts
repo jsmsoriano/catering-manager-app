@@ -5,15 +5,18 @@ import { DEFAULT_RULES } from '@/lib/moneyRules';
 // saveRules() in lib/moneyRules.ts writes to this key
 const MONEY_RULES_LOCAL_KEY = 'moneyRules';
 
-// money_rules table uses id = 'default' with a rules JSONB column.
-// No app_id needed — single-row config table.
+// money_rules table has one row per organization (organization_id UNIQUE).
+// Queries use organization_id when provided; fall back to id='default' for
+// backwards compatibility until all callers pass an org ID.
 
-export async function fetchMoneyRules(supabase: SupabaseClient): Promise<MoneyRules | null> {
-  const { data, error } = await supabase
-    .from('money_rules')
-    .select('rules')
-    .eq('id', 'default')
-    .single();
+export async function fetchMoneyRules(
+  supabase: SupabaseClient,
+  organizationId?: string
+): Promise<MoneyRules | null> {
+  const query = supabase.from('money_rules').select('rules');
+  const { data, error } = organizationId
+    ? await query.eq('organization_id', organizationId).single()
+    : await query.eq('id', 'default').single();
 
   if (error) return null;
   if (!data?.rules || Object.keys(data.rules as object).length === 0) return null;
@@ -24,11 +27,13 @@ export async function fetchMoneyRules(supabase: SupabaseClient): Promise<MoneyRu
 
 export async function saveMoneyRulesToDB(
   supabase: SupabaseClient,
-  rules: MoneyRules
+  rules: MoneyRules,
+  organizationId?: string
 ): Promise<void> {
-  const { error } = await supabase
-    .from('money_rules')
-    .upsert({ id: 'default', rules, updated_at: new Date().toISOString() });
+  const row = organizationId
+    ? { id: 'default', organization_id: organizationId, rules, updated_at: new Date().toISOString() }
+    : { id: 'default', rules, updated_at: new Date().toISOString() };
+  const { error } = await supabase.from('money_rules').upsert(row);
   if (error) throw error;
 }
 

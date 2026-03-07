@@ -14,7 +14,8 @@ export async function GET(request: Request) {
       if (!error) {
         const { data: { user } } = await supabase.auth.getUser();
         const role = (user?.app_metadata as { role?: string } | undefined)?.role;
-        const redirectTo = role === 'chef' ? '/calculator' : next;
+        // If next is explicitly set (e.g. /auth/reset-password), always respect it.
+        const redirectTo = next !== '/' ? next : role === 'chef' ? '/calculator' : next;
         return NextResponse.redirect(new URL(redirectTo, requestUrl.origin));
       }
     }

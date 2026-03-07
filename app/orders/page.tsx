@@ -137,6 +137,12 @@ export default function OrdersPage() {
             <p className="mt-1 text-sm text-text-muted">Manage inbound online orders and convert complex ones to events.</p>
           </div>
           <div className="flex gap-2">
+            <Link
+              href="/orders/entry"
+              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90"
+            >
+              New Order Entry
+            </Link>
             <button
               type="button"
               onClick={seedTestOrders}

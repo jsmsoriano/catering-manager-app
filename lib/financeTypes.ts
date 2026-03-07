@@ -68,3 +68,11 @@ export interface CustomerPaymentRecord {
   notes?: string;
   recordedAt: string;
 }
+
+export interface SalesTaxRemittanceRecord {
+  id: string;
+  remittanceDate: string; // ISO local date string (YYYY-MM-DD)
+  amount: number;
+  notes?: string;
+  createdAt: string;
+}

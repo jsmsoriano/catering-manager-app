@@ -1,6 +1,9 @@
 'use client';
 
-import type { EventTypeConfig } from '@/lib/templateConfig';
+import { useMemo } from 'react';
+import { calculateEventFinancials } from '@/lib/moneyRules';
+import { getPricingSlot, type EventTypeConfig } from '@/lib/templateConfig';
+import type { MoneyRules } from '@/lib/types';
 import type { BookingFormData } from './bookingFormTypes';
 
 interface DetailsTabProps {
@@ -10,6 +13,7 @@ interface DetailsTabProps {
   onSave: (e: React.FormEvent) => void;
   onBack: () => void;
   eventTypeOptions: EventTypeConfig[];
+  rules: MoneyRules;
 }
 
 export function DetailsTab({
@@ -19,7 +23,32 @@ export function DetailsTab({
   onSave,
   onBack,
   eventTypeOptions,
+  rules,
 }: DetailsTabProps) {
+  const pricing = useMemo(() => {
+    if (!formData.eventDate || !formData.adults) return null;
+    try {
+      const pricingSlot = getPricingSlot(eventTypeOptions, formData.eventType);
+      return calculateEventFinancials(
+        {
+          adults: formData.adults,
+          children: formData.children,
+          eventType: formData.eventType,
+          eventDate: new Date(formData.eventDate + 'T12:00:00'),
+          distanceMiles: formData.distanceMiles ?? 0,
+          premiumAddOn: formData.premiumAddOn ?? 0,
+          pricingSlot,
+        },
+        rules
+      );
+    } catch {
+      return null;
+    }
+  }, [formData.adults, formData.children, formData.eventType, formData.eventDate, formData.distanceMiles, formData.premiumAddOn, eventTypeOptions, rules]);
+
+  const fmt = (n: number) =>
+    n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
   return (
     <form onSubmit={onSave} className="space-y-6 rounded-lg border border-border bg-card-elevated p-6">
       <h2 className="text-lg font-semibold text-text-primary">Event details</h2>
@@ -86,6 +115,34 @@ export function DetailsTab({
           className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2 text-text-primary"
         />
       </div>
+      {pricing && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-text-muted">Live Pricing Preview</p>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-text-secondary">
+                Subtotal ({formData.adults} adults{formData.children > 0 ? `, ${formData.children} kids` : ''})
+              </span>
+              <span className="font-medium text-text-primary">{fmt(pricing.subtotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-text-secondary">Gratuity ({pricing.gratuityPercent}%)</span>
+              <span className="font-medium text-text-primary">{fmt(pricing.gratuity)}</span>
+            </div>
+            {pricing.distanceFee > 0 && (
+              <div className="flex justify-between">
+                <span className="text-text-secondary">Distance fee</span>
+                <span className="font-medium text-text-primary">{fmt(pricing.distanceFee)}</span>
+              </div>
+            )}
+            <div className="mt-2 flex justify-between border-t border-border pt-2">
+              <span className="font-semibold text-text-primary">Total</span>
+              <span className="font-bold text-accent">{fmt(pricing.totalCharged)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {saveError && <p className="text-sm text-danger">{saveError}</p>}
       <div className="flex justify-end gap-2">
         <button

@@ -1,5 +1,6 @@
 import type { Booking, BookingStatus, PaymentStatus, PipelineStatus } from './bookingTypes';
 import { normalizeCustomerId } from './customerIdentity';
+import { calculateBookingTotalWithTax } from './salesTax';
 
 export const DEFAULT_DEPOSIT_PERCENT = 30;
 export const DEFAULT_PURCHASE_LEAD_DAYS = 2;
@@ -66,15 +67,15 @@ export function calculatePrepPurchaseByDate(
 function derivePaymentStatus(params: {
   serviceStatus: BookingStatus;
   eventDate: string;
-  total: number;
+  totalDue: number;
   amountPaid: number;
   depositAmount: number;
   asOfDate: string;
 }): PaymentStatus {
-  const { serviceStatus, eventDate, total, amountPaid, depositAmount, asOfDate } = params;
-  const normalizedTotal = Math.max(0, total);
+  const { serviceStatus, eventDate, totalDue, amountPaid, depositAmount, asOfDate } = params;
+  const normalizedTotalDue = Math.max(0, totalDue);
 
-  if (amountPaid + MONEY_EPSILON >= normalizedTotal) return 'paid-in-full';
+  if (amountPaid + MONEY_EPSILON >= normalizedTotalDue) return 'paid-in-full';
 
   if (serviceStatus === 'cancelled') {
     return amountPaid > MONEY_EPSILON ? 'refunded' : 'unpaid';
@@ -96,12 +97,12 @@ export function normalizeBookingWorkflowFields(
   asOfDate = toLocalDateISO(new Date())
 ): Booking {
   const serviceStatus = getBookingServiceStatus(booking);
-  const total = toFiniteNonNegative(booking.total);
+  const totalDue = toFiniteNonNegative(calculateBookingTotalWithTax(booking));
   const depositPercent = toFiniteNonNegative(booking.depositPercent, DEFAULT_DEPOSIT_PERCENT);
-  const computedDeposit = roundMoney(total * (depositPercent / 100));
+  const computedDeposit = roundMoney(totalDue * (depositPercent / 100));
   const depositAmount = roundMoney(toFiniteNonNegative(booking.depositAmount, computedDeposit));
   const amountPaid = roundMoney(toFiniteNonNegative(booking.amountPaid, 0));
-  const balanceDueAmount = roundMoney(Math.max(0, total - amountPaid));
+  const balanceDueAmount = roundMoney(Math.max(0, totalDue - amountPaid));
   const prepPurchaseByDate =
     booking.prepPurchaseByDate || calculatePrepPurchaseByDate(booking.eventDate);
 
@@ -120,7 +121,7 @@ export function normalizeBookingWorkflowFields(
     derivePaymentStatus({
       serviceStatus,
       eventDate: booking.eventDate,
-      total,
+      totalDue,
       amountPaid,
       depositAmount,
       asOfDate,
@@ -150,8 +151,9 @@ export function applyConfirmationPaymentTerms(
   confirmedAtIso: string,
   rulesDepositPercent = DEFAULT_DEPOSIT_PERCENT
 ): Booking {
+  const totalDue = calculateBookingTotalWithTax(booking);
   const depositPercent = toFiniteNonNegative(booking.depositPercent, rulesDepositPercent);
-  const depositAmount = roundMoney(booking.total * (depositPercent / 100));
+  const depositAmount = roundMoney(totalDue * (depositPercent / 100));
   const amountPaid = roundMoney(toFiniteNonNegative(booking.amountPaid, 0));
   const confirmedLocalDate = toLocalDateISO(new Date(confirmedAtIso));
 
@@ -165,7 +167,7 @@ export function applyConfirmationPaymentTerms(
     depositDueDate: booking.depositDueDate || confirmedLocalDate,
     balanceDueDate: booking.balanceDueDate || booking.eventDate,
     amountPaid,
-    balanceDueAmount: roundMoney(Math.max(0, booking.total - amountPaid)),
+    balanceDueAmount: roundMoney(Math.max(0, totalDue - amountPaid)),
     paymentStatus: undefined, // Re-derive
   });
 }
@@ -184,7 +186,7 @@ export function applyPaymentToBooking(
     {
       ...normalizedBooking,
       amountPaid: nextAmountPaid,
-      balanceDueAmount: roundMoney(Math.max(0, normalizedBooking.total - nextAmountPaid)),
+      balanceDueAmount: roundMoney(Math.max(0, calculateBookingTotalWithTax(normalizedBooking) - nextAmountPaid)),
       paymentStatus: undefined, // Re-derive
     },
     paymentDate
@@ -208,7 +210,7 @@ export function applyRefundToBooking(
       status: 'cancelled',
       serviceStatus: 'cancelled',
       amountPaid: nextAmountPaid,
-      balanceDueAmount: roundMoney(Math.max(0, normalizedBooking.total - nextAmountPaid)),
+      balanceDueAmount: roundMoney(Math.max(0, calculateBookingTotalWithTax(normalizedBooking) - nextAmountPaid)),
       paymentStatus: undefined, // Re-derive (refunded when cancelled and amountPaid > 0)
     },
     refundDate

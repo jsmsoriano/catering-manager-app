@@ -62,6 +62,15 @@ const REPORTS: ReportDef[] = [
     iconClass: 'bg-amber-500/10 text-amber-500',
   },
   {
+    id: 'sales-tax',
+    name: 'Sales Tax Liability',
+    description:
+      'Track sales tax collected, remitted, and current owed balance with monthly rollforward.',
+    href: '/reports/sales-tax',
+    icon: BanknotesIcon,
+    iconClass: 'bg-indigo-500/10 text-indigo-500',
+  },
+  {
     id: 'comparative',
     name: 'Staff Payouts',
     description:

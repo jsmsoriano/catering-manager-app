@@ -8,6 +8,13 @@ import { useTemplateConfig } from '@/lib/useTemplateConfig';
 import { getHibachiStaffingRecommendation } from '@/lib/hibachiService';
 import type { MoneyRules, StaffingProfile, StaffingRoleEntry } from '@/lib/types';
 import { useMoneyRulesQuery } from '@/lib/hooks/useMoneyRulesQuery';
+import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import {
+  loadOverheadConfig,
+  saveOverheadConfig,
+  type OverheadConfig,
+  type OverheadExpense,
+} from '@/lib/overheadStorage';
 
 /** Currency input: $ prefix, step 0.01, round to 2 decimals on blur */
 function CurrencyInput({
@@ -96,7 +103,44 @@ export function BusinessRulesContent() {
     { id: 'labor', name: 'Labor' },
     { id: 'costs', name: 'Costs & Fees' },
     { id: 'profit', name: 'Profit' },
+    { id: 'overhead', name: 'Overhead' },
   ];
+
+  // ── Overhead config ──────────────────────────────────────────────────────────
+  const [overhead, setOverhead] = useState<OverheadConfig>(loadOverheadConfig);
+
+  const updateOverhead = (updates: Partial<OverheadConfig>) => {
+    setOverhead((prev) => {
+      const next = { ...prev, ...updates };
+      saveOverheadConfig(next);
+      return next;
+    });
+  };
+
+  const addExpense = () =>
+    updateOverhead({
+      expenses: [
+        ...overhead.expenses,
+        { id: crypto.randomUUID(), name: '', amount: 0, frequency: 'monthly' },
+      ],
+    });
+
+  const removeExpense = (id: string) =>
+    updateOverhead({ expenses: overhead.expenses.filter((e) => e.id !== id) });
+
+  const updateExpense = (id: string, field: keyof OverheadExpense, value: string | number) =>
+    updateOverhead({
+      expenses: overhead.expenses.map((e) => (e.id === id ? { ...e, [field]: value } : e)),
+    });
+
+  const totalMonthlyExpenses = overhead.expenses.reduce((sum, e) => {
+    return sum + (e.frequency === 'annual' ? (e.amount || 0) / 12 : (e.amount || 0));
+  }, 0);
+  const perEventExpense =
+    overhead.eventsPerMonth > 0 ? totalMonthlyExpenses / overhead.eventsPerMonth : 0;
+
+  const formatCurrencyLocal = (n: number) =>
+    n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
 
   // Sync local editing state when saved rules load from Supabase
   useEffect(() => {
@@ -344,6 +388,26 @@ export function BusinessRulesContent() {
                   updateRules={updateRules}
                 />
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* SALES TAX SETTINGS */}
+        <section className="rounded-lg border border-border bg-card p-6 dark:border-border ">
+          <h2 className="mb-4 text-xl font-semibold text-text-primary">Sales Tax Settings</h2>
+          <p className="mb-5 text-sm text-text-muted">
+            Configure the default sales tax rate used across the app for estimates and invoicing displays.
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">
+              Sales Tax Rate (%)
+            </label>
+            <div className="w-28">
+              <PercentInput
+                value={rules.pricing.salesTaxPercent ?? 8}
+                path={['pricing', 'salesTaxPercent']}
+                updateRules={updateRules}
+              />
             </div>
           </div>
         </section>
@@ -1162,6 +1226,172 @@ export function BusinessRulesContent() {
           </div>
         </section>
         </>
+        )}
+
+        {/* OVERHEAD TAB */}
+        {activeTab === 'overhead' && (
+          <div className="space-y-8">
+
+            {/* Expense Items */}
+            <section className="rounded-lg border border-border bg-card p-6">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-text-primary">Monthly Expenses</h2>
+                  <p className="mt-1 text-sm text-text-muted">Fixed overhead costs spread across events (insurance, equipment, subscriptions, etc.)</p>
+                </div>
+                <button
+                  onClick={addExpense}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-card-elevated hover:text-text-primary"
+                >
+                  <PlusIcon className="h-4 w-4" /> Add Expense
+                </button>
+              </div>
+
+              {overhead.expenses.length === 0 ? (
+                <p className="py-6 text-center text-sm text-text-muted">No expenses added. Click Add Expense to start tracking overhead.</p>
+              ) : (
+                <div className="space-y-2">
+                  {overhead.expenses.map((e) => {
+                    const monthlyEquiv = e.frequency === 'annual' ? e.amount / 12 : e.amount;
+                    return (
+                      <div key={e.id} className="rounded-lg bg-card-elevated p-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="text"
+                            placeholder="Expense name"
+                            value={e.name}
+                            onChange={(ev) => updateExpense(e.id, 'name', ev.target.value)}
+                            className="min-w-0 flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+                          />
+                          <div className="flex shrink-0 overflow-hidden rounded-md border border-border bg-card text-xs font-medium">
+                            <button
+                              onClick={() => updateExpense(e.id, 'frequency', 'monthly')}
+                              className={`px-2.5 py-1.5 transition-colors ${e.frequency === 'monthly' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}
+                            >Mo</button>
+                            <button
+                              onClick={() => updateExpense(e.id, 'frequency', 'annual')}
+                              className={`px-2.5 py-1.5 transition-colors ${e.frequency === 'annual' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}
+                            >Yr</button>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <span className="text-sm text-text-muted">$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="10"
+                              value={e.amount}
+                              onChange={(ev) => updateExpense(e.id, 'amount', parseFloat(ev.target.value) || 0)}
+                              className="w-24 rounded-md border border-border bg-card px-2 py-2 text-right text-sm font-semibold text-text-primary focus:border-accent focus:outline-none"
+                            />
+                          </div>
+                          <button onClick={() => removeExpense(e.id)} className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-card hover:text-danger">
+                            <XMarkIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                        {e.frequency === 'annual' && e.amount > 0 && (
+                          <p className="mt-1.5 pl-1 text-xs text-text-muted">
+                            {formatCurrencyLocal(monthlyEquiv)}/mo · {formatCurrencyLocal(e.amount)}/yr
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {overhead.expenses.length > 0 && (
+                <div className="mt-5 border-t border-border pt-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="font-semibold text-text-primary">Total Monthly Equivalent</span>
+                    <span className="font-bold text-danger">{formatCurrencyLocal(totalMonthlyExpenses)}</span>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Per-Event Settings */}
+            <section className="rounded-lg border border-border bg-card p-6">
+              <h2 className="mb-1 text-xl font-semibold text-text-primary">Per-Event Allocation</h2>
+              <p className="mb-5 text-sm text-text-muted">How many events per month divides the total overhead into a per-event cost.</p>
+              <div className="flex flex-wrap items-center gap-4">
+                <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">Events per month</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  value={overhead.eventsPerMonth}
+                  onChange={(e) => updateOverhead({ eventsPerMonth: parseInt(e.target.value) || 1 })}
+                  className="w-28 rounded-md border border-border bg-card-elevated px-3 py-2 text-center text-text-primary"
+                />
+              </div>
+              {totalMonthlyExpenses > 0 && (
+                <div className="mt-5 rounded-lg border-2 border-border bg-card-elevated p-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-text-secondary">Monthly overhead</span>
+                    <span className="font-medium text-text-primary">{formatCurrencyLocal(totalMonthlyExpenses)}</span>
+                  </div>
+                  <div className="mt-1.5 flex justify-between text-sm">
+                    <span className="text-text-secondary">Events per month</span>
+                    <span className="font-medium text-text-primary">{overhead.eventsPerMonth}</span>
+                  </div>
+                  <div className="mt-3 flex justify-between border-t border-border pt-3">
+                    <span className="font-semibold text-text-primary">Overhead per event</span>
+                    <span className="text-xl font-bold text-danger">−{formatCurrencyLocal(perEventExpense)}</span>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Tax Reserves */}
+            <section className="rounded-lg border border-border bg-card p-6">
+              <h2 className="mb-1 text-xl font-semibold text-text-primary">Tax Reserves</h2>
+              <p className="mb-5 text-sm text-text-muted">
+                Reserved from gross profit before owner splits. Sales tax rate is set in the Pricing tab.
+              </p>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">Self-Employment Tax (SE)</label>
+                  <div className="mt-1 flex w-28 items-center rounded-md border border-border bg-card-elevated">
+                    <input
+                      type="number"
+                      min="0"
+                      max="30"
+                      step="0.1"
+                      value={overhead.seTaxPct}
+                      onChange={(e) => updateOverhead({ seTaxPct: parseFloat(e.target.value) || 0 })}
+                      className="flex-1 border-0 bg-transparent py-2 pl-3 pr-1 text-text-primary"
+                    />
+                    <span className="pr-3 text-text-secondary">%</span>
+                  </div>
+                  <p className="text-xs text-text-muted">Social Security + Medicare (~15.3%)</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="w-56 shrink-0 text-sm font-medium text-text-secondary">Income Tax Reserve</label>
+                  <div className="mt-1 flex w-28 items-center rounded-md border border-border bg-card-elevated">
+                    <input
+                      type="number"
+                      min="0"
+                      max="40"
+                      step="0.5"
+                      value={overhead.incomeTaxPct}
+                      onChange={(e) => updateOverhead({ incomeTaxPct: parseFloat(e.target.value) || 0 })}
+                      className="flex-1 border-0 bg-transparent py-2 pl-3 pr-1 text-text-primary"
+                    />
+                    <span className="pr-3 text-text-secondary">%</span>
+                  </div>
+                  <p className="text-xs text-text-muted">Federal + state estimate based on your bracket</p>
+                </div>
+                {(overhead.seTaxPct > 0 || overhead.incomeTaxPct > 0) && (
+                  <div className="rounded-md bg-card-elevated px-4 py-3 text-xs text-text-muted">
+                    Combined reserve (SE + income): <strong className="text-text-primary">{(overhead.seTaxPct + overhead.incomeTaxPct).toFixed(1)}%</strong> of gross profit · Sales tax reserve ({' '}
+                    <Link href="/business-rules" onClick={() => setActiveTab('pricing')} className="text-accent hover:underline">set in Pricing tab</Link>
+                    ) adds to this.
+                  </div>
+                )}
+              </div>
+            </section>
+
+          </div>
         )}
       </div>
 

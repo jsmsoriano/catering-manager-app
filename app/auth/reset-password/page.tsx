@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import Image from 'next/image';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { createClient } from '@/lib/supabase/client';
@@ -12,6 +12,30 @@ function ResetPasswordContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+
+  // Supabase sends recovery tokens in the URL hash fragment.
+  // Exchange them for a session so updateUser() works.
+  useEffect(() => {
+    const hash = window.location.hash.substring(1);
+    if (!hash) { setSessionReady(true); return; } // already logged in
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    const type = params.get('type');
+    if (type !== 'recovery' || !accessToken || !refreshToken) {
+      setSessionReady(true);
+      return;
+    }
+    const supabase = createClient();
+    if (!supabase) { setError('Auth is not configured.'); setSessionReady(true); return; }
+    supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error: sessionError }) => {
+      if (sessionError) setError('Invalid or expired reset link. Please request a new one.');
+      // Clear the hash so tokens are not visible in the URL bar
+      window.history.replaceState(null, '', window.location.pathname);
+      setSessionReady(true);
+    });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +61,9 @@ function ResetPasswordContent() {
           <p className="mt-1 text-sm text-text-muted">Choose a strong password for your account</p>
         </div>
 
-        {done ? (
+        {!sessionReady ? (
+          <div className="text-center text-sm text-text-muted">Verifying reset link…</div>
+        ) : done ? (
           <div className="rounded-lg border border-success/50 bg-success/10 px-4 py-4 text-sm text-success">
             Password updated! Redirecting…
           </div>
