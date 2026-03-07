@@ -343,7 +343,7 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
                 { color: 'bg-amber-500', label: 'Overhead', pct: barOverhead },
                 { color: 'bg-orange-500', label: 'Tax Reserve', pct: barTaxReserve },
                 { color: 'bg-violet-500', label: 'Retained', pct: barRetained },
-                { color: 'bg-emerald-500', label: 'Distributable', pct: barDistributable },
+                { color: 'bg-emerald-500', label: 'Profit Share', pct: barDistributable },
               ].map(({ color, label, pct }) => (
                 <div key={label} className="flex items-center gap-1.5">
                   <div className={`h-2.5 w-2.5 rounded-sm ${color}`} />
@@ -448,7 +448,7 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
                 <span className="tabular-nums text-violet-400">−{formatCurrency(retainedAmt)}</span>
               </div>
               <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
-                <span className="text-text-primary">Distributable ({rules.profitDistribution.ownerDistributionPercent}%)</span>
+                <span className="text-text-primary">Profit Share Distribution ({rules.profitDistribution.ownerDistributionPercent}%)</span>
                 <span className="tabular-nums text-success">{formatCurrency(distributable)}</span>
               </div>
               <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
@@ -770,7 +770,7 @@ function BusinessInfoTab() {
         <div className="mt-2 rounded-md border border-border bg-card-elevated">
           {[
             ['Business retained', '30% of gross profit — working capital & reinvestment'],
-            ['Distributable pool', '70% of gross profit — paid to partners monthly'],
+            ['Profit Share Distribution pool', '70% of gross profit — paid to partners monthly'],
             ['A Soriano share', '40% of distributable pool'],
             ['J Soriano share', '60% of distributable pool'],
           ].map(([label, value]) => (
@@ -877,6 +877,8 @@ export default function CalculatorPage() {
   const [priceText, setPriceText] = useState('60');
   const [gratuityPct, setGratuityPct] = useState(20);
   const [actualCollectedText, setActualCollectedText] = useState('');
+  const [calcActualFoodText, setCalcActualFoodText] = useState('');
+  const [calcActualSuppliesText, setCalcActualSuppliesText] = useState('');
 
   // Live calculations
   const childPricePerGuest = pricePerGuest * 0.5;
@@ -892,7 +894,7 @@ export default function CalculatorPage() {
         <div className="mb-6">
           {/* Logo + title */}
           <div className="mb-5 flex items-center gap-4">
-            <div className="relative h-[68px] w-[68px] shrink-0 rounded-xl border border-border bg-white shadow-md">
+            <div className="relative h-[68px] w-[68px] shrink-0 rounded-xl border border-border bg-card shadow-md">
               <Image src="/hibachisun.png" alt="Hibachi A Go Go" fill className="object-contain p-1.5" />
             </div>
             <div>
@@ -902,12 +904,12 @@ export default function CalculatorPage() {
           </div>
 
           {/* Desktop tabs — hidden on mobile */}
-          <div className="hidden sm:flex rounded-lg border border-border bg-card-elevated p-1 w-fit">
+          <div className="hidden sm:flex rounded-lg border border-border bg-card-elevated p-1 w-full">
             {TABS.map(({ id, label }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   activeTab === id ? 'bg-accent text-white shadow-sm' : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
@@ -965,9 +967,20 @@ export default function CalculatorPage() {
 
           const foodCostPct = isBuffet ? rules.costs.secondaryFoodCostPercent : rules.costs.primaryFoodCostPercent;
           const suppliesCostPct = rules.costs.suppliesCostPercent;
-          const foodCost = subtotal * foodCostPct / 100;
-          const suppliesCost = subtotal * suppliesCostPct / 100;
-          const totalCosts = foodCost + suppliesCost + perEventExpense;
+          const foodCostBudget = subtotal * foodCostPct / 100;
+          const suppliesCostBudget = subtotal * suppliesCostPct / 100;
+
+          // Actual cost overrides
+          const parsedCalcActualFood = Number(calcActualFoodText);
+          const hasCalcActualFood = calcActualFoodText.trim() !== '' && Number.isFinite(parsedCalcActualFood) && parsedCalcActualFood >= 0;
+          const parsedCalcActualSupplies = Number(calcActualSuppliesText);
+          const hasCalcActualSupplies = calcActualSuppliesText.trim() !== '' && Number.isFinite(parsedCalcActualSupplies) && parsedCalcActualSupplies >= 0;
+          const effectiveFoodCost = hasCalcActualFood ? parsedCalcActualFood : foodCostBudget;
+          const effectiveSuppliesCost = hasCalcActualSupplies ? parsedCalcActualSupplies : suppliesCostBudget;
+          // Keep legacy names for display compatibility
+          const foodCost = foodCostBudget;
+          const suppliesCost = suppliesCostBudget;
+          const totalCosts = effectiveFoodCost + effectiveSuppliesCost + perEventExpense;
 
           // Gratuity is a pass-through: collected separately, paid directly to staff.
           // All revenue-based calculations use subtotal only.
@@ -1004,7 +1017,7 @@ export default function CalculatorPage() {
 
           // Bar segments as % of subtotal (revenue only, gratuity excluded)
           const barLabor = subtotal > 0 ? (totalBaseLaborPay / subtotal) * 100 : 0;
-          const barCosts = subtotal > 0 ? ((foodCost + suppliesCost) / subtotal) * 100 : 0;
+          const barCosts = subtotal > 0 ? ((effectiveFoodCost + effectiveSuppliesCost) / subtotal) * 100 : 0;
           const barOverhead = subtotal > 0 ? (perEventExpense / subtotal) * 100 : 0;
           const barTaxReserve = subtotal > 0 ? (totalTaxReserveAmt / subtotal) * 100 : 0;
           const barRetained = subtotal > 0 ? (retainedAmt / subtotal) * 100 : 0;
@@ -1146,7 +1159,7 @@ export default function CalculatorPage() {
                     { color: 'bg-amber-500', label: 'Overhead', pct: barOverhead },
                     { color: 'bg-orange-500', label: 'Tax Reserve', pct: barTaxReserve },
                     { color: 'bg-violet-500', label: 'Retained', pct: barRetained },
-                    { color: 'bg-emerald-500', label: 'Distributable', pct: barDistributable },
+                    { color: 'bg-emerald-500', label: 'Profit Share', pct: barDistributable },
                   ].map(({ color, label, pct }) => (
                     <div key={label} className="flex items-center gap-1.5">
                       <div className={`h-2.5 w-2.5 rounded-sm ${color}`} />
@@ -1201,12 +1214,22 @@ export default function CalculatorPage() {
                 <div className="border-b border-border pb-1 pt-2">
                   <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Costs</p>
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                    <span className="text-text-secondary">Food Cost ({foodCostPct}%)</span>
-                    <span className="tabular-nums text-red-400">−{formatCurrency(foodCost)}</span>
+                    <span className="text-text-secondary">
+                      Food Cost ({foodCostPct}%)
+                      {effectiveFoodCost !== foodCostBudget && (
+                        <span className="ml-2 text-[11px] text-text-muted line-through">{formatCurrency(foodCostBudget)}</span>
+                      )}
+                    </span>
+                    <span className="tabular-nums text-red-400">−{formatCurrency(effectiveFoodCost)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                    <span className="text-text-secondary">Supplies ({suppliesCostPct}%)</span>
-                    <span className="tabular-nums text-red-400">−{formatCurrency(suppliesCost)}</span>
+                    <span className="text-text-secondary">
+                      Supplies ({suppliesCostPct}%)
+                      {effectiveSuppliesCost !== suppliesCostBudget && (
+                        <span className="ml-2 text-[11px] text-text-muted line-through">{formatCurrency(suppliesCostBudget)}</span>
+                      )}
+                    </span>
+                    <span className="tabular-nums text-red-400">−{formatCurrency(effectiveSuppliesCost)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
                     <span className="text-text-secondary">Overhead Allocation</span>
@@ -1256,7 +1279,7 @@ export default function CalculatorPage() {
                     <span className="tabular-nums text-violet-400">−{formatCurrency(retainedAmt)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
-                    <span className="text-text-primary">Distributable ({rules.profitDistribution.ownerDistributionPercent}%)</span>
+                    <span className="text-text-primary">Profit Share Distribution ({rules.profitDistribution.ownerDistributionPercent}%)</span>
                     <span className="tabular-nums text-success">{formatCurrency(distributable)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
@@ -1296,7 +1319,79 @@ export default function CalculatorPage() {
               {/* ── Reconciliation ── */}
               <div className="rounded-lg border border-border bg-card p-5">
                 <h2 className="mb-2 text-sm font-semibold text-text-primary sm:text-base">Reconciliation</h2>
-                <p className="mb-4 text-xs text-text-muted">Enter actual amount collected. Any amount above estimate is treated as extra gratuity.</p>
+                <p className="mb-4 text-xs text-text-muted">Enter actual total collected and actual costs. Any unused cost budget goes to profit.</p>
+
+                {/* Actual cost overrides */}
+                <div className="mb-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">Actual Costs (optional)</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 flex items-center justify-between text-xs font-medium text-text-muted">
+                        <span>Food Cost</span>
+                        <span>budget {formatCurrency(foodCostBudget)}</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-medium text-text-muted">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={calcActualFoodText}
+                          onChange={(e) => setCalcActualFoodText(e.target.value)}
+                          placeholder={foodCostBudget.toFixed(2)}
+                          className="w-full rounded-md border border-border bg-card-elevated pl-7 pr-3 py-2 text-sm font-medium text-text-primary focus:border-accent focus:outline-none"
+                        />
+                      </div>
+                      {hasCalcActualFood && (
+                        <p className={`mt-1 text-xs font-medium ${parsedCalcActualFood < foodCostBudget ? 'text-emerald-400' : 'text-danger'}`}>
+                          {parsedCalcActualFood < foodCostBudget
+                            ? `+${formatCurrency(foodCostBudget - parsedCalcActualFood)} saved → profit`
+                            : `${formatCurrency(parsedCalcActualFood - foodCostBudget)} over budget`}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="mb-1.5 flex items-center justify-between text-xs font-medium text-text-muted">
+                        <span>Supplies</span>
+                        <span>budget {formatCurrency(suppliesCostBudget)}</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-medium text-text-muted">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={calcActualSuppliesText}
+                          onChange={(e) => setCalcActualSuppliesText(e.target.value)}
+                          placeholder={suppliesCostBudget.toFixed(2)}
+                          className="w-full rounded-md border border-border bg-card-elevated pl-7 pr-3 py-2 text-sm font-medium text-text-primary focus:border-accent focus:outline-none"
+                        />
+                      </div>
+                      {hasCalcActualSupplies && (
+                        <p className={`mt-1 text-xs font-medium ${parsedCalcActualSupplies < suppliesCostBudget ? 'text-emerald-400' : 'text-danger'}`}>
+                          {parsedCalcActualSupplies < suppliesCostBudget
+                            ? `+${formatCurrency(suppliesCostBudget - parsedCalcActualSupplies)} saved → profit`
+                            : `${formatCurrency(parsedCalcActualSupplies - suppliesCostBudget)} over budget`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {(hasCalcActualFood || hasCalcActualSupplies) && (() => {
+                    const savings = (foodCostBudget - effectiveFoodCost) + (suppliesCostBudget - effectiveSuppliesCost);
+                    return savings !== 0 ? (
+                      <div className="rounded-md border border-border bg-card-elevated px-3 py-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-text-secondary">Total cost savings → profit</span>
+                          <span className={`font-semibold tabular-nums ${savings >= 0 ? 'text-emerald-400' : 'text-danger'}`}>
+                            {savings >= 0 ? '+' : '−'}{formatCurrency(Math.abs(savings))}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+
+                {/* Actual total collected */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-md border border-border bg-card-elevated px-3 py-2">
                     <p className="text-[11px] uppercase tracking-wide text-text-muted">Estimated Total</p>
