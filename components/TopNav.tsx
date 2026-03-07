@@ -3,14 +3,11 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   BellIcon,
-  Cog6ToothIcon,
   MagnifyingGlassIcon,
-  PlusIcon,
   Bars3Icon,
-  QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline';
 import { loadFromStorage } from '@/lib/storage';
 import type { Booking } from '@/lib/bookingTypes';
@@ -56,10 +53,23 @@ export default function TopNav({
   onOpenMobileMenu: () => void;
 }) {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const pathname = usePathname();
+  const { user } = useAuth();
   const { flags } = useFeatureFlags();
   const [q, setQ] = useState('');
   const [notifications, setNotifications] = useState(0);
+
+  const navLinks = [
+    { name: 'Dashboard', href: '/' },
+    { name: 'Events', href: '/bookings', show: flags.events },
+    { name: 'Calendar', href: '/staff/availability', show: flags.staff },
+    { name: 'Customers', href: '/customers', show: flags.customers },
+  ];
+
+  function isNavActive(href: string) {
+    if (href === '/') return pathname === '/';
+    return pathname === href || pathname.startsWith(href + '/');
+  }
 
   useEffect(() => {
     const refresh = () => setNotifications(getNotificationCount());
@@ -109,38 +119,23 @@ export default function TopNav({
         >
           <Bars3Icon className="h-6 w-6" />
         </button>
-        {flags.events && (
-          <Link
-            href="/bookings/new"
-            className="rounded-md p-1.5 text-text-secondary hover:bg-card-elevated md:hidden"
-            aria-label="New lead"
-          >
-            <PlusIcon className="h-6 w-6" />
-          </Link>
-        )}
-
-        <div className="hidden items-center gap-1 md:flex">
-          {flags.events && (
-            <Link href="/bookings/new" className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-text-primary hover:bg-card-elevated">
-              <PlusIcon className="h-4 w-4" />
-              New Lead
-            </Link>
+        <nav className="hidden items-center gap-1 md:flex">
+          {navLinks.map((link) =>
+            link.show === false ? null : (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={
+                  isNavActive(link.href)
+                    ? 'rounded-md px-2.5 py-1.5 text-sm font-semibold text-accent'
+                    : 'rounded-md px-2.5 py-1.5 text-sm font-medium text-text-secondary hover:bg-card-elevated hover:text-text-primary'
+                }
+              >
+                {link.name}
+              </Link>
+            )
           )}
-          {flags.events && (
-            <Link href="/bookings" className="rounded-md px-2.5 py-1.5 text-sm font-medium text-text-secondary hover:bg-card-elevated hover:text-text-primary">
-              Recent
-            </Link>
-          )}
-          <Link href="/settings" className="rounded-md px-2.5 py-1.5 text-sm font-medium text-text-secondary hover:bg-card-elevated hover:text-text-primary">
-            Administration
-          </Link>
-          {flags.wiki && (
-            <Link href="/wiki" className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm font-medium text-text-secondary hover:bg-card-elevated hover:text-text-primary">
-              <QuestionMarkCircleIcon className="h-4 w-4" />
-              Help
-            </Link>
-          )}
-        </div>
+        </nav>
 
         <form onSubmit={handleSearch} className="ml-auto hidden w-full max-w-md items-center md:flex">
           <div className="relative w-full">
@@ -167,18 +162,11 @@ export default function TopNav({
               </span>
             )}
           </Link>
-          <Link
-            href="/settings"
-            className="rounded-md p-2 text-text-secondary hover:bg-card-elevated hover:text-text-primary"
-            aria-label="Settings"
-          >
-            <Cog6ToothIcon className="h-5 w-5" />
-          </Link>
-          <Link href="/account" className="hidden items-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-secondary hover:bg-card-elevated md:flex">
+          <Link href="/account" className="rounded-md p-1.5 text-text-secondary hover:bg-card-elevated">
             {(user?.user_metadata as { avatar_url?: string } | undefined)?.avatar_url ? (
               <Image
                 src={(user?.user_metadata as { avatar_url?: string }).avatar_url!}
-                alt=""
+                alt="Account"
                 width={24}
                 height={24}
                 className="h-6 w-6 rounded-full object-cover"
@@ -188,15 +176,7 @@ export default function TopNav({
                 {userName[0]?.toUpperCase() ?? '?'}
               </span>
             )}
-            <span className="max-w-[10rem] truncate">{userName}</span>
           </Link>
-          <button
-            type="button"
-            onClick={() => signOut()}
-            className="hidden rounded-md px-2.5 py-1.5 text-sm font-medium text-text-secondary hover:bg-card-elevated hover:text-text-primary md:inline-flex"
-          >
-            Logout
-          </button>
         </div>
       </div>
     </header>

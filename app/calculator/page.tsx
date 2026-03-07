@@ -13,21 +13,8 @@ import { getCurrentChefStaffId, bookingHasStaff } from '@/lib/chefIdentity';
 import { loadRetainedEarningsTransactions } from '@/lib/financeStorage';
 import type { RetainedEarningsTransaction } from '@/lib/financeTypes';
 import type { EventReconciliation } from '@/lib/reconciliationTypes';
-import { PlusIcon, XMarkIcon, QuestionMarkCircleIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import { loadOverheadConfig, type OverheadConfig } from '@/lib/overheadStorage';
 
-// ─── Info tooltip ─────────────────────────────────────────────────────────────
-
-function InfoTooltip({ text }: { text: string }) {
-  return (
-    <span className="group relative inline-flex items-center">
-      <QuestionMarkCircleIcon className="h-4 w-4 cursor-help text-text-muted hover:text-text-secondary" />
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 -translate-x-1/2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-text-secondary opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-        {text}
-        <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-border" />
-      </span>
-    </span>
-  );
-}
 
 // ─── Chef / Event Breakdown Tab ───────────────────────────────────────────────
 
@@ -65,6 +52,7 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
   const { staff } = useStaffQuery();
   const [selectedId, setSelectedId] = useState<string>('');
   const [reconciliationDraftByBooking, setReconciliationDraftByBooking] = useState<Record<string, string>>({});
+  const [actualCostDraftByBooking, setActualCostDraftByBooking] = useState<Record<string, { food: string; supplies: string }>>({});
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const [reconciliationVersion, setReconciliationVersion] = useState(0);
@@ -158,9 +146,27 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
   const isLockedViewOnly = Boolean(finalizedReconciliation || selected?.locked);
   const foodCostPct = isSecondaryEvent ? rules.costs.secondaryFoodCostPercent : rules.costs.primaryFoodCostPercent;
   const suppliesCostPct = rules.costs.suppliesCostPercent;
-  const foodCost = subtotal * foodCostPct / 100;
-  const suppliesCost = subtotal * suppliesCostPct / 100;
-  const totalCosts = foodCost + suppliesCost + perEventExpense;
+  const foodCostBudget = subtotal * foodCostPct / 100;
+  const suppliesCostBudget = subtotal * suppliesCostPct / 100;
+
+  // Actual cost overrides — entered in the reconciliation section for past events
+  const currentCostDraft = selected ? (actualCostDraftByBooking[selected.id] ?? { food: '', supplies: '' }) : { food: '', supplies: '' };
+  const parsedActualFood = Number(currentCostDraft.food);
+  const hasActualFood = currentCostDraft.food.trim() !== '' && Number.isFinite(parsedActualFood) && parsedActualFood >= 0;
+  const parsedActualSupplies = Number(currentCostDraft.supplies);
+  const hasActualSupplies = currentCostDraft.supplies.trim() !== '' && Number.isFinite(parsedActualSupplies) && parsedActualSupplies >= 0;
+
+  const effectiveFoodCost = finalizedReconciliation?.actualFoodCost !== undefined
+    ? finalizedReconciliation.actualFoodCost
+    : (isPastEvent && hasActualFood ? parsedActualFood : foodCostBudget);
+  const effectiveSuppliesCost = finalizedReconciliation?.actualSuppliesCost !== undefined
+    ? finalizedReconciliation.actualSuppliesCost
+    : (isPastEvent && hasActualSupplies ? parsedActualSupplies : suppliesCostBudget);
+
+  // Keep legacy names for display (budget) and use effective for calculations
+  const foodCost = foodCostBudget;
+  const suppliesCost = suppliesCostBudget;
+  const totalCosts = effectiveFoodCost + effectiveSuppliesCost + perEventExpense;
 
   const chefBasePay = subtotal * CHEF_REV_PCT / 100;
   const asstBasePay = subtotal * ASST_REV_PCT / 100;
@@ -170,8 +176,13 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
   const asstGratPay = effectiveGratuity * ASST_GRAT_PCT / 100;
 
   const grossProfit = subtotal - totalCosts - totalBaseLaborPay;
-  const retainedAmt = grossProfit > 0 ? grossProfit * (rules.profitDistribution.businessRetainedPercent / 100) : 0;
-  const distributable = grossProfit > 0 ? grossProfit * (rules.profitDistribution.ownerDistributionPercent / 100) : 0;
+
+  // Sales tax reserve (from money rules) set aside before profit split
+  const salesTaxReserveAmt = grossProfit > 0 ? grossProfit * (rules.pricing.salesTaxPercent / 100) : 0;
+  const afterTaxProfit = Math.max(0, grossProfit - salesTaxReserveAmt);
+
+  const retainedAmt = afterTaxProfit > 0 ? afterTaxProfit * (rules.profitDistribution.businessRetainedPercent / 100) : 0;
+  const distributable = afterTaxProfit > 0 ? afterTaxProfit * (rules.profitDistribution.ownerDistributionPercent / 100) : 0;
 
   const ownerAAmount = distributable * CHEF_PROFIT_PCT / 100;
   const ownerBAmount = distributable * ASST_PROFIT_PCT / 100;
@@ -182,11 +193,12 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
   const jSorianoPct = effectiveTotalCollected > 0 ? (jSorianoTotal / effectiveTotalCollected) * 100 : 0;
 
   const barLabor = subtotal > 0 ? (totalBaseLaborPay / subtotal) * 100 : 0;
-  const barCosts = subtotal > 0 ? ((foodCost + suppliesCost) / subtotal) * 100 : 0;
+  const barCosts = subtotal > 0 ? ((effectiveFoodCost + effectiveSuppliesCost) / subtotal) * 100 : 0;
   const barOverhead = subtotal > 0 ? (perEventExpense / subtotal) * 100 : 0;
+  const barTaxReserve = subtotal > 0 ? (salesTaxReserveAmt / subtotal) * 100 : 0;
   const barRetained = subtotal > 0 ? (retainedAmt / subtotal) * 100 : 0;
   const barDistributable = subtotal > 0 ? (distributable / subtotal) * 100 : 0;
-  const barTotalPct = barLabor + barCosts + barOverhead + barRetained + barDistributable;
+  const barTotalPct = barLabor + barCosts + barOverhead + barTaxReserve + barRetained + barDistributable;
   const handleFinalizeReconciliation = async () => {
     if (!selected || !isPastEvent || !hasDraftCollected || isLockedViewOnly) return;
     setReconciliationError(null);
@@ -205,8 +217,8 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
         actualGratuity: effectiveGratuity,
         actualDistanceFee: fin?.distanceFee ?? 0,
         actualTotal: effectiveTotalCollected,
-        actualFoodCost: foodCost,
-        actualSuppliesCost: suppliesCost,
+        actualFoodCost: effectiveFoodCost,
+        actualSuppliesCost: effectiveSuppliesCost,
         actualTransportationCost: 0,
         actualTotalLaborPaid: totalBaseLaborPay + chefGratPay + asstGratPay,
         notes: existing?.notes ?? 'Finalized from Event Summary calculator reconciliation.',
@@ -320,6 +332,7 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
               {barLabor > 0.5 && <div className="bg-blue-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barLabor, barTotalPct)}%` }} />}
               {barCosts > 0.5 && <div className="bg-red-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barCosts, barTotalPct)}%` }} />}
               {barOverhead > 0.5 && <div className="bg-amber-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barOverhead, barTotalPct)}%` }} />}
+              {barTaxReserve > 0.5 && <div className="bg-orange-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barTaxReserve, barTotalPct)}%` }} />}
               {barRetained > 0.5 && <div className="bg-violet-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barRetained, barTotalPct)}%` }} />}
               {barDistributable > 0.5 && <div className="bg-emerald-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barDistributable, barTotalPct)}%` }} />}
             </div>
@@ -328,6 +341,7 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
                 { color: 'bg-blue-500', label: 'Labor', pct: barLabor },
                 { color: 'bg-red-500', label: 'Food & Supplies', pct: barCosts },
                 { color: 'bg-amber-500', label: 'Overhead', pct: barOverhead },
+                { color: 'bg-orange-500', label: 'Tax Reserve', pct: barTaxReserve },
                 { color: 'bg-violet-500', label: 'Retained', pct: barRetained },
                 { color: 'bg-emerald-500', label: 'Distributable', pct: barDistributable },
               ].map(({ color, label, pct }) => (
@@ -383,12 +397,22 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
             <div className="border-b border-border pb-1 pt-2">
               <p className="px-4 py-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">Costs</p>
               <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                <span className="text-text-secondary">Food Cost ({foodCostPct}%)</span>
-                <span className="tabular-nums text-red-400">−{formatCurrency(foodCost)}</span>
+                <span className="text-text-secondary">
+                  Food Cost ({foodCostPct}%)
+                  {effectiveFoodCost !== foodCostBudget && (
+                    <span className="ml-2 text-[11px] text-text-muted line-through">{formatCurrency(foodCostBudget)}</span>
+                  )}
+                </span>
+                <span className="tabular-nums text-red-400">−{formatCurrency(effectiveFoodCost)}</span>
               </div>
               <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
-                <span className="text-text-secondary">Supplies ({suppliesCostPct}%)</span>
-                <span className="tabular-nums text-red-400">−{formatCurrency(suppliesCost)}</span>
+                <span className="text-text-secondary">
+                  Supplies ({suppliesCostPct}%)
+                  {effectiveSuppliesCost !== suppliesCostBudget && (
+                    <span className="ml-2 text-[11px] text-text-muted line-through">{formatCurrency(suppliesCostBudget)}</span>
+                  )}
+                </span>
+                <span className="tabular-nums text-red-400">−{formatCurrency(effectiveSuppliesCost)}</span>
               </div>
               <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
                 <span className="text-text-secondary">Overhead Allocation</span>
@@ -407,6 +431,18 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
                 <span className="text-text-primary">Gross Profit</span>
                 <span className={`tabular-nums ${grossProfit >= 0 ? 'text-emerald-400' : 'text-danger'}`}>{formatCurrency(grossProfit)}</span>
               </div>
+              {salesTaxReserveAmt > 0 && (
+                <>
+                  <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                    <span className="text-text-secondary">Sales Tax Reserve ({rules.pricing.salesTaxPercent}%)</span>
+                    <span className="tabular-nums text-orange-400">−{formatCurrency(salesTaxReserveAmt)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
+                    <span className="text-text-primary">After-Tax Profit</span>
+                    <span className={`tabular-nums ${afterTaxProfit >= 0 ? 'text-emerald-400' : 'text-danger'}`}>{formatCurrency(afterTaxProfit)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
                 <span className="text-text-secondary">Business Retained ({rules.profitDistribution.businessRetainedPercent}%)</span>
                 <span className="tabular-nums text-violet-400">−{formatCurrency(retainedAmt)}</span>
@@ -447,6 +483,7 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
                 <span className="tabular-nums text-blue-300">{formatCurrency(asstGratPay)}</span>
               </div>
             </div>
+
           </div>
 
           <div className="rounded-lg border border-border bg-card p-5">
@@ -455,7 +492,92 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
               <p className="text-xs text-text-muted">Reconciliation is available after the event date passes.</p>
             ) : (
               <>
-                <p className="mb-3 text-xs text-text-muted">Enter actual total collected. Any amount above estimate is treated as extra gratuity.</p>
+                <p className="mb-3 text-xs text-text-muted">Enter actual total collected and actual costs. Any unused cost budget goes to profit.</p>
+
+                {/* Actual cost overrides */}
+                <div className="mb-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">Actual Costs (optional)</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 flex items-center justify-between text-xs font-medium text-text-muted">
+                        <span>Food Cost</span>
+                        <span>budget {formatCurrency(foodCostBudget)}</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-medium text-text-muted">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={isLockedViewOnly && finalizedReconciliation?.actualFoodCost !== undefined ? finalizedReconciliation.actualFoodCost : currentCostDraft.food}
+                          onChange={(e) => {
+                            if (!selected) return;
+                            setActualCostDraftByBooking((prev) => ({
+                              ...prev,
+                              [selected.id]: { ...prev[selected.id] ?? { food: '', supplies: '' }, food: e.target.value },
+                            }));
+                          }}
+                          disabled={isLockedViewOnly}
+                          placeholder={foodCostBudget.toFixed(2)}
+                          className="w-full rounded-md border border-border bg-card-elevated pl-7 pr-3 py-2 text-sm font-medium text-text-primary focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                        />
+                      </div>
+                      {hasActualFood && !isLockedViewOnly && (
+                        <p className={`mt-1 text-xs font-medium ${parsedActualFood < foodCostBudget ? 'text-emerald-400' : 'text-danger'}`}>
+                          {parsedActualFood < foodCostBudget
+                            ? `+${formatCurrency(foodCostBudget - parsedActualFood)} saved → profit`
+                            : `${formatCurrency(parsedActualFood - foodCostBudget)} over budget`}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="mb-1.5 flex items-center justify-between text-xs font-medium text-text-muted">
+                        <span>Supplies</span>
+                        <span>budget {formatCurrency(suppliesCostBudget)}</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-medium text-text-muted">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={isLockedViewOnly && finalizedReconciliation?.actualSuppliesCost !== undefined ? finalizedReconciliation.actualSuppliesCost : currentCostDraft.supplies}
+                          onChange={(e) => {
+                            if (!selected) return;
+                            setActualCostDraftByBooking((prev) => ({
+                              ...prev,
+                              [selected.id]: { ...prev[selected.id] ?? { food: '', supplies: '' }, supplies: e.target.value },
+                            }));
+                          }}
+                          disabled={isLockedViewOnly}
+                          placeholder={suppliesCostBudget.toFixed(2)}
+                          className="w-full rounded-md border border-border bg-card-elevated pl-7 pr-3 py-2 text-sm font-medium text-text-primary focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                        />
+                      </div>
+                      {hasActualSupplies && !isLockedViewOnly && (
+                        <p className={`mt-1 text-xs font-medium ${parsedActualSupplies < suppliesCostBudget ? 'text-emerald-400' : 'text-danger'}`}>
+                          {parsedActualSupplies < suppliesCostBudget
+                            ? `+${formatCurrency(suppliesCostBudget - parsedActualSupplies)} saved → profit`
+                            : `${formatCurrency(parsedActualSupplies - suppliesCostBudget)} over budget`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {(hasActualFood || hasActualSupplies) && !isLockedViewOnly && (() => {
+                    const savings = (foodCostBudget - effectiveFoodCost) + (suppliesCostBudget - effectiveSuppliesCost);
+                    return savings !== 0 ? (
+                      <div className="rounded-md border border-border bg-card-elevated px-3 py-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-text-secondary">Total cost savings → profit</span>
+                          <span className={`font-semibold tabular-nums ${savings >= 0 ? 'text-emerald-400' : 'text-danger'}`}>
+                            {savings >= 0 ? '+' : '−'}{formatCurrency(Math.abs(savings))}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="rounded-md border border-border bg-card-elevated px-3 py-2">
                     <p className="text-[11px] uppercase tracking-wide text-text-muted">Estimated Total</p>
@@ -511,15 +633,6 @@ function ChefBreakdownTab({ rules, perEventExpense }: { rules: MoneyRules; perEv
     </div>
   );
 }
-
-// ─── Staff + Expense types ────────────────────────────────────────────────────
-
-type ExpenseEntry = {
-  id: string;
-  name: string;
-  amount: number;
-  frequency: 'monthly' | 'annual';
-};
 
 function InfoSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -697,7 +810,6 @@ function BusinessInfoTab() {
 const TABS = [
   { id: 'calculator', label: 'Calculator' },
   { id: 'chef',       label: 'Event Summary' },
-  { id: 'expenses',   label: 'Overhead' },
   { id: 'info',       label: 'Business Info' },
 ] as const;
 type TabId = typeof TABS[number]['id'];
@@ -716,11 +828,25 @@ export default function CalculatorPage() {
     if (delta > 60 && tabIdx < TABS.length - 1) setActiveTab(TABS[tabIdx + 1].id);
     if (delta < -60 && tabIdx > 0) setActiveTab(TABS[tabIdx - 1].id);
   };
-  const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
-  const eventsPerMonth = 4;
-  const [salesTaxPct, setSalesTaxPct] = useState(8);
-  const [seTaxPct, setSeTaxPct] = useState(15.3);
-  const [incomeTaxPct, setIncomeTaxPct] = useState(15);
+
+  // Overhead config — loaded from Business Rules storage
+  const [overhead, setOverhead] = useState<OverheadConfig>(loadOverheadConfig);
+  useEffect(() => {
+    const load = () => setOverhead(loadOverheadConfig());
+    window.addEventListener('overheadConfigUpdated', load);
+    window.addEventListener('storage', (e) => { if (e.key === 'overhead_config') load(); });
+    return () => window.removeEventListener('overheadConfigUpdated', load);
+  }, []);
+
+  const salesTaxPct = rules.pricing.salesTaxPercent;
+  const seTaxPct = overhead.seTaxPct;
+  const incomeTaxPct = overhead.incomeTaxPct;
+  const eventsPerMonth = overhead.eventsPerMonth;
+  const totalMonthlyExpenses = overhead.expenses.reduce((sum, e) => {
+    return sum + (e.frequency === 'annual' ? (e.amount || 0) / 12 : (e.amount || 0));
+  }, 0);
+  const perEventExpense = eventsPerMonth > 0 ? totalMonthlyExpenses / eventsPerMonth : 0;
+
   const [retainedTransactions, setRetainedTransactions] = useState<RetainedEarningsTransaction[]>([]);
 
   const retainedEarningsBalance = useMemo(
@@ -757,23 +883,6 @@ export default function CalculatorPage() {
   const subtotal = adultGuests * pricePerGuest + kids * childPricePerGuest;
   const gratuity = Math.round(subtotal * gratuityPct) / 100;
   const totalCharged = subtotal + gratuity;
-  const totalMonthlyExpenses = expenses.reduce((sum, e) => {
-    const monthly = e.frequency === 'annual' ? (e.amount || 0) / 12 : (e.amount || 0);
-    return sum + monthly;
-  }, 0);
-  const perEventExpense = eventsPerMonth > 0 ? totalMonthlyExpenses / eventsPerMonth : 0;
-
-  function addExpense() {
-    setExpenses((prev) => [...prev, { id: crypto.randomUUID(), name: '', amount: 0, frequency: 'monthly' }]);
-  }
-
-  function removeExpense(id: string) {
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
-  }
-
-  function updateExpense(id: string, field: 'name' | 'amount' | 'frequency', value: string | number) {
-    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
-  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -783,12 +892,12 @@ export default function CalculatorPage() {
         <div className="mb-6">
           {/* Logo + title */}
           <div className="mb-5 flex items-center gap-4">
-            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-border shadow-md">
-              <Image src="/hibachisun.png" alt="Hibachi Sun" fill className="object-cover" />
+            <div className="relative h-[68px] w-[68px] shrink-0 rounded-xl border border-border bg-white shadow-md">
+              <Image src="/hibachisun.png" alt="Hibachi A Go Go" fill className="object-contain p-1.5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold leading-tight text-text-primary sm:text-3xl">Event Calculator</h1>
-              <p className="text-xs text-text-muted sm:text-sm">Hibachi Sun · Chef Portal</p>
+              <h1 className="text-xl font-bold leading-tight text-text-primary sm:text-2xl">Event Calculator</h1>
+              <p className="text-xs text-text-muted sm:text-sm">Hibachi A Go Go — Chef Assistant</p>
             </div>
           </div>
 
@@ -834,175 +943,7 @@ export default function CalculatorPage() {
 
         {activeTab === 'info' && <BusinessInfoTab />}
 
-        {activeTab === 'expenses' && (
-          <div className="mx-auto max-w-3xl space-y-5">
-            {/* Expense list */}
-            <div className="rounded-lg border border-border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-text-primary">Expense Items</h2>
-                <button onClick={addExpense} className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:bg-card-elevated hover:text-text-primary">
-                  <PlusIcon className="h-4 w-4" /> Add Expense
-                </button>
-              </div>
-              {expenses.length === 0 ? (
-                <p className="py-4 text-center text-sm text-text-muted">No expenses added yet. Click Add Expense to start.</p>
-              ) : (
-                <div className="space-y-2">
-                  {expenses.map((e) => {
-                    const monthlyEquiv = e.frequency === 'annual' ? e.amount / 12 : e.amount;
-                    return (
-                      <div key={e.id} className="rounded-lg bg-card-elevated p-3">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="text" placeholder="Expense name" value={e.name}
-                            onChange={(ev) => updateExpense(e.id, 'name', ev.target.value)}
-                            className="min-w-0 flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
-                          />
-                          {/* Frequency toggle */}
-                          <div className="flex shrink-0 rounded-md border border-border bg-card text-xs font-medium overflow-hidden">
-                            <button
-                              onClick={() => updateExpense(e.id, 'frequency', 'monthly')}
-                              className={`px-2.5 py-1.5 transition-colors ${e.frequency === 'monthly' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}
-                            >Mo</button>
-                            <button
-                              onClick={() => updateExpense(e.id, 'frequency', 'annual')}
-                              className={`px-2.5 py-1.5 transition-colors ${e.frequency === 'annual' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}
-                            >Yr</button>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1">
-                            <span className="text-sm text-text-muted">$</span>
-                            <input
-                              type="number" min="0" step="10" value={e.amount}
-                              onChange={(ev) => updateExpense(e.id, 'amount', parseFloat(ev.target.value) || 0)}
-                              className="w-24 rounded-md border border-border bg-card px-2 py-2 text-right text-sm font-semibold text-text-primary focus:border-accent focus:outline-none"
-                            />
-                          </div>
-                          <button onClick={() => removeExpense(e.id)} className="shrink-0 rounded-md p-1.5 text-text-muted hover:bg-card hover:text-danger">
-                            <XMarkIcon className="h-4 w-4" />
-                          </button>
-                        </div>
-                        {e.frequency === 'annual' && e.amount > 0 && (
-                          <p className="mt-1.5 pl-1 text-xs text-text-muted">
-                            {formatCurrency(monthlyEquiv)}/mo · {formatCurrency(e.amount)}/yr
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {expenses.length > 0 && (
-                <div className="mt-4 border-t border-border pt-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-text-primary">Total Monthly Equivalent</span>
-                    <span className="font-bold text-danger">{formatCurrency(totalMonthlyExpenses)}</span>
-                  </div>
-                  {expenses.some((e) => e.frequency === 'annual') && (
-                    <p className="mt-1 text-xs text-text-muted">Annual fees divided by 12 to get monthly equivalent.</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Tax Reserve Settings */}
-            <div className="rounded-lg border border-border bg-card p-5">
-              <div className="mb-1 flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-text-primary">Tax Reserves</h2>
-                <InfoTooltip text="Tax reserves are set aside from adjusted profit (after overhead) before owner splits. Sales tax: state sales tax obligations. Self-employment tax (SE): Social Security + Medicare (~15.3%). Income tax: federal and state tax on profit (estimate based on your bracket)." />
-              </div>
-              <p className="mb-5 text-sm text-text-muted">Reserved before owner profit splits — set aside for tax obligations.</p>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-text-secondary">Sales Tax Reserve</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number" min="0" max="30" step="0.5" value={salesTaxPct}
-                      onChange={(e) => setSalesTaxPct(parseFloat(e.target.value) || 0)}
-                      className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                    />
-                    <span className="text-lg font-semibold text-text-muted">%</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-text-secondary">Self-Employment Tax</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number" min="0" max="30" step="0.1" value={seTaxPct}
-                      onChange={(e) => setSeTaxPct(parseFloat(e.target.value) || 0)}
-                      className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                    />
-                    <span className="text-lg font-semibold text-text-muted">%</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-text-secondary">Income Tax Reserve</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number" min="0" max="40" step="0.5" value={incomeTaxPct}
-                      onChange={(e) => setIncomeTaxPct(parseFloat(e.target.value) || 0)}
-                      className="w-20 rounded-md border border-border bg-card-elevated px-2 py-1.5 text-center text-xl font-bold text-text-primary focus:border-accent focus:outline-none"
-                    />
-                    <span className="text-lg font-semibold text-text-muted">%</span>
-                  </div>
-                </div>
-                {(salesTaxPct > 0 || seTaxPct > 0 || incomeTaxPct > 0) && (
-                  <div className="rounded-lg bg-card-elevated p-3 text-xs text-text-muted">
-                    Combined reserve: <strong className="text-text-primary">{(salesTaxPct + seTaxPct + incomeTaxPct).toFixed(1)}%</strong> deducted from adjusted profit before owner distributions.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Per-event allocation summary */}
-            {totalMonthlyExpenses > 0 && (
-              <div className="rounded-lg border-2 border-border bg-card p-5">
-                <h2 className="mb-4 text-lg font-semibold text-text-primary">Per-Event Impact</h2>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Total monthly overhead</span>
-                    <span className="font-medium text-text-primary">{formatCurrency(totalMonthlyExpenses)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-text-secondary">Events per month</span>
-                    <span className="font-medium text-text-primary">{eventsPerMonth}</span>
-                  </div>
-                  <div className="flex justify-between border-t border-border pt-3">
-                    <span className="font-semibold text-text-primary">Deducted per event</span>
-                    <span className="text-xl font-bold text-danger">−{formatCurrency(perEventExpense)}</span>
-                  </div>
-                </div>
-                <p className="mt-3 text-xs text-text-muted">This amount is deducted from gross profit before calculating retained earnings and owner distributions in the Calculator and Event Summary tabs.</p>
-              </div>
-            )}
-
-            {/* Retained earnings balance */}
-            <div className="rounded-lg border-2 border-violet-500/30 bg-violet-500/5 p-5">
-              <div className="mb-1 flex items-center gap-2">
-                <BanknotesIcon className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-                <h2 className="text-lg font-semibold text-text-primary">Retained Earnings Balance</h2>
-                <InfoTooltip text="Running balance of money kept in the business (deposits from event distributions minus withdrawals). Updated when you record transactions in Reports → Owner Monthly." />
-              </div>
-              <p className="mb-4 text-sm text-text-muted">Current balance from your retained earnings transaction log.</p>
-              <div className="flex flex-wrap items-baseline justify-between gap-4">
-                <div>
-                  <span className="text-sm font-medium text-text-secondary">Balance</span>
-                  <p className={`text-2xl font-bold ${retainedEarningsBalance >= 0 ? 'text-success' : 'text-danger'}`}>
-                    {formatCurrency(retainedEarningsBalance)}
-                  </p>
-                </div>
-                <Link
-                  href="/reports/owner-monthly"
-                  className="rounded-md border border-border bg-card-elevated px-3 py-2 text-sm font-medium text-text-secondary hover:bg-card hover:text-text-primary"
-                >
-                  View full log →
-                </Link>
-              </div>
-              {retainedTransactions.length === 0 && (
-                <p className="mt-3 text-xs text-text-muted">No retained earnings transactions yet. Record distributions in Reports → Owner Monthly to see a balance here.</p>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Overhead summary card — always visible at bottom of calculator tab handled below */}
 
         {activeTab === 'calculator' && (() => {
           // Rates vary by event type; profit split is always 40/60
@@ -1041,8 +982,16 @@ export default function CalculatorPage() {
           // Gross profit derived from revenue only (gratuity excluded)
           const grossProfit = subtotal - totalCosts - totalBaseLaborPay;
 
-          const retainedAmt = grossProfit > 0 ? grossProfit * (rules.profitDistribution.businessRetainedPercent / 100) : 0;
-          const distributable = grossProfit > 0 ? grossProfit * (rules.profitDistribution.ownerDistributionPercent / 100) : 0;
+          // Tax reserves set aside from gross profit before any owner splits
+          const totalTaxReservePct = salesTaxPct + seTaxPct + incomeTaxPct;
+          const salesTaxReserveAmt = grossProfit > 0 ? grossProfit * (salesTaxPct / 100) : 0;
+          const seTaxReserveAmt = grossProfit > 0 ? grossProfit * (seTaxPct / 100) : 0;
+          const incomeTaxReserveAmt = grossProfit > 0 ? grossProfit * (incomeTaxPct / 100) : 0;
+          const totalTaxReserveAmt = grossProfit > 0 ? grossProfit * (totalTaxReservePct / 100) : 0;
+          const afterTaxProfit = Math.max(0, grossProfit - totalTaxReserveAmt);
+
+          const retainedAmt = afterTaxProfit > 0 ? afterTaxProfit * (rules.profitDistribution.businessRetainedPercent / 100) : 0;
+          const distributable = afterTaxProfit > 0 ? afterTaxProfit * (rules.profitDistribution.ownerDistributionPercent / 100) : 0;
 
           const ownerAAmount = distributable * CHEF_PROFIT_PCT / 100;
           const ownerBAmount = distributable * ASST_PROFIT_PCT / 100;
@@ -1057,9 +1006,10 @@ export default function CalculatorPage() {
           const barLabor = subtotal > 0 ? (totalBaseLaborPay / subtotal) * 100 : 0;
           const barCosts = subtotal > 0 ? ((foodCost + suppliesCost) / subtotal) * 100 : 0;
           const barOverhead = subtotal > 0 ? (perEventExpense / subtotal) * 100 : 0;
+          const barTaxReserve = subtotal > 0 ? (totalTaxReserveAmt / subtotal) * 100 : 0;
           const barRetained = subtotal > 0 ? (retainedAmt / subtotal) * 100 : 0;
           const barDistributable = subtotal > 0 ? (distributable / subtotal) * 100 : 0;
-          const barTotalPct = barLabor + barCosts + barOverhead + barRetained + barDistributable;
+          const barTotalPct = barLabor + barCosts + barOverhead + barTaxReserve + barRetained + barDistributable;
 
           return (
             <div className="space-y-5">
@@ -1185,6 +1135,7 @@ export default function CalculatorPage() {
                   {barLabor > 0.5 && <div className="bg-blue-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barLabor, barTotalPct)}%` }} />}
                   {barCosts > 0.5 && <div className="bg-red-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barCosts, barTotalPct)}%` }} />}
                   {barOverhead > 0.5 && <div className="bg-amber-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barOverhead, barTotalPct)}%` }} />}
+                  {barTaxReserve > 0.5 && <div className="bg-orange-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barTaxReserve, barTotalPct)}%` }} />}
                   {barRetained > 0.5 && <div className="bg-violet-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barRetained, barTotalPct)}%` }} />}
                   {barDistributable > 0.5 && <div className="bg-emerald-500 transition-all duration-300" style={{ width: `${normalizedBarWidth(barDistributable, barTotalPct)}%` }} />}
                 </div>
@@ -1193,6 +1144,7 @@ export default function CalculatorPage() {
                     { color: 'bg-blue-500', label: 'Labor', pct: barLabor },
                     { color: 'bg-red-500', label: 'Food & Supplies', pct: barCosts },
                     { color: 'bg-amber-500', label: 'Overhead', pct: barOverhead },
+                    { color: 'bg-orange-500', label: 'Tax Reserve', pct: barTaxReserve },
                     { color: 'bg-violet-500', label: 'Retained', pct: barRetained },
                     { color: 'bg-emerald-500', label: 'Distributable', pct: barDistributable },
                   ].map(({ color, label, pct }) => (
@@ -1273,6 +1225,32 @@ export default function CalculatorPage() {
                     <span className="text-text-primary">Gross Profit</span>
                     <span className={`tabular-nums ${grossProfit >= 0 ? 'text-emerald-400' : 'text-danger'}`}>{formatCurrency(grossProfit)}</span>
                   </div>
+                  {totalTaxReserveAmt > 0 && (
+                    <>
+                      {salesTaxPct > 0 && (
+                        <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                          <span className="text-text-secondary">Sales Tax Reserve ({salesTaxPct}%)</span>
+                          <span className="tabular-nums text-orange-400">−{formatCurrency(salesTaxReserveAmt)}</span>
+                        </div>
+                      )}
+                      {seTaxPct > 0 && (
+                        <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                          <span className="text-text-secondary">SE Tax Reserve ({seTaxPct}%)</span>
+                          <span className="tabular-nums text-orange-400">−{formatCurrency(seTaxReserveAmt)}</span>
+                        </div>
+                      )}
+                      {incomeTaxPct > 0 && (
+                        <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
+                          <span className="text-text-secondary">Income Tax Reserve ({incomeTaxPct}%)</span>
+                          <span className="tabular-nums text-orange-400">−{formatCurrency(incomeTaxReserveAmt)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-3 border-t border-border bg-card-elevated px-4 py-2.5 font-semibold">
+                        <span className="text-text-primary">After-Tax Profit</span>
+                        <span className={`tabular-nums ${afterTaxProfit >= 0 ? 'text-emerald-400' : 'text-danger'}`}>{formatCurrency(afterTaxProfit)}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex items-center justify-between gap-3 pl-8 pr-4 py-2">
                     <span className="text-text-secondary">Business Retained ({rules.profitDistribution.businessRetainedPercent}%)</span>
                     <span className="tabular-nums text-violet-400">−{formatCurrency(retainedAmt)}</span>
@@ -1366,6 +1344,36 @@ export default function CalculatorPage() {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* ── Overhead & Retained Earnings ── */}
+              <div className="rounded-lg border border-border bg-card p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-text-primary sm:text-base">Overhead & Retained Earnings</h2>
+                  <Link href="/business-rules?tab=overhead" className="text-xs text-accent hover:underline">
+                    Edit in Business Rules →
+                  </Link>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Monthly overhead</span>
+                    <span className="font-medium text-text-primary">{formatCurrency(totalMonthlyExpenses)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Overhead per event ({eventsPerMonth} events/mo)</span>
+                    <span className="font-medium text-danger">−{formatCurrency(perEventExpense)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-text-secondary">Tax reserves (SE + income)</span>
+                    <span className="font-medium text-orange-400">{(seTaxPct + incomeTaxPct).toFixed(1)}% of profit</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-2">
+                    <span className="font-semibold text-text-primary">Retained earnings balance</span>
+                    <span className={`font-bold tabular-nums ${retainedEarningsBalance >= 0 ? 'text-violet-400' : 'text-danger'}`}>
+                      {formatCurrency(retainedEarningsBalance)}
+                    </span>
+                  </div>
+                </div>
               </div>
 
             </div>

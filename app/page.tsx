@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isWithinInterval, isToday, isTomorrow, startOfDay, endOfDay, eachWeekOfInterval } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isWithinInterval, isToday, isTomorrow, startOfDay, endOfDay, eachWeekOfInterval, isSameDay } from 'date-fns';
 import { formatCurrency } from '@/lib/moneyRules';
 import { calculateBookingFinancials } from '@/lib/bookingFinancials';
 import { useMoneyRules } from '@/lib/useMoneyRules';
@@ -202,6 +202,18 @@ export default function DashboardPage() {
 
     const todayStart = startOfDay(now);
 
+    // Next 7 calendar days (not including today)
+    const upcoming7: { date: string; label: string; bookings: typeof list }[] = [];
+    for (let i = 1; i <= 7; i++) {
+      const day = addDays(todayStart, i);
+      const dayBookings = list.filter((b) => isSameDay(parseLocalDate(b.eventDate), day) && b.status !== 'cancelled');
+      upcoming7.push({
+        date: format(day, 'yyyy-MM-dd'),
+        label: format(day, 'EEE, MMM d'),
+        bookings: dayBookings,
+      });
+    }
+
     // Confirmed revenue in the next 30 days (cash flow)
     const thirtyDaysOut = addDays(todayStart, 30);
     const upcomingConfirmed = list.filter((b) => {
@@ -265,6 +277,7 @@ export default function DashboardPage() {
       avgRevenuePerEvent,
       avgProfitPerEvent,
       upcoming,
+      upcoming7,
       todayEvents,
       tomorrowEvents,
       pendingBookings,
@@ -339,32 +352,73 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* Today's Events — prominent banner when events exist today */}
+        {dashboard.todayEvents.length > 0 && (
+          <div className="rounded-xl border border-info/40 bg-info/10 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarDaysIcon className="h-5 w-5 text-info" />
+                <h2 className="text-base font-semibold text-text-primary">
+                  Today — {format(new Date(), 'EEEE, MMMM d')}
+                </h2>
+              </div>
+              <Link href="/bookings?filter=confirmed" className="text-xs font-medium text-accent hover:text-accent-hover">
+                View all
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {dashboard.todayEvents.map((b) => (
+                <Link
+                  key={b.id}
+                  href={`/bookings/${b.id}`}
+                  className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 hover:border-accent/40 hover:bg-card-elevated"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`h-2 w-2 rounded-full ${b.status === 'confirmed' ? 'bg-accent' : 'bg-warning'}`} />
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">{b.customerName}</p>
+                      <p className="text-xs text-text-muted">
+                        {b.eventTime} · {b.adults + b.children} guests · {b.location || 'No location'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    b.status === 'confirmed' ? 'bg-accent/10 text-accent' : 'bg-warning/10 text-warning'
+                  }`}>
+                    {b.status}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* MTD Summary Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Upcoming Events */}
+          {/* Confirmed this period */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-accent-soft-bg p-2.5">
                 <CalendarDaysIcon className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <p className="text-sm text-text-secondary">Upcoming Events</p>
+                <p className="text-sm text-text-secondary">Confirmed</p>
                 <p className="text-2xl font-bold text-text-primary">
                   {dashboard.upcomingConfirmedCount}
                 </p>
-                <p className="text-xs text-text-muted">confirmed in period</p>
+                <p className="text-xs text-text-muted">upcoming in period</p>
               </div>
             </div>
           </div>
 
-          {/* Monthly Revenue */}
+          {/* Revenue MTD */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-accent-soft-bg p-2.5">
                 <BanknotesIcon className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <p className="text-sm text-text-secondary">Revenue</p>
+                <p className="text-sm text-text-secondary">Revenue MTD</p>
                 <p className="text-2xl font-bold text-text-primary">
                   {formatCurrency(dashboard.totalRevenue)}
                 </p>
@@ -373,14 +427,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Monthly Profit */}
+          {/* Profit MTD */}
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-accent-soft-bg p-2.5">
                 <ArrowTrendingUpIcon className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <p className="text-sm text-text-secondary">Profit</p>
+                <p className="text-sm text-text-secondary">Profit MTD</p>
                 <p className="text-2xl font-bold text-text-primary">
                   {formatCurrency(dashboard.totalGrossProfit)}
                 </p>
@@ -391,24 +445,60 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Pending Bookings */}
-          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-accent-soft-bg p-2.5">
-                <ClockIcon className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-sm text-text-secondary">Pending Bookings</p>
-                <p className="text-2xl font-bold text-text-primary">
-                  {dashboard.pendingBookings.length}
-                </p>
-                <p className="text-xs text-text-muted">
-                  {dashboard.pendingRevenue > 0 ? formatCurrency(dashboard.pendingRevenue) + ' awaiting confirmation' : 'awaiting confirmation'}
-                </p>
+          {/* Pending Leads */}
+          <Link href="/bookings?filter=leads" className="block">
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-warning/40">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-warning/10 p-2.5">
+                  <ClockIcon className="h-5 w-5 text-warning" />
+                </div>
+                <div>
+                  <p className="text-sm text-text-secondary">Pending Leads</p>
+                  <p className="text-2xl font-bold text-text-primary">
+                    {dashboard.pendingBookings.length}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    {dashboard.pendingRevenue > 0 ? formatCurrency(dashboard.pendingRevenue) + ' at stake' : 'awaiting confirmation'}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
+
+        {/* Upcoming 7 days */}
+        {dashboard.upcoming7.some((d) => d.bookings.length > 0) && (
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-text-primary">Next 7 days</h2>
+              <Link href="/bookings" className="text-xs font-medium text-accent hover:text-accent-hover">
+                View all events
+              </Link>
+            </div>
+            <div className="space-y-1">
+              {dashboard.upcoming7.filter((d) => d.bookings.length > 0).map((day) => (
+                <div key={day.date} className="flex items-start gap-4 rounded-lg px-3 py-2.5 hover:bg-card-elevated">
+                  <div className="w-24 shrink-0">
+                    <p className="text-xs font-semibold text-text-secondary">{day.label}</p>
+                  </div>
+                  <div className="flex flex-1 flex-wrap gap-2">
+                    {day.bookings.map((b) => (
+                      <Link
+                        key={b.id}
+                        href={`/bookings/${b.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card-elevated px-2.5 py-1 text-xs font-medium text-text-primary hover:border-accent/40"
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${b.status === 'confirmed' ? 'bg-accent' : 'bg-warning'}`} />
+                        {b.customerName}
+                        <span className="text-text-muted">· {b.adults + b.children}g</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* This week / Next week — load at a glance */}
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">

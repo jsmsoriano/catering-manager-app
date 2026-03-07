@@ -42,13 +42,13 @@ import { CrmTab } from './CrmTab';
 import { ReviewTab } from './ReviewTab';
 
 const EVENT_TABS: { id: EventTabId; label: string }[] = [
+  { id: 'review', label: 'Overview' },
   { id: 'contact', label: 'Contact' },
   { id: 'details', label: 'Event Details' },
   { id: 'menu', label: 'Menu' },
   { id: 'staff', label: 'Staff' },
   { id: 'payment', label: 'Payments' },
-  { id: 'crm', label: 'Follow Ups' },
-  { id: 'review', label: 'Summary' },
+  { id: 'crm', label: 'Activity' },
 ];
 
 const CATERING_FALLBACK_EVENT_TYPES: EventTypeConfig[] = [
@@ -166,10 +166,10 @@ function EventDetailContent() {
   });
   const [staffRecords, setStaffRecords] = useState<StaffRecord[]>([]);
   const [tabId, setTabId] = useState<EventTabId>(() => {
-    if (typeof window === 'undefined') return 'contact';
+    if (typeof window === 'undefined') return 'review';
     const p = new URLSearchParams(window.location.search);
     const tab = p.get('tab') ?? p.get('step');
-    return EVENT_TABS.some((t) => t.id === tab) ? (tab as EventTabId) : 'contact';
+    return EVENT_TABS.some((t) => t.id === tab) ? (tab as EventTabId) : 'review';
   });
   const [formData, setFormData] = useState<BookingFormData>({
     customerName: '',
@@ -515,6 +515,7 @@ function EventDetailContent() {
       adultBasePrice,
       childBasePrice: adultBasePrice * (1 - rules.pricing.childDiscountPercent / 100),
       gratuityPercent: rules.pricing.defaultGratuityPercent,
+      salesTaxPercent: rules.pricing.salesTaxPercent,
       capturedAt: new Date().toISOString(),
     };
     const updated: Booking = normalizeBookingWorkflowFields({
@@ -902,7 +903,7 @@ function EventDetailContent() {
             >
               Packing Checklist
             </Link>
-            {booking.customerEmail && (booking.proposalSentAt || booking.proposalToken) && (
+            {booking.customerEmail && (
               <button
                 type="button"
                 onClick={handleSendProposal}
@@ -1059,6 +1060,7 @@ function EventDetailContent() {
             onSave={saveDetails}
             onBack={() => goToTab('contact')}
             eventTypeOptions={eventTypeOptions}
+            rules={rules}
           />
         )}
         {tabId === 'payment' && (

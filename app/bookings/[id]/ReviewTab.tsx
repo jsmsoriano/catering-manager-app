@@ -38,12 +38,12 @@ export function ReviewTab({
 
   return (
     <div className="space-y-6 rounded-lg border border-border bg-card-elevated p-6">
-      <h2 className="text-lg font-semibold text-text-primary">Summary & Confirm</h2>
+      <h2 className="text-lg font-semibold text-text-primary">Overview</h2>
 
       {confirmSuccess ? (
         <div className="space-y-4">
           <p className="rounded-lg bg-success/15 px-4 py-3 text-sm font-medium text-success">
-            Event confirmed. Payment terms have been set and the booking is ready for proposals and payments.
+            Event marked as booked. Payment terms have been set and the booking is ready for proposals and payments.
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -63,7 +63,7 @@ export function ReviewTab({
       ) : (
         <>
           <p className="text-sm text-text-muted">
-            Review the details below. Save as draft to keep the event pending, or confirm once the deposit has been recorded.
+            Review the details below. Send a quote to the customer, then mark as booked once the deposit is recorded.
           </p>
           <div className="space-y-4 text-sm">
             <div className="rounded-lg border border-border bg-card p-4">
@@ -142,7 +142,7 @@ export function ReviewTab({
                 onClick={onConfirm}
                 className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
               >
-                Confirm Event
+                Mark as Booked
               </button>
             ) : (
               <button
@@ -150,7 +150,7 @@ export function ReviewTab({
                 onClick={() => onGoToTab(!menuReadyForConfirmation ? 'menu' : 'payment')}
                 className="rounded-md border border-border bg-card-elevated px-4 py-2 text-sm text-text-secondary hover:bg-card"
               >
-                {!menuReadyForConfirmation ? 'Complete Menu First' : 'Record Deposit First'}
+                {!menuReadyForConfirmation ? 'Complete Menu First' : 'Record Deposit to Book'}
               </button>
             )}
           </div>

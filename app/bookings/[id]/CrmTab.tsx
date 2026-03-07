@@ -12,12 +12,12 @@ interface CrmTabProps {
 export function CrmTab({ booking, onContinue }: CrmTabProps) {
   return (
     <div className="space-y-6 rounded-lg border border-border bg-card-elevated p-6">
-      <h2 className="text-lg font-semibold text-text-primary">Follow Ups</h2>
+      <h2 className="text-lg font-semibold text-text-primary">Activity</h2>
       <p className="text-sm text-text-muted">
         Track follow-ups, reminders, and event-level communication history.
       </p>
       <CRMPanel
-        title="Event Follow Ups"
+        title="Event Activity"
         bookingId={booking.id}
         customerId={getBookingCustomerId(booking)}
         scope="event"

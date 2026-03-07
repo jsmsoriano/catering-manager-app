@@ -49,6 +49,11 @@ import {
   toLocalDateISO,
 } from '@/lib/bookingWorkflow';
 import {
+  calculateBookingSalesTax,
+  calculateBookingTotalWithTax,
+  calculatePaymentSalesTaxPortion,
+} from '@/lib/salesTax';
+import {
   ensureShoppingListForBooking,
   loadShoppingLists,
   removeShoppingListForBooking,
@@ -213,7 +218,14 @@ function BookingsPageInner() {
   const rules = useMoneyRules();
   const { bookings, saveBooking, removeBooking } = useBookingsQuery();
   const { customerPayments, savePayment } = useCustomerPaymentsQuery();
-  const [filterStatuses, setFilterStatuses] = useState<BookingStatus[]>([]);
+  const [filterStatuses, setFilterStatuses] = useState<BookingStatus[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const f = new URLSearchParams(window.location.search).get('filter');
+    if (f === 'leads') return ['pending'];
+    if (f === 'confirmed') return ['confirmed'];
+    if (f === 'past') return ['completed'];
+    return [];
+  });
   const [statusFilterOpen, setStatusFilterOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
@@ -467,6 +479,28 @@ function BookingsPageInner() {
     return counts;
   }, [bookings]);
 
+  // Derive active quick-filter tab from current filterStatuses
+  const activeQuickFilter: 'all' | 'leads' | 'confirmed' | 'past' =
+    filterStatuses.length === 1 && filterStatuses[0] === 'pending' ? 'leads' :
+    filterStatuses.length === 1 && filterStatuses[0] === 'confirmed' ? 'confirmed' :
+    filterStatuses.length === 1 && filterStatuses[0] === 'completed' ? 'past' :
+    'all';
+
+  const QUICK_FILTERS: { id: typeof activeQuickFilter; label: string; count: number }[] = [
+    { id: 'all',       label: 'All',       count: bookings.length },
+    { id: 'leads',     label: 'Leads',     count: stats.pending },
+    { id: 'confirmed', label: 'Confirmed', count: stats.confirmed },
+    { id: 'past',      label: 'Past',      count: stats.completed },
+  ];
+
+  function applyQuickFilter(filter: typeof activeQuickFilter) {
+    if (filter === 'all') setFilterStatuses([]);
+    else if (filter === 'leads') setFilterStatuses(['pending']);
+    else if (filter === 'confirmed') setFilterStatuses(['confirmed']);
+    else if (filter === 'past') setFilterStatuses(['completed']);
+    setStatusFilterOpen(false);
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const bookingId = new URLSearchParams(window.location.search).get('bookingId');
@@ -704,6 +738,23 @@ function BookingsPageInner() {
     setPaymentFormError(null);
   };
 
+  const paymentModalSummary = useMemo(() => {
+    if (!paymentModalBooking) return null;
+    const fallbackTaxPercent = rules.pricing.salesTaxPercent ?? 0;
+    const taxPercent = paymentModalBooking.pricingSnapshot?.salesTaxPercent ?? fallbackTaxPercent;
+    const totalDue = calculateBookingTotalWithTax(paymentModalBooking, taxPercent);
+    const salesTaxDue = calculateBookingSalesTax(paymentModalBooking, taxPercent);
+    const amountPaid = paymentModalBooking.amountPaid ?? 0;
+    const balanceDue = Math.max(0, totalDue - amountPaid);
+    const salesTaxCollected = customerPayments
+      .filter((p) => p.bookingId === paymentModalBooking.id)
+      .reduce((sum, p) => {
+        const portion = calculatePaymentSalesTaxPortion(paymentModalBooking, p.amount, taxPercent);
+        return sum + (p.type === 'refund' ? -portion : portion);
+      }, 0);
+    return { taxPercent, totalDue, salesTaxDue, balanceDue, salesTaxCollected };
+  }, [customerPayments, paymentModalBooking, rules.pricing.salesTaxPercent]);
+
   // Open Record Payment modal when navigating from wizard with ?openPayment=bookingId
   useEffect(() => {
     const bookingId = searchParams.get('openPayment');
@@ -910,42 +961,69 @@ function BookingsPageInner() {
         </div>
       </div>
 
+      {/* Quick filter tabs */}
+      <div className="mb-6 border-b border-border">
+        <div className="flex gap-1">
+          {QUICK_FILTERS.map((qf) => {
+            const isActive = activeQuickFilter === qf.id;
+            return (
+              <button
+                key={qf.id}
+                type="button"
+                onClick={() => applyQuickFilter(qf.id)}
+                className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'text-accent'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                {qf.label}
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none ${
+                  isActive ? 'bg-accent text-white' : 'bg-card-elevated text-text-muted'
+                }`}>
+                  {qf.count}
+                </span>
+                {isActive && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-accent" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Summary Cards: Pending, Confirmed, Completed, Cancelled */}
       <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="text-sm font-medium text-text-primary">
-            Pending
-          </h3>
-          <p className="mt-2 text-3xl font-bold text-text-primary">
-            {stats.pending}
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => applyQuickFilter('leads')}
+          className={`rounded-lg border p-6 text-left transition-colors ${activeQuickFilter === 'leads' ? 'border-accent bg-accent/5' : 'border-border bg-card hover:border-accent/40'}`}
+        >
+          <h3 className="text-sm font-medium text-text-primary">Leads</h3>
+          <p className="mt-2 text-3xl font-bold text-text-primary">{stats.pending}</p>
+        </button>
 
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="text-sm font-medium text-text-primary">
-            Confirmed
-          </h3>
-          <p className="mt-2 text-3xl font-bold text-accent">
-            {stats.confirmed}
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => applyQuickFilter('confirmed')}
+          className={`rounded-lg border p-6 text-left transition-colors ${activeQuickFilter === 'confirmed' ? 'border-accent bg-accent/5' : 'border-border bg-card hover:border-accent/40'}`}
+        >
+          <h3 className="text-sm font-medium text-text-primary">Confirmed</h3>
+          <p className="mt-2 text-3xl font-bold text-accent">{stats.confirmed}</p>
+        </button>
 
-        <div className="rounded-lg border border-border bg-success/20 p-6">
-          <h3 className="text-sm font-medium text-text-primary">
-            Completed
-          </h3>
-          <p className="mt-2 text-3xl font-bold text-success">
-            {stats.completed}
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => applyQuickFilter('past')}
+          className={`rounded-lg border p-6 text-left transition-colors ${activeQuickFilter === 'past' ? 'border-success bg-success/5' : 'border-border bg-success/10 hover:border-success/40'}`}
+        >
+          <h3 className="text-sm font-medium text-text-primary">Completed</h3>
+          <p className="mt-2 text-3xl font-bold text-success">{stats.completed}</p>
+        </button>
 
-        <div className="rounded-lg border border-border bg-danger/20 p-6">
-          <h3 className="text-sm font-medium text-text-primary">
-            Cancelled
-          </h3>
-          <p className="mt-2 text-3xl font-bold text-danger">
-            {stats.cancelled}
-          </p>
+        <div className="rounded-lg border border-border bg-danger/10 p-6">
+          <h3 className="text-sm font-medium text-text-primary">Cancelled</h3>
+          <p className="mt-2 text-3xl font-bold text-danger">{stats.cancelled}</p>
         </div>
       </div>
 
@@ -1293,8 +1371,8 @@ function BookingsPageInner() {
                       ['eventDate', 'Event Date', false],
                       ['customerName', 'Customer', false],
                       ['guests', getTemplateLabel(templateConfig.labels, 'guests', 'Guests'), false],
-                      ['status', 'Status', false],
                       ['total', 'Total', false],
+                      ['status', 'Status', false],
                     ] as const)
                   : ([
                       ['eventDate', 'Event Date', false],
@@ -1807,18 +1885,28 @@ function BookingsPageInner() {
             </div>
 
             {/* Booking context */}
-            <div className="grid grid-cols-3 gap-3 border-b border-border px-6 py-4">
+            <div className="grid grid-cols-2 gap-3 border-b border-border px-6 py-4">
               <div>
-                <p className="text-xs text-text-muted">Total</p>
-                <p className="font-semibold text-text-primary">{formatCurrency(paymentModalBooking.total)}</p>
+                <p className="text-xs text-text-muted">Total Due</p>
+                <p className="text-lg font-bold text-text-primary">
+                  {formatCurrency(paymentModalSummary?.totalDue ?? paymentModalBooking.total)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-text-muted">Paid</p>
                 <p className="font-semibold text-success">{formatCurrency(paymentModalBooking.amountPaid ?? 0)}</p>
               </div>
               <div>
+                <p className="text-xs text-text-muted">Sales Tax Due</p>
+                <p className="font-semibold text-text-primary">
+                  {formatCurrency(paymentModalSummary?.salesTaxDue ?? 0)}
+                </p>
+              </div>
+              <div>
                 <p className="text-xs text-text-muted">Balance Due</p>
-                <p className="font-semibold text-accent">{formatCurrency(paymentModalBooking.balanceDueAmount ?? 0)}</p>
+                <p className="text-lg font-bold text-accent">
+                  {formatCurrency(paymentModalSummary?.balanceDue ?? paymentModalBooking.balanceDueAmount ?? 0)}
+                </p>
               </div>
             </div>
 
@@ -1830,6 +1918,24 @@ function BookingsPageInner() {
                   This booking is still pending. Confirm it first so payment status tracks correctly.
                 </p>
               )}
+              <div className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-text-secondary">
+                <div className="flex items-center justify-between">
+                  <span>Sales tax rate</span>
+                  <strong className="text-text-primary">{(paymentModalSummary?.taxPercent ?? 0).toFixed(2)}%</strong>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <span>Sales tax collected</span>
+                  <strong className="text-text-primary">
+                    {formatCurrency(paymentModalSummary?.salesTaxCollected ?? 0)}
+                  </strong>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <span>Sales tax remaining</span>
+                  <strong className="text-text-primary">
+                    {formatCurrency(Math.max(0, (paymentModalSummary?.salesTaxDue ?? 0) - (paymentModalSummary?.salesTaxCollected ?? 0)))}
+                  </strong>
+                </div>
+              </div>
               {/* Refund warning */}
               {paymentForm.paymentType === 'refund' && (
                 <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
@@ -1843,8 +1949,8 @@ function BookingsPageInner() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   {([
                     { key: 'deposit', label: 'Deposit', amount: Math.max(0, (paymentModalBooking.depositAmount ?? 0) - (paymentModalBooking.amountPaid ?? 0)) },
-                    { key: 'balance', label: 'Balance', amount: Math.max(0, paymentModalBooking.balanceDueAmount ?? 0) },
-                    { key: 'full', label: 'Full Payment', amount: Math.max(0, paymentModalBooking.total - (paymentModalBooking.amountPaid ?? 0)) },
+                    { key: 'balance', label: 'Balance', amount: Math.max(0, paymentModalSummary?.balanceDue ?? paymentModalBooking.balanceDueAmount ?? 0) },
+                    { key: 'full', label: 'Full Payment', amount: Math.max(0, (paymentModalSummary?.totalDue ?? paymentModalBooking.total) - (paymentModalBooking.amountPaid ?? 0)) },
                     { key: 'refund', label: 'Refund', amount: paymentModalBooking.amountPaid ?? 0 },
                   ] as const).map(({ key, label, amount }) => (
                     <button

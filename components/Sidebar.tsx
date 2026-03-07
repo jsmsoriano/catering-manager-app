@@ -8,15 +8,16 @@ import {
   HomeIcon,
   CogIcon,
   CalendarDaysIcon,
-  ReceiptPercentIcon,
   ArrowRightOnRectangleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Bars3Icon,
   XMarkIcon,
-  ViewColumnsIcon,
   LinkIcon,
-  ClipboardDocumentListIcon,
+  ClipboardDocumentCheckIcon,
+  FunnelIcon,
+  UsersIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from './AuthProvider';
 import { useFeatureFlags } from '@/lib/useFeatureFlags';
@@ -44,57 +45,70 @@ type NavItem = {
 
 const navigation: NavItem[] = [
   {
-    name: 'Home',
+    name: 'Dashboard',
     icon: HomeIcon,
-    children: [{ name: 'Home', href: '/', featureKey: 'home' }],
+    children: [{ name: 'Dashboard', href: '/', featureKey: 'home' }],
     asDirect: true,
   },
   {
-    // Events is the core product — surfaces above all groups for instant access
+    // Lead → Quote → Follow-up funnel
+    name: 'Sales',
+    icon: FunnelIcon,
+    children: [
+      { name: 'Lead Pipeline', href: '/pipeline', featureKey: 'pipeline' },
+      { name: 'New Inquiry', href: '/bookings/new', featureKey: 'events' },
+      { name: 'Follow-Ups', href: '/follow-ups', featureKey: 'inbox' },
+      { name: 'Inquiries', href: '/inquiries', featureKey: 'events' },
+    ],
+  },
+  {
+    // Confirmed & upcoming work
     name: 'Events',
     icon: CalendarDaysIcon,
-    children: [{ name: 'Events', href: '/bookings', featureKey: 'events' }],
-    asDirect: true,
-  },
-  {
-    name: 'Clients',
-    icon: ViewColumnsIcon,
     children: [
-      { name: 'Inquiries', href: '/pipeline', featureKey: 'pipeline' },
-      { name: 'Follow-ups', href: '/follow-ups', featureKey: 'inbox' },
-      { name: 'Contacts', href: '/customers', featureKey: 'customers' },
-      { name: 'Price Calculator', href: '/calculator', featureKey: 'calculator' },
-      { name: 'Proposal Writer', href: '/proposal-writer', featureKey: 'settings', profiles: ['catering_pro'] },
+      { name: 'All Events', href: '/bookings', featureKey: 'events' },
+      { name: 'Confirmed', href: '/bookings?filter=confirmed', featureKey: 'events' },
+      { name: 'Past Events', href: '/bookings?filter=past', featureKey: 'events' },
+      { name: 'Calendar', href: '/staff/availability', featureKey: 'staff' },
     ],
   },
   {
-    name: 'Planning',
-    icon: ClipboardDocumentListIcon,
+    name: 'Customers',
+    icon: UsersIcon,
     children: [
-      { name: 'Orders', href: '/orders', featureKey: 'events' },
-      { name: 'Packing Checklists', href: '/bookings/packing', featureKey: 'events' },
-      { name: 'Staff', href: '/staff', featureKey: 'staff' },
-      { name: 'Staff Calendar', href: '/staff/availability', featureKey: 'staff' },
-      { name: 'Menus', href: '/menus', featureKey: 'menuBuilder' },
+      { name: 'All Customers', href: '/customers', featureKey: 'customers' },
     ],
   },
   {
-    name: 'Money',
-    icon: ReceiptPercentIcon,
+    // Day-of execution tools
+    name: 'Operations',
+    icon: ClipboardDocumentCheckIcon,
     children: [
-      { name: 'Costs', href: '/expenses', featureKey: 'expenses' },
+      { name: 'Shopping Lists', href: '/bookings/shopping', featureKey: 'events' },
+      { name: 'Menu Builder', href: '/menus/builder' },
+      { name: 'Staff Assignments', href: '/bookings/staff', featureKey: 'staff' },
+      { name: 'Packing', href: '/bookings/packing', featureKey: 'events' },
+    ],
+  },
+  {
+    // Money in, money out, profitability
+    name: 'Finance',
+    icon: BanknotesIcon,
+    children: [
       { name: 'Invoices & Payments', href: '/invoices', featureKey: 'invoices' },
-      { name: 'Insights', href: '/reports', featureKey: 'reports' },
-      { name: 'Pricing Rules', href: '/business-rules', featureKey: 'settings' },
+      { name: 'Expenses', href: '/expenses', featureKey: 'expenses' },
+      { name: 'Profit Calculator', href: '/calculator', featureKey: 'calculator' },
+      { name: 'Reports', href: '/reports', featureKey: 'reports' },
     ],
   },
   {
-    name: 'App',
+    name: 'Settings',
     icon: CogIcon,
     children: [
+      { name: 'Pricing Rules', href: '/business-rules', featureKey: 'settings' },
+      { name: 'Business Profile', href: '/settings' },
+      { name: 'Team', href: '/staff', featureKey: 'staff' },
       { name: 'Permissions', href: '/admin/permissions', featureKey: 'settings', adminOnly: true },
-      { name: 'Agreements', href: '/contracts', featureKey: 'settings', profiles: ['catering_pro'] },
-      { name: 'Help Guide', href: '/wiki', featureKey: 'wiki' },
     ],
   },
 ];
@@ -292,7 +306,7 @@ export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void 
 
   useEffect(() => {
     setExpandedSections((prev) =>
-      Object.fromEntries(accordionNames.map((name) => [name, prev[name] ?? false]))
+      Object.fromEntries(accordionNames.map((name) => [name, prev[name] ?? true]))
     );
   }, [pathname, accordionNames]);
 
@@ -363,7 +377,7 @@ export default function Sidebar({ onMobileClose }: { onMobileClose?: () => void 
             {!collapsed && (
               <span className="relative flex flex-1 items-center gap-1.5">
                 {item.name}
-                {item.name === 'Events' && notificationBadgeCount > 0 && (
+                {item.name === 'Calendar' && notificationBadgeCount > 0 && (
                   <span className="rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                     {notificationBadgeCount}
                   </span>
