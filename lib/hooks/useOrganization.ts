@@ -54,12 +54,13 @@ export function useOrganization(): {
 
       if (error || !data) return null;
 
-      const org = data.organizations as {
+      const orgs = data.organizations as unknown as {
         id: string;
         name: string;
         slug: string;
         product_profile: string;
-      } | null;
+      }[] | null;
+      const org = Array.isArray(orgs) ? (orgs[0] ?? null) : (orgs ?? null);
 
       if (!org) return null;
 
